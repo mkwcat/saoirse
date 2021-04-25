@@ -263,7 +263,9 @@ s32 main(s32 argc, char** argv)
         ophdrs[j].p_vaddr = ishdrs[i].sh_addr;
         ophdrs[j].p_paddr = ishdrs[i].sh_addr;
         ophdrs[j].p_memsz = ishdrs[i].sh_size;
-        ophdrs[j].p_flags = 0x07F00000;
+        /* 0x07F00000 = PPC section
+         * anything else = IOS section */
+        ophdrs[j].p_flags = 0x0FF00000;
         ophdrs[j].p_align = 4;
 
         swapPhdr(&ophdrs[j]);
