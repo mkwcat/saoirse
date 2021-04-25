@@ -1,5 +1,6 @@
-#include "gctypes.h"
-#include "ios.h"
+#include <gctypes.h>
+#include <ios.h>
+#include <string.h>
 
 #define HW_VISOLID 0x0D800024
 #define YUV_YELLOW ((0 << 24) | (148 << 16) | (225 << 8))
@@ -15,6 +16,7 @@ void saoMain(u32 arg)
 
     /* Basic test! */
     s32 fd = IOS_Open("/dev/es", 0);
+    memcpy((void*) 0, (void*) 0x10000000, 32);
 }
 
 void saoExit(void)
