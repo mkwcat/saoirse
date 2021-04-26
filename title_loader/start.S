@@ -2,7 +2,7 @@
 		.arm
 		.global _start
 _start:
-		ldr     sp, =_stack
+		ldr     sp, =_stack + 0x400
 		bl      saoMain
 		b       saoExit
 

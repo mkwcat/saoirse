@@ -36,16 +36,9 @@ lwp_t ut_h = (lwp_t) NULL;
 
 void* thread_proc(void* arg)
 {
-    u32* file = (u32*) 0x91000000;
-
     printf("debug thread entry\n");
 
-    sleep(1);
-
-	printf("FILE: open = %d, pos = %08Xh\n", file[2], file[3]);
-    printf("ES: queue = %d, status = %d\n", es_bin[0xA4 / 4], read32(0));
-
-	sleep(3);
+	sleep(5);
     write32(0x0D800194, read32(0x0D800194) & ~1); // restart
     return NULL;
 }
@@ -78,7 +71,9 @@ s32 main(s32 argc, char** argv)
     /* I cba to explain what's going on here */
     write32(0x939FB738, 0x49004708);
     write32(0x939FB73C, (u32)(&es_bin) - 0x80000000);
-    //write32(0, 0x12345678);
+    //write32(0x34, 0x12345678);
+
+    //write32(0x13a740c0, 0x47000000);
 
     u32* file = (u32*) 0x91000000;
     memset((void*) file, 0, 32);
@@ -102,7 +97,8 @@ s32 main(s32 argc, char** argv)
     s32 ret = ES_GetDeviceCert(devicecert);
     printf("ES_GetDeviceCert() = %d\n", ret);
 
+    //while (1) { printf("%08X   %08X %08X\n", read32(0x34), read32(0x13a740c0), read32(0x13a740c4)); }
     sleep(5);
-    write32(0x0D800024, 0);
+    write32(0x0D800194, read32(0x0D800194) & ~1); // restart
     return 0;
 }

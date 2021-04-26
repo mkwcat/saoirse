@@ -5,6 +5,7 @@
 #include "ios_ipc.h"
 #include "ios_msg.h"
 #include "ios_thread.h"
+#include "ios_haxx.h"
 
 #define IOS_SUCCESS     0
 #define IOS_EACCES      -1

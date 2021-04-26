@@ -78,3 +78,14 @@ name:;                                                                         \
         DEF_SYSCALL( IOS_VirtualToPhysical,       0x4F )
         DEF_SYSCALL( IOS_SetPPCACRPerms,          0x54 )
         DEF_SYSCALL( IOS_LaunchRM,                0x5A )
+		
+		DEF_SYSCALL( IOS_KernelExec,              0x70 )
+		
+		.text
+		.arm
+		.global kernelExec
+		.fnstart
+kernelExec:
+		bx      r0
+		.fnend
+		.size   kernelExec, . - kernelExec
