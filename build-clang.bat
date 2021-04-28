@@ -1,7 +1,7 @@
 @echo off
 cd title_loader
 echo Compiling...
-arm-none-eabi-gcc -std=c99 -march=armv5te -mbig-endian -mthumb-interwork -DDEBUG -T link.ld -fno-builtin -ffreestanding -n -nostartfiles -nodefaultlibs -I lib -Wl,-gc-sections -Os -fomit-frame-pointer start.S ldhack.c syscalls.S sao.c kernel.c lib/memcpy.s lib/string.c -lgcc
+clang --target=arm-none-eabi -mbig-endian -nodefaultlibs -ffreestanding -fomit-frame-pointer -ffunction-sections -Wl,--gc-sections -Os -mcpu=arm926ej-s -T link.ld -I lib start.S syscalls.S sao.c kernel.c lib/string.c lib/memcpy.s
 mv a.out ../a.out
 cd ..
 stripios.exe a.out title_loader.elf
