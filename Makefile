@@ -1,3 +1,9 @@
+#----------------------#
+# Clear built-in rules #
+#----------------------#
+
+.SUFFIXES:
+
 #--------------------#
 # Shared definitions #
 #--------------------#
@@ -29,6 +35,8 @@ TL_SOURCES := $(wildcard $(TL_DIR)/*.s) $(wildcard $(TL_DIR)/*.S) $(wildcard $(T
 	$(wildcard $(TL_DIR)/lib/*.s) $(wildcard $(TL_DIR)/lib/*.S) $(wildcard $(TL_DIR)/lib/*.c)
 
 # Output object files
+TL_OFILES := $(addsuffix .o, $(basename $(TL_SOURCES)))
+TL_OFILES := $(subst $(TL_DIR), $(TL_TARGET), $(TL_OFILES))
 TL_BIN := $(TARGET)/title_loader.o
 TL_ELF := $(TARGET)/title_loader.elf
 
@@ -40,7 +48,7 @@ TL_LD = $(TL_DIR)/link.ld
 #------------------------#
 
 # Compiler
-# TODO: remove hardcoded paths in flags?
+# TODO: use devkitpro environment variable for include paths
 ET_CC := powerpc-eabi-gcc
 ET_CFLAGS := -O2 -Wall -DGEKKO -mrvl -mcpu=750 -meabi -mhard-float -L C:/devkitPro/libogc/lib/wii \
 			 -I C:/devkitPro/libogc/include -lwiiuse -lbte -logc -lm
@@ -55,7 +63,7 @@ ET_TARGET := $(TARGET)/$(ET_DIR)
 ET_SOURCES := $(wildcard $(ET_DIR)/*.c) $(wildcard $(ET_DIR)/*.s) $(wildcard $(ET_DIR)/*.S)
 
 # Output object files
-TL_ELF_S := $(TL_ELF).s
+TL_ELF_S := $(TL_TARGET).s
 ET_ELF := elf_tester.elf
 ET_DOL := elf_tester.dol
 
@@ -63,8 +71,9 @@ ET_DOL := elf_tester.dol
 # Recipes #
 #---------#
 
-# Create build directory if it doesn't exist
-DUMMY != mkdir -p build
+# Create build directories if they don't exist
+# TODO: don't hardcode subdirectories
+DUMMY != mkdir -p $(TARGET) $(TL_TARGET) $(ET_TARGET) $(TL_TARGET)/lib
 
 # Define non-recipe commands
 .PHONY: clean
@@ -72,26 +81,37 @@ DUMMY != mkdir -p build
 # Make dol by default
 default: $(ET_DOL)
 
-$(TL_BIN):
-	@echo $@: $(TL_SOURCES)
-	@$(TL_CC) $(TL_CFLAGS) -T $(TL_LD) -I $(TL_INCLUDES) -o $@ $(TL_SOURCES)
+# Compile title_loader c, s and S files 
+$(TL_TARGET)/%.o: $(TL_DIR)/%.*
+	@echo $@: $<
+	@$(TL_CC) $(TL_CFLAGS) -I $(TL_INCLUDES) -c -o $@ $<
 
+# Link title_loader object files into one
+$(TL_BIN): $(TL_OFILES)
+	@echo $@: $^
+	@$(TL_CC) $(TL_CFLAGS) -T $(TL_LD) $^ -o $@
+
+# Strip title_loader o file
 $(TL_ELF): $(TL_BIN)
 	@echo $@: $(TL_BIN)
 	@$(STRIPIOS) $< $@
 
+# Dump title_loader ELF binary into s
 $(TL_ELF_S): $(TL_ELF)
 	@echo $@: $<
-	@$(BIN2S) $< >> $@
+	@$(BIN2S) $< > $@
 
+# Compile elf_tester c, s, and S files + dumped ELF
 $(ET_ELF): $(TL_ELF_S)
 	@echo $@: $<
 	@$(ET_CC) $(ET_CFLAGS) $(ET_SOURCES) $(TL_ELF_S) -o $@
 
+# Convert elf_tester to dol
 $(ET_DOL): $(ET_ELF) 
 	@echo $@: $<
 	@$(ELF2DOL) $< $@
 
+# Remove build directory and products
 clean:
 	rm -f $(ET_DOL)
 	rm -f $(ET_ELF)
