@@ -64,6 +64,8 @@ ET_SOURCES := $(wildcard $(ET_DIR)/*.c) $(wildcard $(ET_DIR)/*.s) $(wildcard $(E
 
 # Output object files
 TL_ELF_S := $(TL_TARGET).s
+ET_OFILES := $(addsuffix .o, $(basename $(ET_SOURCES)))
+ET_OFILES := $(subst $(ET_DIR), $(ET_TARGET), $(ET_OFILES))
 ET_ELF := elf_tester.elf
 ET_DOL := elf_tester.dol
 
@@ -102,9 +104,14 @@ $(TL_ELF_S): $(TL_ELF)
 	@$(BIN2S) $< > $@
 
 # Compile elf_tester c, s, and S files + dumped ELF
-$(ET_ELF): $(TL_ELF_S)
+$(ET_TARGET)/%.o: $(ET_DIR)/%.*
 	@echo $@: $<
-	@$(ET_CC) $(ET_CFLAGS) $(ET_SOURCES) $(TL_ELF_S) -o $@
+	@$(ET_CC) $(ET_CFLAGS) -c -o $@ $<
+
+# Link elf_tester object files into one
+$(ET_ELF): $(TL_ELF_S) $(ET_OFILES)
+	@echo $@: $^
+	@$(ET_CC) $(ET_CFLAGS) $^ -o $@
 
 # Convert elf_tester to dol
 $(ET_DOL): $(ET_ELF) 
