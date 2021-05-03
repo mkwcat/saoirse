@@ -5,5 +5,6 @@
 
 void* memcpy(void* dst, const void* src, u32 len);
 void memclear(void* ptr, u32 len);
+s32 strlen(const char* str);
 
 #endif /* _STRING_H */

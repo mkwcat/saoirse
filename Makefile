@@ -91,7 +91,7 @@ $(TL_TARGET)/%.o: $(TL_DIR)/%.*
 # Link title_loader object files into one
 $(TL_BIN): $(TL_OFILES)
 	@echo $@: $^
-	@$(TL_CC) $(TL_CFLAGS) -T $(TL_LD) $^ -o $@
+	@$(TL_CC) $^ $(TL_CFLAGS) -T $(TL_LD) -o $@
 
 # Strip title_loader o file
 $(TL_ELF): $(TL_BIN)

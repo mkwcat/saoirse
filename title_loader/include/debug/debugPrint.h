@@ -7,7 +7,7 @@
 
 #pragma once
 
-#include <revolution/gx.h>
+#include <rvl/gx.h>
 
 //! Function Prototype Declarations
 

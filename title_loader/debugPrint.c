@@ -7,8 +7,8 @@
 
 #include "debug/debugPrint.h"
 
-#include <revolution/os.h>
-#include <revolution/vi.h>
+#include <rvl/os.h>
+#include <rvl/vi.h>
 
 #include <stdarg.h>
 #include <stddef.h>

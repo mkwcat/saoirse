@@ -3,8 +3,13 @@
 		.global _start
 _start:
 		ldr     sp, =_stack + 0x400
-		bl      saoMain
-		b       saoExit
+		push    { lr }
+		ldr     r1, =saoMain
+		blx     r1
+		ldr     r1, =saoExit
+		blx     r1
+		pop     { r1 }
+		bx      r1
 
 		.pool
 		.size   _start, . - _start

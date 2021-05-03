@@ -30,7 +30,6 @@ extern u32 es_bin_size;
 static void *xfb = NULL;
 static GXRModeObj *rmode = NULL;
 
-#if 0
 /* Debugging thread */
 lwp_t ut_h = (lwp_t) NULL;
 
@@ -38,11 +37,12 @@ void* thread_proc(void* arg)
 {
     printf("debug thread entry\n");
 
-	sleep(5);
-    write32(0x0D800194, read32(0x0D800194) & ~1); // restart
+    while (1)
+    {
+        memcpy((void*) 0xC1400000, (void*) 0xCC002000, 0x80); // lol, this works
+    }
     return NULL;
 }
-#endif
 
 s32 main(s32 argc, char** argv)
 {
@@ -71,7 +71,7 @@ s32 main(s32 argc, char** argv)
     /* I cba to explain what's going on here */
     write32(0x939FB738, 0x49004708);
     write32(0x939FB73C, (u32)(&es_bin) - 0x80000000);
-    //write32(0x34, 0x12345678);
+    write32(0x34, 0x12345678);
 
     //write32(0x13a740c0, 0x47000000);
 
@@ -86,18 +86,18 @@ s32 main(s32 argc, char** argv)
     memcpy((void*) 0x91000020, title_loader_elf, title_loader_elf_size);
     DCFlushRange((void*) 0x91000000, title_loader_elf_size + 32);
 
-#if 0
     printf("make thread\n");
     LWP_CreateThread(&ut_h, thread_proc, 0, 0, 256, 50);
     LWP_SetThreadPriority(LWP_GetSelf(), 50);
-#endif
 
     printf("do\n");
     u8 devicecert[512] ATTRIBUTE_ALIGN(32); // probably big enough
     s32 ret = ES_GetDeviceCert(devicecert);
     printf("ES_GetDeviceCert() = %d\n", ret);
 
-    //while (1) { printf("%08X   %08X %08X\n", read32(0x34), read32(0x13a740c0), read32(0x13a740c4)); }
+    
+
+    //while (1) { printf("%08X   %08X\n", read32(0x3600), read16(0x0c002048)); }
     sleep(5);
     write32(0x0D800194, read32(0x0D800194) & ~1); // restart
     return 0;
