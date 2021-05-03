@@ -1,0 +1,10 @@
+/*!
+ * Author  : Star
+ * Date    : 03 May 2021
+ * File    : debug.h
+ * Version : 1.0.0.0
+ */
+
+#pragma once
+
+#include <debug/debugPrint.h>

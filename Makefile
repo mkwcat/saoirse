@@ -22,12 +22,12 @@ ELF2DOL := elf2dol
 
 # Compiler
 TL_CC := arm-none-eabi-gcc 
-TL_CFLAGS := -std=c99 -march=armv5te -mbig-endian -mthumb-interwork -DDEBUG -fno-builtin -ffreestanding \
-			 -n -nostartfiles -nodefaultlibs -Wl,-gc-sections -Os -s -fomit-frame-pointer -lgcc
+TL_CFLAGS := -std=c99 -march=armv5te -mbig-endian -mthumb-interwork -mthumb -DDEBUG -fno-builtin -ffreestanding \
+			 -ffunction-sections -n -nostartfiles -nodefaultlibs -Wl,-gc-sections -Os -fomit-frame-pointer -lgcc
 
 # Source, include and build directories
 TL_DIR := title_loader
-TL_INCLUDES := $(TL_DIR)/lib
+TL_INCLUDES := -I $(TL_DIR)/include -I $(TL_DIR)/lib
 TL_TARGET := $(TARGET)/$(TL_DIR)
 
 # Source files
@@ -86,7 +86,7 @@ default: $(ET_DOL)
 # Compile title_loader c, s and S files 
 $(TL_TARGET)/%.o: $(TL_DIR)/%.*
 	@echo $@: $<
-	@$(TL_CC) $(TL_CFLAGS) -I $(TL_INCLUDES) -c -o $@ $<
+	@$(TL_CC) $(TL_CFLAGS) $(TL_INCLUDES) -c -o $@ $<
 
 # Link title_loader object files into one
 $(TL_BIN): $(TL_OFILES)
