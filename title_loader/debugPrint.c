@@ -1,8 +1,8 @@
 /*!
  * Author  : Star
- * Date    : 03 May 2021
+ * Date    : 24 May 2021
  * File    : debugPrint.c
- * Version : 1.0.0.0
+ * Version : 1.1.0.0
  */
 
 #include "debug/debugPrint.h"
@@ -144,6 +144,7 @@ static int DrawStringToXFB(const char* pString, int iCurrentRow, int iCurrentCol
 __attribute__((noinline)) static unsigned int ConvertRGBToYCbCr(unsigned char R, unsigned char G, unsigned char B);
 static inline unsigned short GetXFBWidth();
 static inline unsigned short GetXFBHeight();
+static inline bool IsProgressiveScanMode();
 static inline unsigned int* GetCurrentXFBPointer();
 static inline bool IsCharacterValid(char c);
 
@@ -229,16 +230,16 @@ DrawStringToXFB(const char* pString, int iCurrentRow, int iCurrentColumn)
 		}
 
 		// If we go past the final row, go to the first column and row
-		if (iCurrentRow >= (GetXFBHeight() / BITMAP_FONT_CHARACTER_HEIGHT))
+		if (iCurrentRow >= (GetXFBHeight() / BITMAP_FONT_CHARACTER_HEIGHT / (IsProgressiveScanMode() ? 2 : 1)))
 		{
 			iCurrentColumn = 0;
 			iCurrentRow    = 0;
 		}
 
 		// Calculate where to start rendering the character at
-		unsigned int* pXFB = GetCurrentXFBPointer()                                            + // O
-			             (iCurrentColumn * BITMAP_FONT_CHARACTER_WIDTH)                    + // X
-			             (iCurrentRow * (BITMAP_FONT_CHARACTER_HEIGHT / 2) * GetXFBWidth()); // Y
+		unsigned int* pXFB = GetCurrentXFBPointer()                                                                          + // O
+			             (iCurrentColumn * BITMAP_FONT_CHARACTER_WIDTH)                                                  + // X
+			             (GetXFBWidth() * iCurrentRow * BITMAP_FONT_CHARACTER_HEIGHT / (IsProgressiveScanMode() ? 1 : 2)); // Y
 
 		// Handle control characters
 		if (c == '\b') // Backspace
@@ -343,6 +344,19 @@ GetXFBHeight()
 {
 	return ((*(volatile unsigned char*)(VI_REG_BASE + VI_VTR_REG_OFFSET + 0) << 5)  |
 		(*(volatile unsigned char*)(VI_REG_BASE + VI_VTR_REG_OFFSET + 1) >> 3)) & 0x07FE;
+}
+
+/*---------------------------------------------------------------------------*
+ * Name        : IsProgressiveScanMode
+ * Description : Checks if the game is being displayed in progressive scan mode.
+ * Returns     : 0    The game is not being displayed in progressive scan mode.
+ *               1    The game is being displayed in progressive scan mode.
+ *---------------------------------------------------------------------------*/
+// Credits: Savezelda
+static inline bool
+IsProgressiveScanMode()
+{
+	return (*(volatile unsigned char*)(VI_REG_BASE + VI_VTR_REG_OFFSET + 1) & 0x0F) > 10;
 }
 
 /*---------------------------------------------------------------------------*
