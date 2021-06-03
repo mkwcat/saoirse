@@ -1,6 +1,14 @@
 #ifndef _IOS_HAXX_H
 #define _IOS_HAXX_H
 
+#include <types.h>
+
+#ifdef __cplusplus
+    extern "C" {
+#endif
+
+#ifdef IOS
+
 /* 
  * IOS Haxx
  * 
@@ -22,7 +30,6 @@
  * 
  * Any other regions will require disabling MMU.
  */
-
 
 /* Defined as syscall 0x3D */
 s32 IOS_KernelExec(void* func, ...);
@@ -47,5 +54,11 @@ u32 IOS_DisableInterrupts();
 void IOS_RestoreInterrupts(u32 level);
 void IOS_DisableMMU();
 void IOS_EnableMMU();
+
+#endif // IOS
+
+#ifdef __cplusplus
+    }
+#endif
 
 #endif /* _IOS_HAXX_H */

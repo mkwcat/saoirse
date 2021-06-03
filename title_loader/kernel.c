@@ -1,6 +1,6 @@
 #include <ios.h>
 #include <string.h>
-#include <gctypes.h>
+#include <types.h>
 
 
 static u32 __kwrite32(void* _0, u32* ptr, u32 value)

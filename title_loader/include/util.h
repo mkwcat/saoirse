@@ -1,11 +1,14 @@
-#ifndef __GCUTIL_H__
-#define __GCUTIL_H__
+#ifndef __UTIL_H__
+#define __UTIL_H__
 
 #ifndef ATTRIBUTE_ALIGN
 #define ATTRIBUTE_ALIGN(v) __attribute__((aligned(v)))
 #endif
 #ifndef ATTRIBUTE_PACKED
 #define ATTRIBUTE_PACKED __attribute__((packed))
+#endif
+#ifndef ATTRIBUTE_TARGET
+#define ATTRIBUTE_TARGET(t) __attribute((target(#t)))
 #endif
 
 #define _SHIFTL(v, s, w)                                                       \
@@ -18,4 +21,4 @@
 
 #define _ROTL(v, s) (((u32) v << s) | ((u32) v >> (0x20 - s)))
 
-#endif /* _GCUTIL_H */
+#endif /* _UTIL_H */

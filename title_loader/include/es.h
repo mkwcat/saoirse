@@ -1,7 +1,11 @@
 #ifndef _ES_H
 #define _ES_H
 
-#include <gctypes.h>
+#include <types.h>
+
+#ifdef __cplusplus
+    extern "C" {
+#endif
 
 #define ES_PATH                             "/dev/es"
 
@@ -44,14 +48,14 @@ typedef struct
     u8 caCRLVersion;
     u8 signerCRLVersion;
     u8 vwiiTitle;
-    u64 sysVersion;                //0x184
-    u64 titleID;                   //0x18c
-    u32 titleType;                 //0x194
-    u16 groupID;                   //0x198
-    u16 zero;                       //0x19a
-    u16 region;                     //0x19c
-    u8 ratings[16];                 //0x19e
-    u8 reserved[12];                //0x1ae
+    u64 sysVersion;
+    u64 titleID;
+    u32 titleType;
+    u16 groupID;
+    u16 zero;
+    u16 region;
+    u8 ratings[16];
+    u8 reserved[12];
     u8 ipcMask[12];
     u8 reserved2[18];
     u32 accessRights;
@@ -62,10 +66,14 @@ typedef struct
     TMDContent contents[];
 } __attribute__((packed)) TMD;
 
-s32 ES_OpenLib();
+s32 ES_InitLib();
 s32 ES_CloseLib();
 s32 ES_GetNumTicketViews(u64 titleID, u32* cnt);
 s32 ES_GetTicketViews(u64 titleID, TicketView* views, u32 cnt);
 s32 ES_LaunchTitle(u64 titleID, const TicketView* view);
+
+#ifdef __cplusplus
+    }
+#endif
 
 #endif // _ES_H

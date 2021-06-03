@@ -1,11 +1,11 @@
 #include "es.h"
 
 #include <ios.h>
-#include <gctypes.h>
+#include <types.h>
 
 static s32 __esFd = -1;
 
-s32 ES_OpenLib(void)
+s32 ES_InitLib(void)
 {
     if (__esFd < 0)
         __esFd = IOS_Open(ES_PATH, IOS_OPEN_NONE);

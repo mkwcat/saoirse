@@ -1,7 +1,7 @@
 #ifndef _IOS_MSG_H
 #define _IOS_MSG_H
 
-#include "gctypes.h"
+#include <types.h>
 
 #ifdef __cplusplus
     extern "C" {

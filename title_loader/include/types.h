@@ -1,5 +1,5 @@
-#ifndef __GCTYPES_H__
-#define __GCTYPES_H__
+#ifndef __TYPES_H__
+#define __TYPES_H__
 
 /*! \file gctypes.h 
 \brief Data type definitions

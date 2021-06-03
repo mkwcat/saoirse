@@ -1,7 +1,7 @@
 #ifndef _IOS_IPC_H
 #define _IOS_IPC_H
 
-#include "gctypes.h"
+#include <types.h>
 
 #ifdef __cplusplus
     extern "C" {
@@ -76,8 +76,6 @@ typedef struct
     };
 } IOSRequest;
 
-s32 IOS_RegisterResourceManager(const char* device, s32 queue_id);
-
 s32 IOS_Open(const char* path, u32 mode);
 s32 IOS_OpenAsync(
     const char* path, u32 mode, s32 queue_id, void* usrdata);
@@ -105,7 +103,10 @@ s32 IOS_IoctlvAsync(
     s32 fd, u32 command, u32 in_cnt, u32 out_cnt, IOVector* vec,
     s32 queue_id, void* usrdata);
 
+#ifdef IOS
+s32 IOS_RegisterResourceManager(const char* device, s32 queue_id);
 s32 IOS_ResourceReply(const IOSRequest* request, s32 reply);
+#endif
 
 #ifdef __cplusplus
     }

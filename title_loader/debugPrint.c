@@ -13,7 +13,7 @@
 #include <stdarg.h>
 #include <stddef.h>
 
-#include "gctypes.h"
+#include "types.h"
 #include "vsprintf.h"
 
 //! Definitions
