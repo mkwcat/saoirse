@@ -26,7 +26,7 @@ INCLUDES	:=
 #---------------------------------------------------------------------------------
 
 CFLAGS	= -g -O2 -Wall -Wextra -Wpedantic -Wno-register -Wnull-dereference -Wshadow $(MACHDEP) $(INCLUDE)
-CXXFLAGS	=	$(CFLAGS) -std=c++17
+CXXFLAGS	=	$(CFLAGS) -std=c++20
 
 LDFLAGS	=	-g $(MACHDEP) -Wl,-Map,$(notdir $@).map -Wl,--section-start,.init=0x80900000
 
