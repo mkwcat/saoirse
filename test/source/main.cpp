@@ -232,12 +232,36 @@ irse::Stage irse::stDiscError([[maybe_unused]] Stage from)
     return Stage::stNoDisc;
 }
 
+static void UnencryptedRead(void* dst, u32 len, u32 ofs) {
+    DVD::UniqueCommand cmd;
+    assert(cmd.cmd() != nullptr);
+    DVDLow::UnencryptedReadAsync(*cmd.cmd(), dst, len, ofs);
+    const auto result = cmd.cmd()->syncReply();
+
+    if (result != DiErr::OK) {
+        printf("Failed to execute read\n");
+        return;
+    }
+    printf("DVD read returned DiErr::OK\n");
+}
+
+static void TestIfDvdWorks() {
+    u32 buf[8];
+    memset(buf, 0xAA, sizeof(buf));
+    UnencryptedRead(&buf, sizeof(buf), 0x00010000);
+    for (u32 i = 0; i < 8; ++i) {
+        printf("%x\n", buf[i]);
+    }
+    printf("READ RESULT ^\n");
+}
+
+
 irse::Stage irse::stReadDisc([[maybe_unused]] Stage from)
 {
     irse::Log(LogS::Core, LogL::INFO,
         "DiskID: %.6s", reinterpret_cast<char*>(MEM1_BASE));
 
-
+    TestIfDvdWorks();
 
     /* Next stage not implemented yet so just wait for disc eject */
     return Stage::stDiscError;
