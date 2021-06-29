@@ -239,14 +239,14 @@ static void UnencryptedRead(void* dst, u32 len, u32 ofs) {
     const auto result = cmd.cmd()->syncReply();
 
     if (result != DiErr::OK) {
-        printf("Failed to execute read\n");
+        printf("Failed to execute read: RESULT=%i\n", static_cast<s32>(result));
         return;
     }
     printf("DVD read returned DiErr::OK\n");
 }
 
 static void TestIfDvdWorks() {
-    u32 buf[8];
+    u32 buf[8] ATTRIBUTE_ALIGN(32);
     memset(buf, 0xAA, sizeof(buf));
     UnencryptedRead(&buf, sizeof(buf), 0x00010000);
     for (u32 i = 0; i < 8; ++i) {
