@@ -40,7 +40,7 @@ const char* DVDLow::PrintErr(DiErr err)
 DVDLow::DVDCommand* DVD::GetCommand()
 {
     DVDLow::DVDCommand* block = dataQueue.receive();
-    ASSERT(block != nullptrptr);
+    ASSERT(block != nullptr);
 
     return block;
 }
