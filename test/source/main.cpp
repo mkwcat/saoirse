@@ -14,6 +14,8 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include "Boot.hpp"
+
 
 namespace irse
 {
@@ -262,6 +264,12 @@ irse::Stage irse::stReadDisc([[maybe_unused]] Stage from)
         "DiskID: %.6s", reinterpret_cast<char*>(MEM1_BASE));
 
     TestIfDvdWorks();
+    static Apploader loader;
+    auto main = loader.load();
+    
+    // TODO: Proper shutdown
+    SYS_ResetSystem(SYS_SHUTDOWN, 0, 0);
+    main();
 
     /* Next stage not implemented yet so just wait for disc eject */
     return Stage::stDiscError;
