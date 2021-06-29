@@ -189,8 +189,8 @@ void DVDLow::EncryptedReadAsync(
     DVDCommand& block, void* data, u32 len, u32 offset)
 {
     block.input.command = DiIoctl::EncryptedRead;
-    block.input.args[1] = len;
-    block.input.args[2] = offset;
+    block.input.args[0] = len;
+    block.input.args[1] = offset;
 
     block.sendIoctl(DiIoctl::EncryptedRead, data, len);
 }
