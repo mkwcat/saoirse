@@ -224,11 +224,7 @@ constexpr s32 Write = 2;
 constexpr s32 RW = Read | Write;
 }
 
-struct Vector
-{
-	void *data;
-	u32 len;
-};
+typedef struct _ioctlv Vector;
 
 struct Request
 {
@@ -349,7 +345,7 @@ public:
     s32 ioctlv(Ioctl cmd, u32 inputCnt, u32 outputCnt, Vector* vec) {
         return IOS_Ioctlv(
             this->m_fd, static_cast<u32>(cmd),
-            inputCnt, outputCnt, reinterpret_cast<struct _ioctlv*>(vec));
+            inputCnt, outputCnt, vec);
     }
     
     s32 ioctlAsync(Ioctl cmd, void* input, u32 inputLen,
@@ -365,7 +361,7 @@ public:
                     ipccallback callback, void* usrdata) {
         return IOS_IoctlvAsync(
             this->m_fd, static_cast<u32>(cmd),
-            inputCnt, outputCnt, reinterpret_cast<struct _ioctlv*>(vec),
+            inputCnt, outputCnt, vec,
             IPC_QUEUE_CALLBACK(callback, usrdata));
     }
 

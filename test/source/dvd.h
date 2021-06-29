@@ -12,6 +12,7 @@ enum class DiIoctl : u8
     WaitForCoverClose = 0x79,
     GetCoverStatus = 0x88,
     Reset = 0x8A,
+    OpenPartition = 0x8B,
     UnencryptedRead = 0x8D,
     RequestDiscStatus = 0xDB
 };
@@ -35,6 +36,7 @@ struct DVDCommand
 {
     s32 id;
     Queue<DiErr> reply_queue{1};
+    IOS::Vector* vec = nullptr;
 
     union {    
         struct {
@@ -50,13 +52,20 @@ struct DVDCommand
         u8 output_buf[32];
     };
 
-    DiErr syncReply();
+    void sendIoctl(DiIoctl cmd, void* out, u32 outLen);
+    void sendIoctlv(DiIoctl cmd, u32 inputCnt, u32 outputCnt);
+    DiErr syncReply() { return this->reply_queue.receive(); }
     DiErr syncReplyAssertRet(DiErr expected);
+    void beginIoctlv(u32 inputCnt, u32 outputCnt) {
+        vec = new IOS::Vector[inputCnt * outputCnt];
+    }
+    void endIoctlv() { delete vec; vec = nullptr; }
 };
 
 const char* PrintErr(DiErr err);
 void ResetAsync(DVDCommand& block, bool spinup);
 void ReadDiskIDAsync(DVDCommand& block, void* data);
+void OpenPartitionAsync(DVDCommand& block, u32 offset, signed_blob* tmd);
 
 void UnencryptedReadAsync(DVDCommand& block, void* data, u32 len, u32 offset);
 void EncryptedReadAsync(DVDCommand& block, void* data, u32 len, u32 offset);
@@ -105,6 +114,5 @@ DiErr ResetDrive(bool spinup);
 DiErr ReadDiskID(DiskID* out);
 DiErr ReadCachedDiskID(DiskID* out);
 bool IsInserted();
-
 
 }
