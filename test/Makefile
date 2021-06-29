@@ -25,8 +25,8 @@ INCLUDES	:=
 # options for code generation
 #---------------------------------------------------------------------------------
 
-CFLAGS	= -g -O2 -Wall $(MACHDEP) $(INCLUDE)
-CXXFLAGS	=	$(CFLAGS)
+CFLAGS	= -g -O2 -Wall -Wextra -Wpedantic -Wno-register $(MACHDEP) $(INCLUDE)
+CXXFLAGS	=	$(CFLAGS) -std=c++17
 
 LDFLAGS	=	-g $(MACHDEP) -Wl,-Map,$(notdir $@).map -Wl,--section-start,.init=0x80900000
 
