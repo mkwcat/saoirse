@@ -49,19 +49,20 @@ struct DVDCommand
         u32 output[8];
         u8 output_buf[32];
     };
+
+    DiErr syncReply();
+    DiErr syncReplyAssertRet(DiErr expected);
 };
 
 const char* PrintErr(DiErr err);
-void ResetAsync(DVDCommand*, bool spinup);
-void ReadDiskIDAsync(DVDCommand*, void* out);
+void ResetAsync(DVDCommand& block, bool spinup);
+void ReadDiskIDAsync(DVDCommand& block, void* data);
 
-void UnencryptedReadAsync(DVDCommand*, void* buffer, u32 length, u32 offset);
-void EncryptedReadAsync(DVDCommand& cmd, void* buf, u32 len, u32 offset);
+void UnencryptedReadAsync(DVDCommand& block, void* data, u32 len, u32 offset);
+void EncryptedReadAsync(DVDCommand& block, void* data, u32 len, u32 offset);
 
-void GetCoverStatusAsync(DVDCommand*, u32* result);
-void WaitForCoverCloseAsync(DVDCommand*);
-DiErr SyncReply(DVDCommand*);
-DiErr SyncReplyAssertRet(DVDCommand*, DiErr expected);
+void GetCoverStatusAsync(DVDCommand& block, u32* result);
+void WaitForCoverCloseAsync(DVDCommand& block);
 
 }
 

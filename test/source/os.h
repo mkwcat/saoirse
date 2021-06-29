@@ -14,6 +14,11 @@
 #define MEM1_BASE ((void*) 0x80000000)
 #endif
 
+template<class T>
+inline bool aligned(T addr, u32 align) {
+    return !(reinterpret_cast<u32>(addr) & (align - 1));
+}
+
 namespace IOSErr
 {
 

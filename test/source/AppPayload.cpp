@@ -35,7 +35,7 @@ void AppPayload::readPayload(const ApploaderInfo& info) {
     DVD::UniqueCommand cmd;
     assert(cmd.cmd() != nullptr);
     DVDLow::EncryptedReadAsync(*cmd.cmd(), payload_addr, round_up(info.payload_size, 32), 0x2460 / 4);
-    const auto result = DVDLow::SyncReply(cmd.cmd());
+    const auto result = cmd.cmd()->syncReply();
 
     if (result != DiErr::OK) {
         printf("Failed to read info block\n");
