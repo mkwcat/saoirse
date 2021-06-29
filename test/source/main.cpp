@@ -174,6 +174,10 @@ bool startupDrive()
     /* Drive is not spinning */
     irse::Log(LogS::Core, LogL::INFO, "Spinning up drive...");
     ret = DVD::ResetDrive(true);
+    if (ret != DiErr::OK)
+        return false;
+
+    ret = DVD::ReadDiskID(reinterpret_cast<DVD::DiskID*>(MEM1_BASE));
     return ret == DiErr::OK;
 }
 
