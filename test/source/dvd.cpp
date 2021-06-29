@@ -179,6 +179,15 @@ void DVDLow::UnencryptedReadAsync(
     DVD_SendIoctl(DiIoctl::UnencryptedRead, block, buffer, length);
 }
 
+void DVDLow::EncryptedReadAsync(DVDCommand& cmd, void* buffer, u32 len, u32 offset)
+{
+    cmd.input.command = DiIoctl::EncryptedRead;
+    cmd.input.args[1] = len;
+    cmd.input.args[2] = offset;
+
+    DVD_SendIoctl(DiIoctl::EncryptedRead, &cmd, buffer, len);
+}
+
 void DVDLow::GetCoverStatusAsync(DVDCommand* block, u32* result)
 {
     block->input.command = DiIoctl::GetCoverStatus;

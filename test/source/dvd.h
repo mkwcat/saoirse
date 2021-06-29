@@ -7,6 +7,8 @@
 enum class DiIoctl : u8
 {
     ReadDiskID = 0x70,
+    EncryptedRead = 0x71,
+
     WaitForCoverClose = 0x79,
     GetCoverStatus = 0x88,
     Reset = 0x8A,
@@ -52,7 +54,10 @@ struct DVDCommand
 const char* PrintErr(DiErr err);
 void ResetAsync(DVDCommand*, bool spinup);
 void ReadDiskIDAsync(DVDCommand*, void* out);
+
 void UnencryptedReadAsync(DVDCommand*, void* buffer, u32 length, u32 offset);
+void EncryptedReadAsync(DVDCommand& cmd, void* buf, u32 len, u32 offset);
+
 void GetCoverStatusAsync(DVDCommand*, u32* result);
 void WaitForCoverCloseAsync(DVDCommand*);
 DiErr SyncReply(DVDCommand*);

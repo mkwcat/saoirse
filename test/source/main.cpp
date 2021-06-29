@@ -237,6 +237,8 @@ irse::Stage irse::stReadDisc([[maybe_unused]] Stage from)
     irse::Log(LogS::Core, LogL::INFO,
         "DiskID: %.6s", reinterpret_cast<char*>(MEM1_BASE));
 
+
+
     /* Next stage not implemented yet so just wait for disc eject */
     return Stage::stDiscError;
 }
