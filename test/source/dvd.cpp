@@ -13,12 +13,14 @@ static bool initialized = false;
 
 static Queue<DVDLow::DVDCommand*> dataQueue(8);
 
-#define DVD_CACHE_FILE "/title/00000001/00000002/data/cache.dat"
-#define DVD_CACHE_SIZE 0xB00000
-#define DVD_CACHE_DISKID_OFFS 0x20
+constexpr const char* DVD_CACHE_FILE = "/title/00000001/00000002/data/cache.dat";
+constexpr std::size_t DVD_CACHE_SIZE = 0xB00000;
+constexpr std::ptrdiff_t DVD_CACHE_DISKID_OFFS = 0x20;
 
-#define STATUS_NOTINSERTED 1
-#define STATUS_INSERTED 2
+enum EStatus {
+    STATUS_NOTINSERTED = 1,
+    STATUS_INSERTED = 2
+};
 
 const char* DVDLow::PrintErr(DiErr err)
 {
@@ -38,7 +40,7 @@ const char* DVDLow::PrintErr(DiErr err)
 DVDLow::DVDCommand* DVD::GetCommand()
 {
     DVDLow::DVDCommand* block = dataQueue.receive();
-    ASSERT(block != nullptr);
+    ASSERT(block != nullptrptr);
 
     return block;
 }
@@ -65,7 +67,7 @@ static void DVD_SendIoctl(
         return;
     }
 
-    s32 ret = di.ioctlAsync(cmd,
+    const s32 ret = di.ioctlAsync(cmd,
         block->input_buf, sizeof(block->input_buf),
         output, outputLen, &DVD_Callback, reinterpret_cast<void*>(block));
     
@@ -125,6 +127,7 @@ bool DVD::IsInserted()
 
     DVDLow::GetCoverStatusAsync(block.cmd(), &status);
     DVDLow::SyncReplyAssertRet(block.cmd(), DiErr::OK);
+
     return status == STATUS_INSERTED;
 }
 
@@ -133,17 +136,18 @@ DiErr DVD::ReadDiskID(DiskID* out)
     UniqueCommand block;
 
     DVDLow::ReadDiskIDAsync(block.cmd(), reinterpret_cast<void*>(out));
+
     return DVDLow::SyncReply(block.cmd());
 }
 
 DiErr DVD::ReadCachedDiskID(DiskID* out)
 {
-    s32 ret = cacheFile.seek(DVD_CACHE_DISKID_OFFS, SEEK_SET);
-    if (ret != DVD_CACHE_DISKID_OFFS)
+    if (const s32 ret = cacheFile.seek(DVD_CACHE_DISKID_OFFS, SEEK_SET); 
+        ret != DVD_CACHE_DISKID_OFFS)
         return DiErr::DriveError;
 
-    ret = cacheFile.read(reinterpret_cast<void*>(out), 0x20);
-    if (ret != 0x20)
+    if (const s32 ret = cacheFile.read(reinterpret_cast<void*>(out), 0x20);
+        ret != 0x20)
         return DiErr::DriveError;
     
     return DiErr::OK;
@@ -153,7 +157,8 @@ DiErr DVD::ReadCachedDiskID(DiskID* out)
 void DVDLow::ResetAsync(DVDCommand* block, bool spinup)
 {
     block->input.command = DiIoctl::Reset;
-    block->input.args[0] = (u32) spinup;
+    block->input.args[0] = static_cast<u32>(spinup);
+
     DVD_SendIoctl(DiIoctl::Reset, block,
         block->output_buf, sizeof(block->output_buf));
 }
@@ -170,12 +175,14 @@ void DVDLow::UnencryptedReadAsync(
     block->input.command = DiIoctl::UnencryptedRead;
     block->input.args[1] = length;
     block->input.args[2] = offset;
+
     DVD_SendIoctl(DiIoctl::UnencryptedRead, block, buffer, length);
 }
 
 void DVDLow::GetCoverStatusAsync(DVDCommand* block, u32* result)
 {
     block->input.command = DiIoctl::GetCoverStatus;
+
     DVD_SendIoctl(DiIoctl::GetCoverStatus, block,
         reinterpret_cast<void*>(result), sizeof(u32));
 }
@@ -183,7 +190,8 @@ void DVDLow::GetCoverStatusAsync(DVDCommand* block, u32* result)
 void DVDLow::WaitForCoverCloseAsync(DVDCommand* block)
 {
     block->input.command = DiIoctl::WaitForCoverClose;
-    DVD_SendIoctl(DiIoctl::WaitForCoverClose, block, NULL, 0);
+
+    DVD_SendIoctl(DiIoctl::WaitForCoverClose, block, nullptr, 0);
 }
 
 DiErr DVDLow::SyncReply(DVDLow::DVDCommand* block)
@@ -193,12 +201,14 @@ DiErr DVDLow::SyncReply(DVDLow::DVDCommand* block)
 
 DiErr DVDLow::SyncReplyAssertRet(DVDLow::DVDCommand* cmd, DiErr expected)
 {
-    DiErr ret = cmd->reply_queue.receive();
+    const DiErr ret = cmd->reply_queue.receive();
+    
     if (ret != expected) {
         irse::Log(LogS::DVD, LogL::ERROR,
             "SyncReplyAssertRet: ret == %s, expected %s\n",
             DVDLow::PrintErr(ret), DVDLow::PrintErr(expected));
         abort();
     }
+    
     return ret;
 }
