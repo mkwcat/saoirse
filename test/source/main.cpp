@@ -91,6 +91,7 @@ void irse::stInit()
 
     irse::LogConfig(0xFFFFFFFF, LogL::INFO);
     irse::Log(LogS::Core, LogL::WARN, "Debug console initialized");
+    VIDEO_WaitVSync();
     DVD::Init();
     motor = new DVDLow::DVDCommand;
 
@@ -103,9 +104,10 @@ void irse::stInit()
 
 void irse::stNoDisc()
 {
-    if (!DVD::IsInserted()) {
+    irse::Log(LogS::Core, LogL::INFO, "Waiting for disc insert...");
+
+    while (!DVD::IsInserted()) {
         usleep(32000);
-        return;
     }
 
     state.stage = Stage::stSpinupDiscNoCache;
@@ -113,8 +115,7 @@ void irse::stNoDisc()
 
 void irse::stSpinupDisc()
 {
-    DVD::DiskID diskid;
-
+    /* If ReadDiskID succeeds here, that means the drive is already started */
     DiErr ret = DVD::ReadDiskID(reinterpret_cast<DVD::DiskID*>(MEM1_BASE));
     if (ret == DiErr::OK) {
         state.stage = Stage::stReadDisc;
@@ -126,28 +127,47 @@ void irse::stSpinupDisc()
         return;
     }
 
-    
-
-
-
-
-
-
+    /* ReadDiskID returned DriveError, so we have to spinup the drive */
+    state.stage = Stage::stSpinupDiscNoCache;
 }
 
 void irse::stSpinupDiscNoCache()
 {
+    DiErr ret = DVD::ResetDrive();
+    if (ret != DiErr::OK) {
+        state.stage = Stage::stDiscError;
+        return;
+    }
 
+    ret = DVD::ReadDiskID(reinterpret_cast<DVD::DiskID*>(MEM1_BASE));
+    if (ret != DiErr::OK) {
+        irse::Log(LogS::Core, LogL::ERROR, "DVD::ReadDiskID returned %s",
+            DVDLow::PrintErr(ret));
+        state.stage = Stage::stDiscError;
+        return;
+    }
+
+    state.stage = Stage::stReadDisc;
 }
 
 void irse::stDiscError()
 {
+    irse::Log(LogS::Core, LogL::INFO, "Waiting for disc eject...");
 
+    while (DVD::IsInserted()) {
+        usleep(32000);
+    }
+
+    state.stage = Stage::stNoDisc;
 }
 
 void irse::stReadDisc()
 {
+    irse::Log(LogS::Core, LogL::INFO,
+        "DiskID: %.6s", reinterpret_cast<char*>(MEM1_BASE));
 
+    /* Next stage not implemented yet so just wait for disc eject */
+    state.stage = Stage::stDiscError;
 }
 
 void irse::Loop()

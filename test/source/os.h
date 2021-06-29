@@ -75,8 +75,10 @@ public:
     
     Queue(const Queue& from) = delete;
     explicit Queue(u32 count = 8) {
-        const s32 ret = MQ_Init(&this->m_queue, count);
-        ASSERT(ret == 0);
+        if (count != 0) {
+            const s32 ret = MQ_Init(&this->m_queue, count);
+            ASSERT(ret == 0);
+        }
     }
 
     ~Queue() {

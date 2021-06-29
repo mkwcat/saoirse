@@ -25,10 +25,10 @@ INCLUDES	:=
 # options for code generation
 #---------------------------------------------------------------------------------
 
-CFLAGS	= -g -Os -Wall $(MACHDEP) $(INCLUDE) -Wl,--section-start,.init=0x80900000
+CFLAGS	= -g -Os -Wall $(MACHDEP) $(INCLUDE)
 CXXFLAGS	=	$(CFLAGS)
 
-LDFLAGS	=	-g $(MACHDEP) -Wl,-Map,$(notdir $@).map
+LDFLAGS	=	-g $(MACHDEP) -Wl,-Map,$(notdir $@).map -Wl,--section-start,.init=0x80900000
 
 #---------------------------------------------------------------------------------
 # any extra libraries we wish to link with the project

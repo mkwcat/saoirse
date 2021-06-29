@@ -10,7 +10,7 @@ static IOS::ResourceCtrl<DiIoctl> di(-1);
 static IOS::File cacheFile(-1);
 static bool initialized = false;
 
-static Queue<DVDLow::DVDCommand*> dataQueue(-1);
+static Queue<DVDLow::DVDCommand*> dataQueue(8);
 
 #define DVD_CACHE_FILE "/title/00000001/00000002/data/cache.dat"
 #define DVD_CACHE_SIZE 0xB00000
@@ -90,6 +90,18 @@ void DVD::Init()
         dataQueue.send(blocks + i);
 
     irse::Log(LogS::DVD, LogL::WARN, "DVD initialized");
+}
+
+DiErr DVD::ResetDrive()
+{
+    UniqueCommand block;
+
+    DVDLow::ResetAsync(block.cmd(), true);
+    DiErr ret = DVDLow::SyncReply(block.cmd());
+    if (ret != DiErr::OK)
+        irse::Log(LogS::DVD, LogL::WARN, "Failed to reset drive: %s\n",
+            DVDLow::PrintErr(ret));
+    return ret;
 }
 
 bool DVD::IsInserted()
