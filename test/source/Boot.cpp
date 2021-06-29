@@ -20,6 +20,15 @@
 #include <thread>
 #include <time.h>
 
+#if 0
+static void DebugPause() {
+    using namespace std;
+    std::this_thread::sleep_for(2s);
+}
+#else
+static void DebugPause() {}
+#endif
+
 enum class CachePolicy {
     None,
     InvalidateDC,
@@ -102,55 +111,31 @@ EntryPoint Apploader::load(
     [[maybe_unused]] int fst_expand)
 {
     const Volume main_volume = readVolumes()[0];
-    {
-        using namespace std;
-        std::this_thread::sleep_for(2s);
-    }
+    
     const auto partitions = readPartitions(main_volume);
-    {
-        using namespace std;
-        std::this_thread::sleep_for(2s);
-    }
+    DebugPause();
     const Partition* boot_partition = findBootPartition(main_volume, partitions);
-    {
-        using namespace std;
-        std::this_thread::sleep_for(2s);
-    }
+    DebugPause();
     if (boot_partition == nullptr) {
         return nullptr;
     }
     printf("Boot partition: %p\n", reinterpret_cast<const void*>(boot_partition));
 
     openPartition(*boot_partition);
-    {
-        using namespace std;
-        std::this_thread::sleep_for(2s);
-    }
+    DebugPause();
     const ApploaderInfo app_info = readAppInfo();
     dumpAppInfo(app_info);
-    {
-        using namespace std;
-        std::this_thread::sleep_for(2s);
-    }
+    DebugPause();
 
     
     // XXX Partition must be open
     PayloadManager payload(app_info);
-    {
-        using namespace std;
-        std::this_thread::sleep_for(2s);
-    };
+    DebugPause();
     settime(secs_to_ticks(time(NULL) - 946684800));
-    {
-        using namespace std;
-        std::this_thread::sleep_for(2s);
-    }
+    DebugPause();
     payload.loadSegmnts();
 
-    {
-        using namespace std;
-        std::this_thread::sleep_for(2s);
-    }
+    DebugPause();
 
 
     return payload.getEntrypoint();
@@ -174,10 +159,7 @@ ApploaderInfo Apploader::readAppInfo() {
 
     printf("Reading apploader info..\n");
     EncryptedRead(&app_info, sizeof(app_info), 0x2440 / 4, CachePolicy::InvalidateDC);
-    {
-        using namespace std;
-        std::this_thread::sleep_for(2s);
-    }
+    DebugPause();
     return app_info;
 }
 
