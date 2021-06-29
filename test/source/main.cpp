@@ -108,7 +108,7 @@ irse::Stage irse::stDefault(Stage from)
     }
 }
 
-irse::Stage irse::stInit(Stage from)
+irse::Stage irse::stInit([[maybe_unused]] Stage from)
 {
     /* Initialize video and the debug console */
     VIDEO_Init();
@@ -137,7 +137,7 @@ irse::Stage irse::stInit(Stage from)
     return Stage::stNoDisc;
 }
 
-irse::Stage irse::stReturnToMenu(Stage from)
+irse::Stage irse::stReturnToMenu([[maybe_unused]] Stage from)
 {
     if (DVD::IsInserted()) {
         DVD::ResetDrive(false);
@@ -181,7 +181,7 @@ bool startupDrive()
     return ret == DiErr::OK;
 }
 
-irse::Stage irse::stSpinupDisc(Stage from)
+irse::Stage irse::stSpinupDisc([[maybe_unused]] Stage from)
 {
     if (!startupDrive())
         return Stage::stDiscError;
@@ -202,7 +202,7 @@ irse::Stage irse::stSpinupDisc(Stage from)
     return Stage::stReadDisc;
 }
 
-irse::Stage irse::stSpinupDiscNoCache(Stage from)
+irse::Stage irse::stSpinupDiscNoCache([[maybe_unused]] Stage from)
 {
     if (!startupDrive())
         return Stage::stDiscError;
@@ -217,7 +217,7 @@ irse::Stage irse::stSpinupDiscNoCache(Stage from)
     return Stage::stReadDisc;
 }
 
-irse::Stage irse::stDiscError(Stage from)
+irse::Stage irse::stDiscError([[maybe_unused]] Stage from)
 {
     if (from != Stage::stDefault) {
         DVD::ResetDrive(false);
@@ -232,7 +232,7 @@ irse::Stage irse::stDiscError(Stage from)
     return Stage::stNoDisc;
 }
 
-irse::Stage irse::stReadDisc(Stage from)
+irse::Stage irse::stReadDisc([[maybe_unused]] Stage from)
 {
     irse::Log(LogS::Core, LogL::INFO,
         "DiskID: %.6s", reinterpret_cast<char*>(MEM1_BASE));
@@ -241,7 +241,7 @@ irse::Stage irse::stReadDisc(Stage from)
     return Stage::stDiscError;
 }
 
-s32 irse::Loop(void* arg)
+s32 irse::Loop([[maybe_unused]] void* arg)
 {
     Stage stage = Stage::stInit;
     Stage prev = Stage::stDefault;
@@ -266,7 +266,7 @@ s32 irse::Loop(void* arg)
     }
 }
 
-s32 main(s32 argc, char** argv)
+s32 main([[maybe_unused]] s32 argc, [[maybe_unused]] char** argv)
 {
     /* Initialize controllers */
     WPAD_Init();
