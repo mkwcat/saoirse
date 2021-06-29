@@ -2,6 +2,7 @@
 
 #include "dvd.h"
 #include <gccore.h>
+#include <gcutil.h>
 #include <wiiuse/wpad.h>
 
 #include <stdio.h>
@@ -13,10 +14,32 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-static struct {
+
+namespace irse
+{
+
+struct {
     s32 verbosity;
-    irse::Stage stage;
+    bool useCache;
+    u64 waitTime;
 } state;
+
+Queue<Stage> events;
+
+s32 Loop(void* arg);
+
+Stage stDefault(Stage from);
+Stage stInit(Stage from);
+Stage stReturnToMenu(Stage from);
+Stage stNoDisc(Stage from);
+Stage stSpinupDisc(Stage from);
+Stage stSpinupDiscNoCache(Stage from);
+Stage stDiscError(Stage from);
+Stage stReadDisc(Stage from);
+
+}
+
+static Thread mainThread;
 
 static struct {
     void *xfb = NULL;
@@ -66,13 +89,27 @@ void irse::Log(LogS src, LogL level, const char* format, ...)
     }
 }
 
-static DVDLow::DVDCommand* motor;
-
-void irse::stInit()
+/* 
+ * Checks to see if we have any events, like shutdown commands.
+ * Returns to the previous stage if none, after waiting for some amount
+ * of time.
+ */
+irse::Stage irse::stDefault(Stage from)
 {
-    /* Initialize controllers */
-    WPAD_Init();
+    Stage next;
+    if (!events.tryreceive(next)) {
+        //! No event
+        /* Wait 32 ms */
+        usleep(32000);
+        return from;
+    } else {
+        //! Received event
+        return next;
+    }
+}
 
+irse::Stage irse::stInit(Stage from)
+{
     /* Initialize video and the debug console */
     VIDEO_Init();
     display.rmode = VIDEO_GetPreferredMode(NULL);
@@ -93,91 +130,126 @@ void irse::stInit()
     irse::Log(LogS::Core, LogL::WARN, "Debug console initialized");
     VIDEO_WaitVSync();
     DVD::Init();
-    motor = new DVDLow::DVDCommand;
 
     if (DVD::IsInserted()) {
-        state.stage = Stage::stSpinupDisc;
-    } else {
-        state.stage = Stage::stNoDisc;
+        return Stage::stSpinupDisc;
     }
+    return Stage::stNoDisc;
 }
 
-void irse::stNoDisc()
+irse::Stage irse::stReturnToMenu(Stage from)
 {
-    irse::Log(LogS::Core, LogL::INFO, "Waiting for disc insert...");
-
-    while (!DVD::IsInserted()) {
-        usleep(32000);
+    if (DVD::IsInserted()) {
+        DVD::ResetDrive(false);
     }
-
-    state.stage = Stage::stSpinupDiscNoCache;
+    exit(0);
+    /* Should never reach here */
+    return Stage::stReturnToMenu;
 }
 
-void irse::stSpinupDisc()
+irse::Stage irse::stNoDisc(Stage from)
+{
+    if (from != Stage::stDefault) {
+        irse::Log(LogS::Core, LogL::WARN, "Waiting for disc insert...");
+    }
+
+    if (!DVD::IsInserted()) {
+        return Stage::stDefault;
+    }
+    return Stage::stSpinupDiscNoCache;
+}
+
+static inline
+bool startupDrive()
 {
     /* If ReadDiskID succeeds here, that means the drive is already started */
     DiErr ret = DVD::ReadDiskID(reinterpret_cast<DVD::DiskID*>(MEM1_BASE));
     if (ret == DiErr::OK) {
-        state.stage = Stage::stReadDisc;
-        return;
+        irse::Log(LogS::Core, LogL::INFO, "Drive is already spinning");
+        return true;
     }
+    if (ret != DiErr::DriveError)
+        return false;
 
-    if (ret != DiErr::DriveError) {
-        state.stage = Stage::stDiscError;
-        return;
-    }
-
-    /* ReadDiskID returned DriveError, so we have to spinup the drive */
-    state.stage = Stage::stSpinupDiscNoCache;
+    /* Drive is not spinning */
+    irse::Log(LogS::Core, LogL::INFO, "Spinning up drive...");
+    ret = DVD::ResetDrive(true);
+    return ret == DiErr::OK;
 }
 
-void irse::stSpinupDiscNoCache()
+irse::Stage irse::stSpinupDisc(Stage from)
 {
-    DiErr ret = DVD::ResetDrive();
-    if (ret != DiErr::OK) {
-        state.stage = Stage::stDiscError;
-        return;
+    if (!startupDrive())
+        return Stage::stDiscError;
+
+    /* Initialize the system menu cache.dat */
+    state.useCache = DVD::OpenCacheFile();
+    if (state.useCache) {
+        DVD::DiskID cached ATTRIBUTE_ALIGN(32);
+        DiErr ret = DVD::ReadCachedDiskID(&cached);
+
+        if (ret == DiErr::OK && memcmp(MEM1_BASE, &cached.gameID, 6)) {
+            irse::Log(LogS::Core, LogL::WARN,
+                "Cached diskid does not equal real diskid");
+            state.useCache = false;
+        }
     }
 
-    ret = DVD::ReadDiskID(reinterpret_cast<DVD::DiskID*>(MEM1_BASE));
+    return Stage::stReadDisc;
+}
+
+irse::Stage irse::stSpinupDiscNoCache(Stage from)
+{
+    if (!startupDrive())
+        return Stage::stDiscError;
+
+    DiErr ret = DVD::ReadDiskID(reinterpret_cast<DVD::DiskID*>(MEM1_BASE));
     if (ret != DiErr::OK) {
         irse::Log(LogS::Core, LogL::ERROR, "DVD::ReadDiskID returned %s",
             DVDLow::PrintErr(ret));
-        state.stage = Stage::stDiscError;
-        return;
+        return Stage::stDiscError;
     }
 
-    state.stage = Stage::stReadDisc;
+    return Stage::stReadDisc;
 }
 
-void irse::stDiscError()
+irse::Stage irse::stDiscError(Stage from)
 {
-    irse::Log(LogS::Core, LogL::INFO, "Waiting for disc eject...");
-
-    while (DVD::IsInserted()) {
-        usleep(32000);
+    if (from != Stage::stDefault) {
+        DVD::ResetDrive(false);
+        irse::Log(LogS::Core, LogL::WARN, "Disc error, waiting for eject...");
+        /* Drive reset will throw off the cover status at first */
+        return Stage::stDefault;
     }
 
-    state.stage = Stage::stNoDisc;
+    if (DVD::IsInserted()) {
+        return Stage::stDefault;
+    }
+    return Stage::stNoDisc;
 }
 
-void irse::stReadDisc()
+irse::Stage irse::stReadDisc(Stage from)
 {
     irse::Log(LogS::Core, LogL::INFO,
         "DiskID: %.6s", reinterpret_cast<char*>(MEM1_BASE));
 
     /* Next stage not implemented yet so just wait for disc eject */
-    state.stage = Stage::stDiscError;
+    return Stage::stDiscError;
 }
 
-void irse::Loop()
+s32 irse::Loop(void* arg)
 {
-    state.stage = Stage::stInit;
+    Stage stage = Stage::stInit;
+    Stage prev = Stage::stDefault;
+    Stage next = Stage::stReturnToMenu;
+    state.waitTime = 32000;
 
     while (1) {
-        switch (state.stage) {
-#define STAGE_CASE(name) case Stage::name: name(); break
+        switch (stage) {
+#define STAGE_CASE(name) case Stage::name: next = name(prev); break
+            STAGE_CASE(stDefault);
             STAGE_CASE(stInit);
+            STAGE_CASE(stReturnToMenu);
             STAGE_CASE(stNoDisc);
             STAGE_CASE(stSpinupDisc);
             STAGE_CASE(stSpinupDiscNoCache);
@@ -185,20 +257,29 @@ void irse::Loop()
             STAGE_CASE(stReadDisc);
 #undef STAGE_CASE
         }
+        prev = stage;
+        stage = next;
     }
 }
 
 s32 main(s32 argc, char** argv)
 {
-    irse::Loop();
+    /* Initialize controllers */
+    WPAD_Init();
+
+    LWP_SetThreadPriority(LWP_GetSelf(), 50);
+    mainThread.create(irse::Loop, nullptr, nullptr, 1024, LWP_PRIO_HIGHEST - 20);
+    
+    while (1) {
+        usleep(16000);
+        WPAD_ScanPads();
+
+        s32 down = WPAD_ButtonsDown(0);
+        if (down & WPAD_BUTTON_HOME) {
+            irse::events.send(irse::Stage::stReturnToMenu);
+            break;
+        }
+    }
+    while (1) { }
     return 0;
 }
-
-
-
-
-
-
-
-
-

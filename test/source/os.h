@@ -86,15 +86,23 @@ public:
     }
 
     void send(T msg, u32 flags = 0) {
-        const BOOL ret = MQ_Send(this->m_queue, reinterpret_cast<mqmsg_t>(msg), flags);
+        const BOOL ret = MQ_Send(
+            this->m_queue, reinterpret_cast<mqmsg_t>(msg), flags);
         ASSERT(ret == TRUE);
     }
 
-    T receive(u32 flags = 0) {
+    T receive() {
         T msg;
-        const BOOL ret = MQ_Receive(this->m_queue, reinterpret_cast<mqmsg_t*>(&msg), flags);
+        const BOOL ret = MQ_Receive(
+            this->m_queue, reinterpret_cast<mqmsg_t*>(&msg), 0);
         ASSERT(ret == TRUE);
         return msg;
+    }
+
+    bool tryreceive(T& msg) {
+        const BOOL ret = MQ_Receive(
+            this->m_queue, reinterpret_cast<mqmsg_t*>(&msg), 1);
+        return ret; 
     }
 
     mqbox_t id() const {
@@ -143,6 +151,47 @@ public:
 
 protected:
     mutexid m_mutex;
+#endif
+};
+
+class Thread
+{
+    typedef s32 (*Proc)(void* arg);
+#ifdef T_IOS
+public:
+    static_assert(0, "Not implemented!");
+#else
+public:
+    Thread(const Thread& rhs) = delete;
+
+    Thread() : m_arg(nullptr), f_proc(nullptr), m_valid(false), m_tid(0) { }
+    Thread(lwp_t thread)
+        : m_arg(nullptr), f_proc(nullptr), m_valid(true), m_tid(thread) { }
+
+    Thread(Proc proc, void* arg, void* stack, u32 stackSize, s32 prio) {
+        create(proc, arg, stack, stackSize, prio);
+    }
+
+    void create(Proc proc, void* arg, void* stack, u32 stackSize, s32 prio) {
+        f_proc = proc;
+        m_arg = arg;
+        const s32 ret = LWP_CreateThread(&m_tid, &__threadProc,
+            reinterpret_cast<void*>(this), stack, stackSize, prio);
+        ASSERT(ret == 0);
+    }
+
+    static void* __threadProc(void* arg) {
+        Thread* thr = reinterpret_cast<Thread*>(arg);
+        if (thr->f_proc != nullptr)
+            thr->f_proc(arg);
+        return NULL;
+    }
+
+protected:
+    void* m_arg;
+    Proc f_proc;
+    bool m_valid;
+    lwp_t m_tid;
 #endif
 };
 
@@ -236,11 +285,16 @@ struct Request
 class Resource
 {
 public:
+    Resource() : m_fd(-1) { }
     Resource(s32 fd) : m_fd(fd) { }
     explicit Resource(const char* path, u32 mode = 0)
         : m_fd(IOS_Open(path, mode)) { }
 
     Resource(const Resource& from) = delete;
+    Resource(Resource&& from) {
+        this->m_fd = from.m_fd;
+        from.m_fd = -1;
+    }
 
     ~Resource() {
         if (this->m_fd >= 0)
@@ -272,7 +326,7 @@ public:
     }
 
 protected:
-    const s32 m_fd;
+    s32 m_fd;
 };
 
 template<typename Ioctl>

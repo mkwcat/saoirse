@@ -94,7 +94,8 @@ struct DiskID
 };
 
 void Init();
-DiErr ResetDrive();
+bool OpenCacheFile();
+DiErr ResetDrive(bool spinup);
 DiErr ReadDiskID(DiskID* out);
 DiErr ReadCachedDiskID(DiskID* out);
 bool IsInserted();

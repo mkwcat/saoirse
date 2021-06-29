@@ -3,6 +3,7 @@
 #include "os.h"
 #include <cstdio>
 #include <array>
+#include <utility>
 #include <unistd.h>
 #include <stdlib.h>
 
@@ -81,10 +82,6 @@ void DVD::Init()
     new (&di) IOS::ResourceCtrl<DiIoctl>("/dev/di");
     ASSERT(di.fd() >= 0);
 
-    new (&cacheFile) IOS::File(DVD_CACHE_FILE, IOS::Mode::Read);
-    ASSERT(cacheFile.fd() >= 0);
-    ASSERT(cacheFile.size() == DVD_CACHE_SIZE);
-
     DVDLow::DVDCommand* blocks = new DVDLow::DVDCommand[8];
     for (s32 i = 0; i < 8; i++)
         dataQueue.send(blocks + i);
@@ -92,11 +89,28 @@ void DVD::Init()
     irse::Log(LogS::DVD, LogL::WARN, "DVD initialized");
 }
 
-DiErr DVD::ResetDrive()
+bool DVD::OpenCacheFile()
+{
+    IOS::File f(DVD_CACHE_FILE, IOS::Mode::Read);
+    if (f.fd() < 0) {
+        irse::Log(LogS::DVD, LogL::ERROR,
+            "Failed to open cache.dat: %d", f.fd());
+        return false;
+    }
+    if (f.size() != DVD_CACHE_SIZE) {
+        irse::Log(LogS::DVD, LogL::ERROR, "Invalid cache.dat size");
+        return false;
+    }
+
+    new (&cacheFile) IOS::File(std::move(f));
+    return true;
+}
+
+DiErr DVD::ResetDrive(bool spinup)
 {
     UniqueCommand block;
 
-    DVDLow::ResetAsync(block.cmd(), true);
+    DVDLow::ResetAsync(block.cmd(), spinup);
     DiErr ret = DVDLow::SyncReply(block.cmd());
     if (ret != DiErr::OK)
         irse::Log(LogS::DVD, LogL::WARN, "Failed to reset drive: %s\n",
@@ -107,13 +121,12 @@ DiErr DVD::ResetDrive()
 bool DVD::IsInserted()
 {
     UniqueCommand block;
-    u32 status;
+    u32 status ATTRIBUTE_ALIGN(32);
 
     DVDLow::GetCoverStatusAsync(block.cmd(), &status);
     DVDLow::SyncReplyAssertRet(block.cmd(), DiErr::OK);
     return status == STATUS_INSERTED;
 }
-
 
 DiErr DVD::ReadDiskID(DiskID* out)
 {
@@ -135,6 +148,7 @@ DiErr DVD::ReadCachedDiskID(DiskID* out)
     
     return DiErr::OK;
 }
+
 
 void DVDLow::ResetAsync(DVDCommand* block, bool spinup)
 {

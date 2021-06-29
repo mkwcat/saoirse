@@ -16,17 +16,11 @@ namespace irse
 void LogConfig(u32 srcmask, LogL level);
 void Log(LogS src, LogL level, const char* format, ...);
 
-void Loop();
-
 enum class Stage {
-    stInit, stNoDisc, stSpinupDisc, stSpinupDiscNoCache, stDiscError, stReadDisc
+    stDefault, stInit, stReturnToMenu, stNoDisc, stSpinupDisc, stSpinupDiscNoCache, stDiscError, stReadDisc
 };
-void stInit();
-void stNoDisc();
-void stSpinupDisc();
-void stSpinupDiscNoCache();
-void stDiscError();
-void stReadDisc();
+
+extern Queue<Stage> events;
 
 }
 
