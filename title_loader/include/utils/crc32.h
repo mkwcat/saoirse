@@ -1,8 +1,5 @@
 /*!
- * Author  : Star
- * Date    : 14 May 2021
  * File    : crc32.h
- * Version : 1.0.0.0
  */
 
 #pragma once
@@ -26,14 +23,17 @@ __attribute__((always_inline))
 inline unsigned int
 CRC32_Calculate(unsigned int uiCRC32, const void* buffer, unsigned int uiBufferLength)
 {
-	const volatile unsigned int vuiPolynomial = XOR_CRYPT_POLYNOMIAL(POLYNOMIAL);
+	unsigned int polynomial = XOR_CRYPT_POLYNOMIAL(POLYNOMIAL);
 
 	uiCRC32 = ~uiCRC32;
 	for (unsigned char* pBuffer = (unsigned char*)buffer; uiBufferLength != 0; uiBufferLength--)
 	{
 		uiCRC32 ^= *pBuffer++;
 		for (int i = 0; i < 8; i++)
-			uiCRC32 = (uiCRC32 >> 1) ^ (XOR_CRYPT_POLYNOMIAL(vuiPolynomial) & -(uiCRC32 & 1));
+			uiCRC32 = (uiCRC32 >> 1) ^ (XOR_CRYPT_POLYNOMIAL(polynomial) & -(uiCRC32 & 1));
 	}
 	return ~uiCRC32;
 }
+
+#undef POLYNOMIAL
+#undef XOR_CRYPT_POLYNOMIAL
