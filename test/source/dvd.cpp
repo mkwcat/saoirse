@@ -1,6 +1,7 @@
 #include "dvd.h"
 #include "irse.h"
 #include "os.h"
+#include "hollywood.h"
 #include <ogc/es.h>
 #include <cstdio>
 #include <array>
@@ -108,13 +109,17 @@ DiErr DVD::ResetDrive(bool spinup)
 
 bool DVD::IsInserted()
 {
-    UniqueCommand block;
-    u32 status ATTRIBUTE_ALIGN(32);
+    /* Check SLOT_IN first to make IPC requests less spammy */
+    if (GPIOBRead(GPIOPin::SLOT_IN)) {
+        UniqueCommand block;
+        u32 status ATTRIBUTE_ALIGN(32);
 
-    DVDLow::GetCoverStatusAsync(*block.cmd(), &status);
-    block.cmd()->syncReplyAssertRet(DiErr::OK);
+        DVDLow::GetCoverStatusAsync(*block.cmd(), &status);
+        block.cmd()->syncReplyAssertRet(DiErr::OK);
 
-    return status == STATUS_INSERTED;
+        return status == STATUS_INSERTED;
+    }
+    return false;
 }
 
 DiErr DVD::ReadDiskID(DiskID* out)
