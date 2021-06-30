@@ -16,28 +16,14 @@
 #include "Boot.hpp"
 #include "GlobalsConfig.hpp"
 
-namespace irse
-{
+using namespace irse;
 
 struct {
     s32 verbosity;
     bool useCache;
 } state;
 
-Queue<Stage> events;
-
-s32 Loop(void* arg);
-
-Stage stDefault(Stage from);
-Stage stInit(Stage from);
-Stage stReturnToMenu(Stage from);
-Stage stNoDisc(Stage from);
-Stage stSpinupDisc(Stage from);
-Stage stSpinupDiscNoCache(Stage from);
-Stage stDiscError(Stage from);
-Stage stReadDisc(Stage from);
-
-}
+Queue<Stage> irse::events;
 
 static Thread mainThread;
 
@@ -45,6 +31,17 @@ static struct {
     void *xfb = NULL;
     GXRModeObj *rmode = NULL;
 } display;
+
+static s32 Loop(void* arg);
+
+static Stage stDefault(Stage from);
+static Stage stInit(Stage from);
+static Stage stReturnToMenu(Stage from);
+static Stage stNoDisc(Stage from);
+static Stage stSpinupDisc(Stage from);
+static Stage stSpinupDiscNoCache(Stage from);
+static Stage stDiscError(Stage from);
+static Stage stReadDisc(Stage from);
 
 static constexpr std::array<const char*, 4> logSources = {
     "Core", "DVD", "Loader", "Payload" };
@@ -102,7 +99,7 @@ void irse::Log(LogS src, LogL level, const char* format, ...)
  * Returns to the previous stage if none, after waiting for some amount
  * of time.
  */
-irse::Stage irse::stDefault(Stage from)
+static Stage stDefault(Stage from)
 {
     Stage next;
     if (!events.tryreceive(next)) {
@@ -116,7 +113,7 @@ irse::Stage irse::stDefault(Stage from)
     }
 }
 
-irse::Stage irse::stInit([[maybe_unused]] Stage from)
+static Stage stInit([[maybe_unused]] Stage from)
 {
     /* Initialize video and the debug console */
     VIDEO_Init();
@@ -140,31 +137,31 @@ irse::Stage irse::stInit([[maybe_unused]] Stage from)
     DVD::Init();
 
     if (DVD::IsInserted()) {
-        return Stage::stSpinupDisc;
+        return Stage::SpinupDisc;
     }
-    return Stage::stNoDisc;
+    return Stage::NoDisc;
 }
 
-irse::Stage irse::stReturnToMenu([[maybe_unused]] Stage from)
+static Stage stReturnToMenu([[maybe_unused]] Stage from)
 {
     if (DVD::IsInserted()) {
         DVD::ResetDrive(false);
     }
     exit(0);
     /* Should never reach here */
-    return Stage::stReturnToMenu;
+    return Stage::ReturnToMenu;
 }
 
-irse::Stage irse::stNoDisc(Stage from)
+static Stage stNoDisc(Stage from)
 {
-    if (from != Stage::stDefault) {
+    if (from != Stage::Default) {
         irse::Log(LogS::Core, LogL::WARN, "Waiting for disc insert...");
     }
 
     if (!DVD::IsInserted()) {
-        return Stage::stDefault;
+        return Stage::Default;
     }
-    return Stage::stSpinupDiscNoCache;
+    return Stage::SpinupDiscNoCache;
 }
 
 static inline
@@ -189,10 +186,10 @@ bool startupDrive()
     return ret == DiErr::OK;
 }
 
-irse::Stage irse::stSpinupDisc([[maybe_unused]] Stage from)
+static Stage stSpinupDisc([[maybe_unused]] Stage from)
 {
     if (!startupDrive())
-        return Stage::stDiscError;
+        return Stage::DiscError;
 
     /* Initialize the system menu cache.dat */
     state.useCache = DVD::OpenCacheFile();
@@ -207,40 +204,40 @@ irse::Stage irse::stSpinupDisc([[maybe_unused]] Stage from)
         }
     }
 
-    return Stage::stReadDisc;
+    return Stage::ReadDisc;
 }
 
-irse::Stage irse::stSpinupDiscNoCache([[maybe_unused]] Stage from)
+static Stage stSpinupDiscNoCache([[maybe_unused]] Stage from)
 {
     if (!startupDrive())
-        return Stage::stDiscError;
+        return Stage::DiscError;
 
     DiErr ret = DVD::ReadDiskID(reinterpret_cast<DVD::DiskID*>(MEM1_BASE));
     if (ret != DiErr::OK) {
         irse::Log(LogS::Core, LogL::ERROR, "DVD::ReadDiskID returned %s",
             DVDLow::PrintErr(ret));
-        return Stage::stDiscError;
+        return Stage::DiscError;
     }
 
-    return Stage::stReadDisc;
+    return Stage::ReadDisc;
 }
 
-irse::Stage irse::stDiscError([[maybe_unused]] Stage from)
+static Stage stDiscError([[maybe_unused]] Stage from)
 {
-    if (from != Stage::stDefault) {
+    if (from != Stage::Default) {
         DVD::ResetDrive(false);
         irse::Log(LogS::Core, LogL::WARN, "Disc error, waiting for eject...");
         /* Drive reset will confuse the cover status at first */
-        return Stage::stDefault;
+        return Stage::Default;
     }
 
     if (DVD::IsInserted()) {
-        return Stage::stDefault;
+        return Stage::Default;
     }
-    return Stage::stNoDisc;
+    return Stage::NoDisc;
 }
 
-irse::Stage irse::stReadDisc([[maybe_unused]] Stage from)
+static Stage stReadDisc([[maybe_unused]] Stage from)
 {
     irse::Log(LogS::Core, LogL::INFO,
         "DiskID: %.6s", reinterpret_cast<char*>(MEM1_BASE));
@@ -260,23 +257,23 @@ irse::Stage irse::stReadDisc([[maybe_unused]] Stage from)
     abort();
 }
 
-s32 irse::Loop([[maybe_unused]] void* arg)
+static s32 Loop([[maybe_unused]] void* arg)
 {
-    Stage stage = Stage::stInit;
-    Stage prev = Stage::stDefault;
-    Stage next = Stage::stReturnToMenu;
+    Stage stage = Stage::Init;
+    Stage prev = Stage::Default;
+    Stage next = Stage::ReturnToMenu;
 
     while (1) {
         switch (stage) {
-#define STAGE_CASE(name) case Stage::name: next = name(prev); break
-            STAGE_CASE(stDefault);
-            STAGE_CASE(stInit);
-            STAGE_CASE(stReturnToMenu);
-            STAGE_CASE(stNoDisc);
-            STAGE_CASE(stSpinupDisc);
-            STAGE_CASE(stSpinupDiscNoCache);
-            STAGE_CASE(stDiscError);
-            STAGE_CASE(stReadDisc);
+#define STAGE_CASE(name) case Stage::name: next =  st ## name(prev); break
+            STAGE_CASE(Default);
+            STAGE_CASE(Init);
+            STAGE_CASE(ReturnToMenu);
+            STAGE_CASE(NoDisc);
+            STAGE_CASE(SpinupDisc);
+            STAGE_CASE(SpinupDiscNoCache);
+            STAGE_CASE(DiscError);
+            STAGE_CASE(ReadDisc);
 #undef STAGE_CASE
         }
         prev = stage;
@@ -290,7 +287,7 @@ s32 main([[maybe_unused]] s32 argc, [[maybe_unused]] char** argv)
     WPAD_Init();
 
     LWP_SetThreadPriority(LWP_GetSelf(), 50);
-    mainThread.create(irse::Loop, nullptr, nullptr, 1024, LWP_PRIO_HIGHEST - 20);
+    mainThread.create(Loop, nullptr, nullptr, 1024, LWP_PRIO_HIGHEST - 20);
     
     while (1) {
         usleep(16000);
@@ -298,7 +295,7 @@ s32 main([[maybe_unused]] s32 argc, [[maybe_unused]] char** argv)
 
         s32 down = WPAD_ButtonsDown(0);
         if (down & WPAD_BUTTON_HOME) {
-            irse::events.send(irse::Stage::stReturnToMenu);
+            events.send(Stage::ReturnToMenu);
             break;
         }
     }
