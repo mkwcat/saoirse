@@ -15,7 +15,7 @@
 #include <unistd.h>
 
 #include "Boot.hpp"
-
+#include "GlobalsConfig.hpp"
 
 namespace irse
 {
@@ -266,6 +266,8 @@ irse::Stage irse::stReadDisc([[maybe_unused]] Stage from)
     TestIfDvdWorks();
     static Apploader loader;
     auto main = loader.load();
+
+    SetupGlobals(0);
     
     // TODO: Proper shutdown
     SYS_ResetSystem(SYS_SHUTDOWN, 0, 0);
