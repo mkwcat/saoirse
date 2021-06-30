@@ -13,6 +13,7 @@ static IOS::ResourceCtrl<DiIoctl> di(-1);
 static IOS::File cacheFile(-1);
 static bool initialized = false;
 
+static DVDLow::DVDCommand sDvdBlocks[8];
 static Queue<DVDLow::DVDCommand*> dataQueue(8);
 
 constexpr const char* DVD_CACHE_FILE = "/title/00000001/00000002/data/cache.dat";
@@ -71,9 +72,8 @@ void DVD::Init()
     new (&di) IOS::ResourceCtrl<DiIoctl>("/dev/di");
     ASSERT(di.fd() >= 0);
 
-    DVDLow::DVDCommand* blocks = new DVDLow::DVDCommand[8];
     for (s32 i = 0; i < 8; i++)
-        dataQueue.send(blocks + i);
+        dataQueue.send(&sDvdBlocks[i]);
 
     irse::Log(LogS::DVD, LogL::WARN, "DVD initialized");
 }
