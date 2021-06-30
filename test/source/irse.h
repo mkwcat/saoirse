@@ -1,8 +1,12 @@
 #pragma once
 
+#include "util.hpp"
+
 #include <stdio.h>
 #include <stdarg.h>
+LIBOGC_SUCKS_BEGIN
 #include <gccore.h>
+LIBOGC_SUCKS_END
 #include "os.h"
 #include <mutex>
 

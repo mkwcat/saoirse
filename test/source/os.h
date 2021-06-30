@@ -1,6 +1,10 @@
 #pragma once
 
+#include "util.hpp"
+
+LIBOGC_SUCKS_BEGIN
 #include <gccore.h>
+LIBOGC_SUCKS_END
 #include <ogc/mutex.h>
 #include <bit>
 #include <cassert>

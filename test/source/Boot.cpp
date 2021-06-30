@@ -79,11 +79,11 @@ static void EncryptedRead(void* dst, u32 len, u32 ofs, CachePolicy invalidate)
 }
 
 
-void OpenPartition(s32 ofs, void* tmd) {
+void OpenPartition(s32 ofs, void* tmd_) {
     DVD::UniqueCommand cmd;
     assert(cmd.cmd() != nullptr);
     DVDLow::OpenPartitionAsync(*cmd.cmd(), ofs,
-        reinterpret_cast<signed_blob*>(tmd));
+        reinterpret_cast<signed_blob*>(tmd_));
     const auto result = cmd.cmd()->syncReply();
 
     if (result != DiErr::OK) {
