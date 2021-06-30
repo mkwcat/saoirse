@@ -283,6 +283,9 @@ static s32 Loop([[maybe_unused]] void* arg)
 
 s32 main([[maybe_unused]] s32 argc, [[maybe_unused]] char** argv)
 {
+    // TODO: Do IOS reload at the right time (just before launch)
+    IOS_ReloadIOS(36);
+
     /* Initialize Wii Remotes */
     WPAD_Init();
 

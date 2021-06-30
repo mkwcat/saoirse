@@ -109,17 +109,13 @@ DiErr DVD::ResetDrive(bool spinup)
 
 bool DVD::IsInserted()
 {
-    /* Check SLOT_IN first to make IPC requests less spammy */
-    if (GPIOBRead(GPIOPin::SLOT_IN)) {
-        UniqueCommand block;
-        u32 status ATTRIBUTE_ALIGN(32);
+    UniqueCommand block;
+    u32 status ATTRIBUTE_ALIGN(32);
 
-        DVDLow::GetCoverStatusAsync(*block.cmd(), &status);
-        block.cmd()->syncReplyAssertRet(DiErr::OK);
+    DVDLow::GetCoverStatusAsync(*block.cmd(), &status);
+    block.cmd()->syncReplyAssertRet(DiErr::OK);
 
-        return status == STATUS_INSERTED;
-    }
-    return false;
+    return status == STATUS_INSERTED;
 }
 
 DiErr DVD::ReadDiskID(DiskID* out)
