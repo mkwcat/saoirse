@@ -7,7 +7,6 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdarg.h>
 #include <string.h>
 #include <dirent.h>
 #include <sys/types.h>
@@ -23,7 +22,6 @@ namespace irse
 struct {
     s32 verbosity;
     bool useCache;
-    u64 waitTime;
 } state;
 
 Queue<Stage> events;
@@ -48,8 +46,8 @@ static struct {
     GXRModeObj *rmode = NULL;
 } display;
 
-static constexpr std::array<const char*, 2> logSources = {
-    "Core", "DVD" };
+static constexpr std::array<const char*, 4> logSources = {
+    "Core", "DVD", "Loader", "Payload" };
 static constexpr std::array<const char*, 3> logColors = {
     "\x1b[37;1m", "\x1b[33;1m", "\x1b[31;1m" };
 static std::array<char, 256> logBuffer;
@@ -67,7 +65,7 @@ void irse::LogConfig(u32 srcmask, LogL level)
     logInit = true;
 }
 
-void irse::Log(LogS src, LogL level, const char* format, ...)
+void irse::VLog(LogS src, LogL level, const char* format, va_list args)
 {
     DASSERT(logInit);
     u32 slvl = static_cast<u32>(level);
@@ -75,20 +73,28 @@ void irse::Log(LogS src, LogL level, const char* format, ...)
     ASSERT(slvl < logColors.size());
     ASSERT(schan < logSources.size());
 
-    if (!(logMask & (1 << schan)))
-        return;
-    if (slvl < logLevel)
-        return;
+    if (level != LogL::ERROR) {
+        if (!(logMask & (1 << schan)))
+            return;
+        if (slvl < logLevel)
+            return;
+    }
     {
         std::unique_lock<Mutex> lock(logMutex);
-        va_list args;
-	    va_start(args, format);
 	    vsnprintf(&logBuffer[0], 256, format, args);
-	    va_end(args);
 
+        // TODO: Skip newline at the end of format string
         printf("%s[%s] %s\n\x1b[37;1m",
             logColors[slvl], logSources[schan], logBuffer.data());
     }
+}
+
+void irse::Log(LogS src, LogL level, const char* format, ...)
+{
+    va_list args;
+	va_start(args, format);
+    VLog(src, level, format, args);
+    va_end(args);
 }
 
 /* 
@@ -224,7 +230,7 @@ irse::Stage irse::stDiscError([[maybe_unused]] Stage from)
     if (from != Stage::stDefault) {
         DVD::ResetDrive(false);
         irse::Log(LogS::Core, LogL::WARN, "Disc error, waiting for eject...");
-        /* Drive reset will throw off the cover status at first */
+        /* Drive reset will confuse the cover status at first */
         return Stage::stDefault;
     }
 
@@ -234,36 +240,13 @@ irse::Stage irse::stDiscError([[maybe_unused]] Stage from)
     return Stage::stNoDisc;
 }
 
-static void UnencryptedRead(void* dst, u32 len, u32 ofs) {
-    DVD::UniqueCommand cmd;
-    assert(cmd.cmd() != nullptr);
-    DVDLow::UnencryptedReadAsync(*cmd.cmd(), dst, len, ofs);
-    const auto result = cmd.cmd()->syncReply();
-
-    if (result != DiErr::OK) {
-        printf("Failed to execute read: RESULT=%i\n", static_cast<s32>(result));
-        return;
-    }
-    printf("DVD read returned DiErr::OK\n");
-}
-
-static void TestIfDvdWorks() {
-    u32 buf[8] ATTRIBUTE_ALIGN(32);
-    memset(buf, 0xAA, sizeof(buf));
-    UnencryptedRead(&buf, sizeof(buf), 0x00010000);
-    for (u32 i = 0; i < 8; ++i) {
-        printf("%x\n", buf[i]);
-    }
-    printf("READ RESULT ^\n");
-}
-
-
 irse::Stage irse::stReadDisc([[maybe_unused]] Stage from)
 {
     irse::Log(LogS::Core, LogL::INFO,
         "DiskID: %.6s", reinterpret_cast<char*>(MEM1_BASE));
 
-    TestIfDvdWorks();
+    WPAD_Shutdown();
+
     static Apploader loader;
     auto main = loader.load();
 
@@ -271,10 +254,10 @@ irse::Stage irse::stReadDisc([[maybe_unused]] Stage from)
     
     // TODO: Proper shutdown
     SYS_ResetSystem(SYS_SHUTDOWN, 0, 0);
+    IRQ_Disable();
     main();
-
-    /* Next stage not implemented yet so just wait for disc eject */
-    return Stage::stDiscError;
+    /* Unreachable! */
+    abort();
 }
 
 s32 irse::Loop([[maybe_unused]] void* arg)
@@ -282,7 +265,6 @@ s32 irse::Loop([[maybe_unused]] void* arg)
     Stage stage = Stage::stInit;
     Stage prev = Stage::stDefault;
     Stage next = Stage::stReturnToMenu;
-    state.waitTime = 32000;
 
     while (1) {
         switch (stage) {
@@ -304,7 +286,7 @@ s32 irse::Loop([[maybe_unused]] void* arg)
 
 s32 main([[maybe_unused]] s32 argc, [[maybe_unused]] char** argv)
 {
-    /* Initialize controllers */
+    /* Initialize Wii Remotes */
     WPAD_Init();
 
     LWP_SetThreadPriority(LWP_GetSelf(), 50);

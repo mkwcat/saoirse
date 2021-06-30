@@ -2,6 +2,7 @@
 #include "Boot.hpp"
 #include "dvd.h"
 #include "util.hpp"
+#include "irse.h"
 
 #include <algorithm>
 #include <array>
@@ -35,7 +36,8 @@ enum class CachePolicy {
     FlushDC
 };
 
-static void EnforceCachePolicy(void* dst, u32 len, CachePolicy policy) {
+static void EnforceCachePolicy(void* dst, u32 len, CachePolicy policy)
+{
     if (policy == CachePolicy::InvalidateDC) {
         DCInvalidateRange(dst, len);
     }
@@ -44,28 +46,32 @@ static void EnforceCachePolicy(void* dst, u32 len, CachePolicy policy) {
     }
 }
 
-static void UnencryptedRead(void* dst, u32 len, u32 ofs, CachePolicy invalidate) {
+static void UnencryptedRead(void* dst, u32 len, u32 ofs, CachePolicy invalidate)
+{
     DVD::UniqueCommand cmd;
     assert(cmd.cmd() != nullptr);
     DVDLow::UnencryptedReadAsync(*cmd.cmd(), dst, len, ofs);
     const auto result = cmd.cmd()->syncReply();
 
     if (result != DiErr::OK) {
-        printf("Failed to execute read: RESULT=%i\n", static_cast<s32>(result));
+        irse::Log(LogS::Loader, LogL::ERROR,
+            "Failed to execute read: %s", DVDLow::PrintErr(result));
         return;
     }
 
     EnforceCachePolicy(dst, len, invalidate);
 }
 
-static void EncryptedRead(void* dst, u32 len, u32 ofs, CachePolicy invalidate) {
+static void EncryptedRead(void* dst, u32 len, u32 ofs, CachePolicy invalidate)
+{
     DVD::UniqueCommand cmd;
     assert(cmd.cmd() != nullptr);
     DVDLow::EncryptedReadAsync(*cmd.cmd(), dst, len, ofs);
     const auto result = cmd.cmd()->syncReply();
 
     if (result != DiErr::OK) {
-        printf("Failed to execute encrypted read\n");
+        irse::Log(LogS::Loader, LogL::ERROR,
+            "Failed to execute encrypted read");
         return;
     }
 
@@ -76,11 +82,12 @@ static void EncryptedRead(void* dst, u32 len, u32 ofs, CachePolicy invalidate) {
 void OpenPartition(s32 ofs, void* tmd) {
     DVD::UniqueCommand cmd;
     assert(cmd.cmd() != nullptr);
-    DVDLow::OpenPartitionAsync(*cmd.cmd(), ofs, reinterpret_cast<signed_blob*>(tmd));
+    DVDLow::OpenPartitionAsync(*cmd.cmd(), ofs,
+        reinterpret_cast<signed_blob*>(tmd));
     const auto result = cmd.cmd()->syncReply();
 
     if (result != DiErr::OK) {
-        printf("Failed to open partition\n");
+        irse::Log(LogS::Loader, LogL::ERROR, "Failed to open partition");
         abort();
     }
 }
@@ -96,7 +103,8 @@ public:
             if (!copy_cmd.has_value())
                 break;
 
-            EncryptedRead(copy_cmd->dest, copy_cmd->length, round_down(copy_cmd->offset, 4), CachePolicy::FlushDC);
+            EncryptedRead(copy_cmd->dest, copy_cmd->length,
+                round_down(copy_cmd->offset, 4), CachePolicy::FlushDC);
         }
     }
 
@@ -114,12 +122,14 @@ EntryPoint Apploader::load(
     
     const auto partitions = readPartitions(main_volume);
     DebugPause();
-    const Partition* boot_partition = findBootPartition(main_volume, partitions);
+    const Partition* boot_partition
+        = findBootPartition(main_volume, partitions);
     DebugPause();
     if (boot_partition == nullptr) {
         return nullptr;
     }
-    printf("Boot partition: %p\n", reinterpret_cast<const void*>(boot_partition));
+    irse::Log(LogS::Loader, LogL::INFO,
+        "Boot partition: %p", reinterpret_cast<const void*>(boot_partition));
 
     openPartition(*boot_partition);
     DebugPause();
@@ -141,11 +151,13 @@ EntryPoint Apploader::load(
     return payload.getEntrypoint();
 }
 
-void Apploader::dumpAppInfo(const ApploaderInfo& app_info) {
+void Apploader::dumpAppInfo(const ApploaderInfo& app_info)
+{
     auto mem_dump = [](std::span<u32> mem) {
-        printf("MEMORY DUMP\n");
+        irse::Log(LogS::Loader, LogL::INFO, "MEMORY DUMP");
         for (std::size_t i = 0; i < mem.size(); i += 4) {
-            printf("%p: %08X %08X %08X %08X\n",
+            irse::Log(LogS::Loader, LogL::INFO,
+                "%p: %08X %08X %08X %08X",
                 reinterpret_cast<void*>(&mem[i]),
                 mem[i], mem[i + 1],
                 mem[i + 2], mem[i + 3]);
@@ -154,33 +166,35 @@ void Apploader::dumpAppInfo(const ApploaderInfo& app_info) {
     mem_dump({ (u32*)&app_info, 32 });
 }
 
-ApploaderInfo Apploader::readAppInfo() {
+ApploaderInfo Apploader::readAppInfo()
+{
     static ApploaderInfo app_info ATTRIBUTE_ALIGN(32);
 
-    printf("Reading apploader info..\n");
-    EncryptedRead(&app_info, sizeof(app_info), 0x2440 / 4, CachePolicy::InvalidateDC);
+    irse::Log(LogS::Loader, LogL::INFO, "Reading apploader info..");
+    EncryptedRead(&app_info, sizeof(app_info), 0x2440 / 4,
+        CachePolicy::InvalidateDC);
     DebugPause();
     return app_info;
 }
 
-void Apploader::openPartition(const Partition& boot_partition) {
-    printf("Reading boot partition..\n");
+void Apploader::openPartition(const Partition& boot_partition)
+{
+    irse::Log(LogS::Loader, LogL::INFO, "Reading boot partition..");
     std::array<u32, 0x4A00 / 4> ticket_metadata ATTRIBUTE_ALIGN(32) = {};
     OpenPartition(boot_partition.offset, ticket_metadata.data());
-
-    printf("...\n");
 }
 
 const Partition*
 Apploader::findBootPartition(const Volume& main_volume,
-    const std::array<Partition, 4>& partitions) {
-
+    const std::array<Partition, 4>& partitions)
+{
     for (const auto& part : partitions) {
-        printf("| Partition: %08x %08x\n", part.offset, part.type);
+        irse::Log(LogS::Loader, LogL::INFO,
+            "| Partition: %08X %08X", part.offset, part.type);
     }
 
     if (main_volume.num_boot_info > partitions.size()) {
-        printf("Invalid volume header.\n");
+        irse::Log(LogS::Loader, LogL::ERROR, "Invalid volume header");
         return nullptr;
     }
 
@@ -189,34 +203,42 @@ Apploader::findBootPartition(const Volume& main_volume,
         [](const Partition& part) { return part.type == 0; });
 
     if (found_it == partitions.end()) {
-        printf("Couldn't find boot partition.\n");
+        irse::Log(LogS::Loader, LogL::ERROR, "Couldn't find boot partition");
         return nullptr;
     }
 
-    printf("Partition: %08x %08x\n", found_it->offset, found_it->type);
+    irse::Log(LogS::Loader, LogL::INFO,
+        "Partition: %08X %08X", found_it->offset, found_it->type);
     return &*found_it;
 }
 
-std::array<Partition, 4> Apploader::readPartitions(const Volume& volume) {
-    printf("Reading partition headers offset: %i..\n", static_cast<s32>(volume.ofs_partition_info));
+std::array<Partition, 4> Apploader::readPartitions(const Volume& volume)
+{
+    irse::Log(LogS::Loader, LogL::INFO,
+        "Reading partition headers offset: %i..",
+        static_cast<s32>(volume.ofs_partition_info));
 
     std::array<Partition, 4> partitions ATTRIBUTE_ALIGN(32);
 
     memset(&partitions, 'F', sizeof(partitions));
 
-    UnencryptedRead(partitions.data(), sizeof(partitions), volume.ofs_partition_info, CachePolicy::InvalidateDC);
+    UnencryptedRead(partitions.data(), sizeof(partitions),
+        volume.ofs_partition_info, CachePolicy::InvalidateDC);
     
     return partitions;
 }
 
-std::array<Volume, 4> Apploader::readVolumes() {
+std::array<Volume, 4> Apploader::readVolumes()
+{
     std::array<Volume, 4> volumes ATTRIBUTE_ALIGN(32);
-    printf("Reading table of contents..\n");
+    irse::Log(LogS::Loader, LogL::INFO, "Reading table of contents..");
 
     memset(&volumes, 0, sizeof(volumes));
-    UnencryptedRead(volumes.data(), sizeof(volumes), 0x00010000, CachePolicy::InvalidateDC);
+    UnencryptedRead(volumes.data(), sizeof(volumes), 0x00010000,
+        CachePolicy::InvalidateDC);
     for (auto& v : volumes) {
-        printf("| Volume %u %u\n", v.num_boot_info, v.ofs_partition_info);
+        irse::Log(LogS::Loader, LogL::INFO,
+            "| Volume %u %u", v.num_boot_info, v.ofs_partition_info);
     }
 
     return volumes;
