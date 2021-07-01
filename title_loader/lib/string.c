@@ -1,7 +1,7 @@
 #include <string.h>
 #include <util.h>
 
-ATTRIBUTE_TARGET(arm)
+ATTRIBUTE_TARGET(thumb)
 void* memcpy(void* dest, const void* src, u32 len)
 {
     char* d = dest;
@@ -11,7 +11,7 @@ void* memcpy(void* dest, const void* src, u32 len)
     return dest;
 }
 
-ATTRIBUTE_TARGET(arm)
+ATTRIBUTE_TARGET(thumb)
 void* memcpy32(void* dest, const void* src, u32 len)
 {
     u32* d = dest;
@@ -21,7 +21,7 @@ void* memcpy32(void* dest, const void* src, u32 len)
     return dest;
 }
 
-ATTRIBUTE_TARGET(arm)
+ATTRIBUTE_TARGET(thumb)
 void memclear(void* ptr, u32 len)
 {
     u32* p = (u32*) ptr;
@@ -35,7 +35,7 @@ void memclear(void* ptr, u32 len)
     } while(len -= 4);
 }
 
-ATTRIBUTE_TARGET(arm)
+ATTRIBUTE_TARGET(thumb)
 s32 memcmp(const void* str1, const void* str2, u32 count)
 {
     const u8* s1 = str1;
@@ -50,7 +50,7 @@ s32 memcmp(const void* str1, const void* str2, u32 count)
     return 0;
 }
 
-ATTRIBUTE_TARGET(arm)
+ATTRIBUTE_TARGET(thumb)
 void* memset(void* dest, int val, u32 len)
 {
     unsigned char* ptr = dest;
@@ -59,7 +59,7 @@ void* memset(void* dest, int val, u32 len)
     return dest;
 }
 
-ATTRIBUTE_TARGET(arm)
+ATTRIBUTE_TARGET(thumb)
 void* memset32(void* dest, int val, u32 len)
 {
     u32* ptr = dest;
@@ -69,7 +69,7 @@ void* memset32(void* dest, int val, u32 len)
     return dest;
 }
 
-ATTRIBUTE_TARGET(arm)
+ATTRIBUTE_TARGET(thumb)
 s32 strlen(const char* str)
 {
     const char* str2 = str;

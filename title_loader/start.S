@@ -4,9 +4,9 @@
 _start:
 		ldr     sp, =_stack + 0x400
 		push    { lr }
-		ldr     r1, =saoMain
+		ldr     r1, =_main
 		blx     r1
-		ldr     r1, =saoExit
+		ldr     r1, =_exit
 		blx     r1
 		pop     { r1 }
 		bx      r1
