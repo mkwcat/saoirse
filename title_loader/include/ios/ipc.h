@@ -37,7 +37,7 @@ typedef struct
     s32 result;
     union {
         s32 fd;
-        u32 req_cmd;
+        s32 handle;
     };
     union
     {
@@ -45,6 +45,8 @@ typedef struct
             char* path;
             u32 mode;
             s32 fd;
+            u32 uid;
+            u16 gid;
         } open;
 
         struct {
@@ -78,35 +80,33 @@ typedef struct
 
 s32 IOS_Open(const char* path, u32 mode);
 s32 IOS_OpenAsync(
-    const char* path, u32 mode, s32 queue_id, void* usrdata);
+    const char* path, u32 mode, s32 queue_id, IOSRequest* msg);
 s32 IOS_Close(s32 fd);
 s32 IOS_CloseAsync(
-    s32 fd, s32 queue_id, void* usrdata);
+    s32 fd, s32 queue_id, IOSRequest* msg);
 
 s32 IOS_Seek(s32 fd, s32 where, s32 whence);
 s32 IOS_SeekAsync(
-    s32 fd, s32 where, s32 whence, s32 queue_id, void* usrdata);
+    s32 fd, s32 where, s32 whence, s32 queue_id, IOSRequest* msg);
 s32 IOS_Read(s32 fd, void* buf, s32 len);
 s32 IOS_ReadAsync(
-    s32 fd, void* buf, s32 len, s32 queue_id, void* usrdata);
+    s32 fd, void* buf, s32 len, s32 queue_id, IOSRequest* msg);
 s32 IOS_Write(s32 fd, const void* buf, s32 len);
 s32 IOS_WriteAsync(
-    s32 fd, const void* buf, s32 len, s32 queue_id, void* usrdata);
+    s32 fd, const void* buf, s32 len, s32 queue_id, IOSRequest* msg);
 
 s32 IOS_Ioctl(s32 fd, u32 command, void* in, u32 in_len, void* io, u32 io_len);
 s32 IOS_IoctlAsync(
     s32 fd, u32 command, void* in, u32 in_len, void* io, u32 io_len,
-    s32 queue_id, void* usrdata);
+    s32 queue_id, IOSRequest* msg);
 
 s32 IOS_Ioctlv(s32 fd, u32 command, u32 in_cnt, u32 out_cnt, IOVector* vec);
 s32 IOS_IoctlvAsync(
     s32 fd, u32 command, u32 in_cnt, u32 out_cnt, IOVector* vec,
-    s32 queue_id, void* usrdata);
+    s32 queue_id, IOSRequest* msg);
 
-#ifdef IOS
 s32 IOS_RegisterResourceManager(const char* device, s32 queue_id);
 s32 IOS_ResourceReply(const IOSRequest* request, s32 reply);
-#endif
 
 #ifdef __cplusplus
     }

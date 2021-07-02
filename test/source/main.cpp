@@ -148,6 +148,8 @@ static Stage stInit([[maybe_unused]] Stage from)
     irse::Log(LogS::Core, LogL::INFO, "IOS Launch result: %d", ret);
     new IOSBoot::Log();
 
+    /* Wait for DI to startup */
+    usleep(2000);
     DVD::Init();
     if (DVD::IsInserted()) {
         return Stage::SpinupDisc;

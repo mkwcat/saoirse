@@ -82,3 +82,17 @@ s32 strlen(const char* str)
     
     return (s32) str - (s32) str2;
 }
+
+ATTRIBUTE_TARGET(thumb)
+s32 strcmp(const char* s1, const char* s2)
+{
+    char c1, c2;
+    do {
+        c1 = *s1++;
+        c2 = *s2++;
+        if (c1 == 0)
+            return c1 - c2;
+    }
+    while (c1 == c2);
+    return c1 - c2;
+}

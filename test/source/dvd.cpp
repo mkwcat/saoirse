@@ -69,7 +69,7 @@ void DVD::Init()
         return;
     initialized = true;
 
-    new (&di) IOS::ResourceCtrl<DiIoctl>("/dev/di");
+    new (&di) IOS::ResourceCtrl<DiIoctl>("/dev/di/proxy");
     ASSERT(di.fd() >= 0);
 
     for (s32 i = 0; i < 8; i++)

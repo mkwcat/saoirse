@@ -1,5 +1,5 @@
 #include "log.h"
-
+#include "main.h"
 #include <ios.h>
 #include <stdarg.h>
 #include <string.h>
@@ -10,7 +10,6 @@ static s32 printBufQueue = -1;
 static u32 printBufQueueData;
 char logBuffer[256];
 
-void _exit(u32 color);
 static void sendPrint();
 
 void printf(s32 level, const char* format, ...)
@@ -28,7 +27,7 @@ void printf(s32 level, const char* format, ...)
     vsnprintf(logBuffer, PRINT_BUFFER_SIZE - 1, format, args);
     va_end(args);
 
-    memcpy(req->ioctl.io, logBuffer, PRINT_BUFFER_SIZE);
+    memcpy32(req->ioctl.io, logBuffer, PRINT_BUFFER_SIZE);
     IOS_FlushDCache(req->ioctl.io, PRINT_BUFFER_SIZE);
     IOS_ResourceReply(req, level);
 }
@@ -91,7 +90,7 @@ void stdoutInit()
     printBufQueue = ret;
     
     const s32 tid = IOS_CreateThread(
-        stdoutThread, NULL, stdoutThreadStack + 0x400 / 4, 0x400, 10, true);
+        stdoutThread, NULL, stdoutThreadStack + 0x400 / 4, 0x400, 80, true);
     if (tid < 0)
         _exit(YUV_DARK_BLUE);
 
