@@ -96,3 +96,13 @@ s32 strcmp(const char* s1, const char* s2)
     while (c1 == c2);
     return c1 - c2;
 }
+
+ATTRIBUTE_TARGET(thumb)
+char* strchr(const char* s, char c)
+{
+    do {
+        if (*s == c)
+            return (char*) s;
+    } while (*s++);
+    return NULL;
+}

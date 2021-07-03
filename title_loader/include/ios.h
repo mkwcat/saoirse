@@ -6,7 +6,7 @@
 #include <ios/ipc.h>
 #include <ios/msg.h>
 #include <ios/thread.h>
-#include <ios/haxx.h>
+#include <ios/time.h>
 
 #define IOS_SUCCESS       0
 #define IOS_EACCES        -1
