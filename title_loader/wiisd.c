@@ -499,6 +499,16 @@ bool sdio_Deinitialize(void)
 	return true;
 }
 
+bool sdio_Open(void)
+{
+	if (__sd0_fd < 0 || __sd0_initialized==0) {
+		__sd0_fd = IOS_Open(_sd0_fs,1);
+		if (__sd0_fd < 0)
+			return false;
+	}
+	return true;
+}
+
 bool sdio_Startup(void)
 {
 	if(__sdio_initialized==1) return true;
@@ -506,9 +516,7 @@ bool sdio_Startup(void)
 	if(rw_buffer == NULL) rw_buffer = IOS_Alloc(heap,(4*1024));
 	if(rw_buffer == NULL) return false;
  
-	__sd0_fd = IOS_Open(_sd0_fs,1);
-
-	if(__sd0_fd<0) {
+	if(!sdio_Open()) {
 		sdio_Deinitialize();
 		return false;
 	}
@@ -562,7 +570,7 @@ bool sdio_ReadSectors(sec_t sector, sec_t numSectors,void* buffer)
 		}
 	} else {
 		if(__sd0_sdhc == 0) sector *= PAGE_SIZE512;
-		IOS_InvalidateDCache(buffer, numSectors*PAGE_SIZE512);
+		IOS_InvalidateDCache(buffer, PAGE_SIZE512*numSectors);
 		ret = __sdio_sendcommand(SDIO_CMD_READMULTIBLOCK,SDIOCMD_TYPE_AC,SDIO_RESPONSE_R1,sector,numSectors,PAGE_SIZE512,buffer,NULL,0);
 	}
 
@@ -591,6 +599,7 @@ bool sdio_WriteSectors(sec_t sector, sec_t numSectors,const void* buffer)
 			if(numSectors > 8)secs_to_write = 8;
 			else secs_to_write = numSectors;
 			memcpy(rw_buffer,ptr,PAGE_SIZE512*secs_to_write);
+			IOS_FlushDCache(rw_buffer, PAGE_SIZE512*secs_to_write);
 			ret = __sdio_sendcommand(SDIO_CMD_WRITEMULTIBLOCK,SDIOCMD_TYPE_AC,SDIO_RESPONSE_R1,blk_off,secs_to_write,PAGE_SIZE512,rw_buffer,NULL,0);
 			if(ret>=0) {
 				ptr += PAGE_SIZE512*secs_to_write;
@@ -601,6 +610,7 @@ bool sdio_WriteSectors(sec_t sector, sec_t numSectors,const void* buffer)
 		}
 	} else {
 		if(__sd0_sdhc == 0) sector *= PAGE_SIZE512;
+		IOS_FlushDCache(buffer, PAGE_SIZE512*numSectors);
 		ret = __sdio_sendcommand(SDIO_CMD_WRITEMULTIBLOCK,SDIOCMD_TYPE_AC,SDIO_RESPONSE_R1,sector,numSectors,PAGE_SIZE512,(char *)buffer,NULL,0);
 	}
 
@@ -618,4 +628,9 @@ bool sdio_IsInserted(void)
 {
 	return ((__sdio_getstatus() & SDIO_STATUS_CARD_INSERTED) ==
 			SDIO_STATUS_CARD_INSERTED);
+}
+
+bool sdio_IsInitialized(void)
+{
+	return __sdio_initialized == 1;
 }

@@ -2,4 +2,4 @@
 
 #include <types.h>
 
-s32 DI_CreateThread();
+void DI_CreateThread();

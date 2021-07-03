@@ -101,15 +101,16 @@ s32 DI_ThreadEntry(void* arg)
 
     s32 ret = IOS_CreateMessageQueue(__diMsgData, 8);
     if (ret < 0) {
-        printf(ERROR, "IOS_CreateMessageQueue diMsgQueue failed: %d", ret);
-        return ret;
+        printf(ERROR, "DI_ThreadEntry: IOS_CreateMessageQueue failed: %d", ret);
+        abort();
     }
     DiMsgQueue = ret;
 
     ret = IOS_RegisterResourceManager(DI_PROXY_PATH, DiMsgQueue);
     if (ret != IOS_SUCCESS) {
-        printf(ERROR, "IOS_RegisterResourceManager failed: %d", ret);
-        return ret;
+        printf(ERROR,
+            "DI_ThreadEntry: IOS_RegisterResourceManager failed: %d", ret);
+        abort();
     }
 
     DiStarted = true;
@@ -117,8 +118,8 @@ s32 DI_ThreadEntry(void* arg)
         IOSRequest* req;
         ret = IOS_ReceiveMessage(DiMsgQueue, (u32*) &req, 0);
         if (ret != IOS_SUCCESS) {
-            printf(ERROR, "IOS_ReceiveMessage failed: %d", ret);
-            return ret;
+            printf(ERROR, "DI_ThreadEntry: IOS_ReceiveMessage failed: %d", ret);
+            abort();
         }
 
         DI_HandleRequest(req);
@@ -128,20 +129,18 @@ s32 DI_ThreadEntry(void* arg)
 
 static u32 DiStack[0x1000 / 4];
 
-s32 DI_CreateThread()
+void DI_CreateThread()
 {
     const s32 tid = IOS_CreateThread(DI_ThreadEntry, NULL,
         DiStack + sizeof(DiStack) / 4, sizeof(DiStack), 100, true);
     if (tid < 0) {
         printf(ERROR, "Failed to make DI thread: %d", tid);
-        return tid;
+        abort();
     }
 
     const s32 ret = IOS_StartThread(tid);
     if (ret != IOS_SUCCESS) {
         printf(ERROR, "Failed to start DI thread: %d", ret);
-        return ret;
+        abort();
     }
-
-    return IOS_SUCCESS;
 }
