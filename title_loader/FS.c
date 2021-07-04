@@ -106,7 +106,6 @@ DWORD get_fattime()
  * IPC Filesystem Interface
  * ----------> */
 
-#define FS_IPC_MAX_HANDLES 8
 #define FS_MAX_PATH 1024
 
 #define DEVICE_STORAGE_PATH "/dev/storage"
@@ -123,54 +122,57 @@ DWORD get_fattime()
 #define IOCTL_FSIZE      10
 #define IOCTL_FERROR     11
 
-typedef struct
-{
-    FIL* fp[FS_IPC_MAX_HANDLES];
-} FSContext;
-
 static s32 FsQueue;
 static u32 __FsQueueData[8];
 static bool FsStarted = false;
 
+static inline
+void FS_BeginFile(const void* input, FIL* fp)
+{
+    ASSERT(fp);
+    memcpy((void*) fp, input, sizeof(FIL));
+}
+
+static inline
+void FS_ReplyFile(void* output, FIL* fp)
+{
+    ASSERT(fp);
+    memcpy(output, (void*) fp, sizeof(FIL));
+}
+
 static
 s32 FS_FileCommand(IOSRequest* req)
 {
-    if (req->ioctlv.in_count < 1 || req->ioctlv.vec[0].len != sizeof(s32)) {
+    if (req->ioctlv.in_count < 1 || req->ioctlv.vec[0].len != sizeof(FIL)) {
         printf(ERROR, "FS_FileCommand: Invalid input");
         return IOS_EINVAL;
     }
-    const s32 fd = *(s32*) req->ioctlv.vec[0].data;
-    if (fd < 0 || fd > FS_IPC_MAX_HANDLES) {
-        printf(ERROR, "FS_FileCommand: Invalid file descriptor: %d", fd);
+    if ((u32) req->ioctlv.vec[0].data & 3) {
+        printf(ERROR, "FS_FileCommand: FIL must be aligned to 4 byte boundary");
         return IOS_EINVAL;
     }
-    FSContext* ctx = (FSContext*) req->handle;
-    ASSERT(req->handle);
-    if (ctx->fp[fd] == NULL) {
-        printf(ERROR, "FS_FileCommand: NULL file descriptor");
-        return IOS_EINVAL;
-    }
+    FIL fp;
+    FS_BeginFile(req->ioctlv.vec[0].data, &fp);
 
     switch (req->ioctl.cmd)
     {
         case IOCTL_FCLOSE:
             if (req->ioctlv.in_count != 1 && req->ioctlv.io_count != 0)
                 return IOS_EINVAL;
-            return f_close(ctx->fp[fd]);
+            return f_close(&fp);
         
         case IOCTL_FREAD:
             if (req->ioctlv.in_count != 1 && req->ioctlv.io_count != 1)
                 return IOS_EINVAL;
             UINT read;
-            f_read(ctx->fp[fd],
-                req->ioctlv.vec[1].data, req->ioctlv.vec[1].len, &read);
+            f_read(&fp, req->ioctlv.vec[1].data, req->ioctlv.vec[1].len, &read);
             return (s32) read;
         
         case IOCTL_FWRITE:
             if (req->ioctlv.in_count != 2 && req->ioctlv.io_count != 0)
                 return IOS_EINVAL;
             UINT wrote;
-            f_write(ctx->fp[fd],
+            f_write(&fp,
                 req->ioctlv.vec[1].data, req->ioctlv.vec[1].len, &wrote);
             return (s32) wrote;
         
@@ -179,69 +181,40 @@ s32 FS_FileCommand(IOSRequest* req)
                 return IOS_EINVAL;
             if (req->ioctlv.vec[1].len != sizeof(u32))
                 return IOS_EINVAL;
-            return f_lseek(ctx->fp[fd], *(FSIZE_t*) req->ioctlv.vec[1].data);
+            return f_lseek(&fp, *(FSIZE_t*) req->ioctlv.vec[1].data);
         
         case IOCTL_FTRUNCATE:
             if (req->ioctlv.in_count != 1 && req->ioctlv.io_count != 0)
                 return IOS_EINVAL;
-            return f_truncate(ctx->fp[fd]);
+            return f_truncate(&fp);
         
         case IOCTL_FSYNC:
             if (req->ioctlv.in_count != 1 && req->ioctlv.io_count != 0)
                 return IOS_EINVAL;
-            return f_sync(ctx->fp[fd]);
+            return f_sync(&fp);
         
         case IOCTL_FTELL:
             if (req->ioctlv.in_count != 1 && req->ioctlv.io_count != 0)
                 return IOS_EINVAL;
-            return f_tell(ctx->fp[fd]);
+            return f_tell(&fp);
         
         case IOCTL_FEOF:
             if (req->ioctlv.in_count != 1 && req->ioctlv.io_count != 0)
                 return IOS_EINVAL;
-            return f_eof(ctx->fp[fd]);
+            return f_eof(&fp);
         
         case IOCTL_FSIZE:
             if (req->ioctlv.in_count != 1 && req->ioctlv.io_count != 0)
                 return IOS_EINVAL;
-            return f_size(ctx->fp[fd]);
+            return f_size(&fp);
         
         case IOCTL_FERROR:
             if (req->ioctlv.in_count != 1 && req->ioctlv.io_count != 0)
                 return IOS_EINVAL;
-            return f_error(ctx->fp[fd]);
-    }
-}
-
-static
-s32 FS_GetHandle(FSContext* ctx)
-{
-    ASSERT(ctx);
-
-    for (s32 i = 0; i < FS_IPC_MAX_HANDLES; i++)
-    {
-        if (ctx->fp[i] == NULL) {
-            ctx->fp[i] = IOS_Alloc(heap, sizeof(FIL));
-            ASSERT(ctx->fp[i]);
-            return i;
-        }
-    }
-    printf(ERROR, "FS_GetHandle: Could not find handle to open");
-    return -1;
-}
-
-static
-void FS_ReleaseHandle(FSContext* ctx, s32 fd)
-{
-    ASSERT(ctx);
-
-    if (ctx->fp[fd] == NULL) {
-        printf(INFO, "FS_ReleaseHandle: Releasing a file that was not open");
-        return;
+            return f_error(&fp);
     }
 
-    const s32 ret = IOS_Free(heap, (void*) ctx->fp[fd]);
-    ASSERT(ret == IOS_SUCCESS);
+    return IOS_EINVAL;
 }
 
 static
@@ -251,24 +224,12 @@ s32 FS_ReqOpen(IOSRequest* req)
         return IOS_ENOENT;
     if (req->open.mode != IOS_OPEN_NONE)
         return IOS_EINVAL;
-
-    FSContext* ctx = IOS_Alloc(heap, sizeof(FSContext));
-    ASSERT((s32) ctx > 0);
-    memset((void*) ctx, 0, sizeof(FSContext));
-    return (s32) ctx;
+    return 0;
 }
 
 static
 s32 FS_ReqClose(IOSRequest* req)
 {
-    FSContext* ctx = (FSContext*) req->handle;
-    ASSERT(ctx);
-
-    for (s32 i = 0; i < FS_IPC_MAX_HANDLES; i++) {
-        FS_ReleaseHandle(ctx, i);
-    }
-    const s32 ret = IOS_Free(heap, (void*) ctx);
-    ASSERT(ret == IOS_SUCCESS);
     return 0;
 }
 
@@ -278,7 +239,7 @@ s32 FS_ReqIoctlv(IOSRequest* req)
     switch (req->ioctlv.cmd)
     {
         case IOCTL_FOPEN: {
-            if (req->ioctlv.in_count != 2 && req->ioctlv.io_count != 0)
+            if (req->ioctlv.in_count != 2 && req->ioctlv.io_count != 1)
                 return IOS_EINVAL;
             if (req->ioctlv.vec[0].len == 0
              || req->ioctlv.vec[0].len > FS_MAX_PATH
@@ -287,19 +248,19 @@ s32 FS_ReqIoctlv(IOSRequest* req)
             if (strnlen((char*) req->ioctlv.vec[0].data, req->ioctlv.vec[0].len)
                 == req->ioctlv.vec[0].len)
                 return IOS_EINVAL;
+            if (req->ioctlv.vec[2].len != sizeof(FIL)
+             || (u32) req->ioctlv.vec[2].data & 3)
+                return IOS_EINVAL;
 
-            FSContext* ctx = (FSContext*) req->handle;
-            ASSERT(ctx);
-
-            s32 fd = FS_GetHandle(ctx);
+            FIL fp;
+            memset((void*) &fp, 0, sizeof(FIL));
             /* 
              * Hmm, what if someone changes the path by the time we get here?
              * ... probably worrying about nothing, just noting this for later
              */
-            FRESULT fret = f_open(ctx->fp[fd], (char*) req->ioctlv.vec[0].data,
+            FRESULT fret = f_open(&fp, (char*) req->ioctlv.vec[0].data,
                 *(BYTE*) req->ioctlv.vec[1].data);
-            if (fret != FR_OK)
-                FS_ReleaseHandle(ctx, fd);
+            FS_ReplyFile(req->ioctlv.vec[0].data, &fp);
             return fret;
         }
 
@@ -362,6 +323,13 @@ static FATFS fatfs;
 
 void FS_Init()
 {
+    /*
+     * I don't think there's a static_assert kind of thing in C,
+     * but anyway, unaligned would break because of a hardware bug (and we don't
+     * have a proper memcpy implementation to work around it) 
+     */
+    ASSERT(sizeof(FIL) & 3 == 0);
+
     if (!sdio_Open()) {
         printf(ERROR, "FS_Init: sdio_Open returned false");
         abort();
