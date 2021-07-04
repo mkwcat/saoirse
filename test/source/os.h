@@ -225,6 +225,19 @@ constexpr s32 RW = Read | Write;
 
 typedef struct _ioctlv Vector;
 
+template<u32 in_count, u32 out_count>
+struct IOVector
+{
+    struct {
+        const void* data;
+        u32 len;
+    } in[in_count];
+    struct {
+        void* data;
+        u32 len;
+    } out[out_count];
+};
+
 struct Request
 {
     Command cmd;
@@ -346,6 +359,12 @@ public:
             this->m_fd, static_cast<u32>(cmd),
             inputCnt, outputCnt, vec);
     }
+    template<u32 in_count, u32 out_count>
+    s32 ioctlv(Ioctl cmd, IOVector<in_count, out_count>& vec) {
+        return IOS_Ioctlv(
+            this->m_fd, static_cast<u32>(cmd),
+            in_count, out_count, reinterpret_cast<Vector*>(&vec));
+    }
     
     s32 ioctlAsync(Ioctl cmd, void* input, u32 inputLen,
                    void* output, u32 outputLen,
@@ -361,6 +380,14 @@ public:
         return IOS_IoctlvAsync(
             this->m_fd, static_cast<u32>(cmd),
             inputCnt, outputCnt, vec,
+            IPC_QUEUE_CALLBACK(callback, usrdata));
+    }
+    template<u32 in_count, u32 out_count>
+    s32 ioctlvAsync(Ioctl cmd, IOVector<in_count, out_count>& vec,
+                    ipccallback callback, void* usrdata) {
+        return IOS_IoctlvAsync(
+            this->m_fd, static_cast<u32>(cmd),
+            in_count, out_count, reinterpret_cast<Vector*>(&vec),
             IPC_QUEUE_CALLBACK(callback, usrdata));
     }
 
