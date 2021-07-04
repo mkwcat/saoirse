@@ -84,6 +84,16 @@ s32 strlen(const char* str)
 }
 
 ATTRIBUTE_TARGET(thumb)
+s32 strnlen(const char* str, s32 maxlen)
+{
+    s32 len = 0;
+    for (len = 0; len < maxlen; len++, str++)
+        if (*str == 0)
+            break;
+    return len;
+}
+
+ATTRIBUTE_TARGET(thumb)
 s32 strcmp(const char* s1, const char* s2)
 {
     char c1, c2;

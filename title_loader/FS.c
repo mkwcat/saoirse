@@ -8,18 +8,11 @@
 #include <main.h>
 #include <string.h>
 
-#define DRV_SDCARD 0
-
-#define DEVICE_STORAGE_PATH "/dev/storage"
-
-static FATFS fatfs;
-static s32 FsQueue;
-static u32 __FsQueueData[8];
-static bool FsStarted = false;
-
-/* ---------->
+/* <----------
  * FatFS Disk I/O Support
- * <---------- */
+ * ----------> */
+
+#define DRV_SDCARD 0
 
 DSTATUS disk_status(BYTE pdrv)
 {
@@ -77,6 +70,31 @@ DRESULT disk_write(BYTE pdrv, const BYTE* buff, LBA_t sector, UINT count)
     return STA_NOINIT;
 }
 
+DRESULT disk_ioctl(BYTE pdrv, BYTE cmd, void* buff)
+{
+    switch (cmd)
+    {
+        case CTRL_SYNC:
+            if (pdrv == DRV_SDCARD) {
+                /* /dev/sdio must handle the AHB buffers itself */
+                return RES_OK;
+            }
+            return RES_NOTRDY;
+        
+        case GET_SECTOR_SIZE:
+            if (pdrv == DRV_SDCARD) {
+                /* Always 512 */
+                *(WORD*) buff = 512;
+                return RES_OK;
+            }
+            return RES_NOTRDY;
+        
+        default:
+            printf(ERROR, "disk_ioctl: unknown command: %d", cmd);
+            return RES_PARERR;
+    }
+}
+
 /* todo */
 DWORD get_fattime()
 {
@@ -84,39 +102,223 @@ DWORD get_fattime()
 }
 
 
-/* ---------->
+/* <----------
  * IPC Filesystem Interface
- * <---------- */
+ * ----------> */
 
-static s32 FS_ReqOpen(IOSRequest* req)
+#define FS_IPC_MAX_HANDLES 8
+#define FS_MAX_PATH 1024
+
+#define DEVICE_STORAGE_PATH "/dev/storage"
+
+#define IOCTL_FOPEN      1
+#define IOCTL_FCLOSE     2
+#define IOCTL_FREAD      3
+#define IOCTL_FWRITE     4
+#define IOCTL_FLSEEK     5
+#define IOCTL_FTRUNCATE  6
+#define IOCTL_FSYNC      7
+#define IOCTL_FTELL      8
+#define IOCTL_FEOF       9
+#define IOCTL_FSIZE      10
+#define IOCTL_FERROR     11
+
+typedef struct
+{
+    FIL* fp[FS_IPC_MAX_HANDLES];
+} FSContext;
+
+static s32 FsQueue;
+static u32 __FsQueueData[8];
+static bool FsStarted = false;
+
+static
+s32 FS_FileCommand(IOSRequest* req)
+{
+    if (req->ioctlv.in_count < 1 || req->ioctlv.vec[0].len != sizeof(s32)) {
+        printf(ERROR, "FS_FileCommand: Invalid input");
+        return IOS_EINVAL;
+    }
+    const s32 fd = *(s32*) req->ioctlv.vec[0].data;
+    if (fd < 0 || fd > FS_IPC_MAX_HANDLES) {
+        printf(ERROR, "FS_FileCommand: Invalid file descriptor: %d", fd);
+        return IOS_EINVAL;
+    }
+    FSContext* ctx = (FSContext*) req->handle;
+    ASSERT(req->handle);
+    if (ctx->fp[fd] == NULL) {
+        printf(ERROR, "FS_FileCommand: NULL file descriptor");
+        return IOS_EINVAL;
+    }
+
+    switch (req->ioctl.cmd)
+    {
+        case IOCTL_FCLOSE:
+            if (req->ioctlv.in_count != 1 && req->ioctlv.io_count != 0)
+                return IOS_EINVAL;
+            return f_close(ctx->fp[fd]);
+        
+        case IOCTL_FREAD:
+            if (req->ioctlv.in_count != 1 && req->ioctlv.io_count != 1)
+                return IOS_EINVAL;
+            UINT read;
+            f_read(ctx->fp[fd],
+                req->ioctlv.vec[1].data, req->ioctlv.vec[1].len, &read);
+            return (s32) read;
+        
+        case IOCTL_FWRITE:
+            if (req->ioctlv.in_count != 2 && req->ioctlv.io_count != 0)
+                return IOS_EINVAL;
+            UINT wrote;
+            f_write(ctx->fp[fd],
+                req->ioctlv.vec[1].data, req->ioctlv.vec[1].len, &wrote);
+            return (s32) wrote;
+        
+        case IOCTL_FLSEEK:
+            if (req->ioctlv.in_count != 2 && req->ioctlv.io_count != 0)
+                return IOS_EINVAL;
+            if (req->ioctlv.vec[1].len != sizeof(u32))
+                return IOS_EINVAL;
+            return f_lseek(ctx->fp[fd], *(FSIZE_t*) req->ioctlv.vec[1].data);
+        
+        case IOCTL_FTRUNCATE:
+            if (req->ioctlv.in_count != 1 && req->ioctlv.io_count != 0)
+                return IOS_EINVAL;
+            return f_truncate(ctx->fp[fd]);
+        
+        case IOCTL_FSYNC:
+            if (req->ioctlv.in_count != 1 && req->ioctlv.io_count != 0)
+                return IOS_EINVAL;
+            return f_sync(ctx->fp[fd]);
+        
+        case IOCTL_FTELL:
+            if (req->ioctlv.in_count != 1 && req->ioctlv.io_count != 0)
+                return IOS_EINVAL;
+            return f_tell(ctx->fp[fd]);
+        
+        case IOCTL_FEOF:
+            if (req->ioctlv.in_count != 1 && req->ioctlv.io_count != 0)
+                return IOS_EINVAL;
+            return f_eof(ctx->fp[fd]);
+        
+        case IOCTL_FSIZE:
+            if (req->ioctlv.in_count != 1 && req->ioctlv.io_count != 0)
+                return IOS_EINVAL;
+            return f_size(ctx->fp[fd]);
+        
+        case IOCTL_FERROR:
+            if (req->ioctlv.in_count != 1 && req->ioctlv.io_count != 0)
+                return IOS_EINVAL;
+            return f_error(ctx->fp[fd]);
+    }
+}
+
+static
+s32 FS_GetHandle(FSContext* ctx)
+{
+    ASSERT(ctx);
+
+    for (s32 i = 0; i < FS_IPC_MAX_HANDLES; i++)
+    {
+        if (ctx->fp[i] == NULL) {
+            ctx->fp[i] = IOS_Alloc(heap, sizeof(FIL));
+            ASSERT(ctx->fp[i]);
+            return i;
+        }
+    }
+    printf(ERROR, "FS_GetHandle: Could not find handle to open");
+    return -1;
+}
+
+static
+void FS_ReleaseHandle(FSContext* ctx, s32 fd)
+{
+    ASSERT(ctx);
+
+    if (ctx->fp[fd] == NULL) {
+        printf(INFO, "FS_ReleaseHandle: Releasing a file that was not open");
+        return;
+    }
+
+    const s32 ret = IOS_Free(heap, (void*) ctx->fp[fd]);
+    ASSERT(ret == IOS_SUCCESS);
+}
+
+static
+s32 FS_ReqOpen(IOSRequest* req)
 {
     if (strcmp(req->open.path, DEVICE_STORAGE_PATH))
         return IOS_ENOENT;
     if (req->open.mode != IOS_OPEN_NONE)
         return IOS_EINVAL;
+
+    FSContext* ctx = IOS_Alloc(heap, sizeof(FSContext));
+    ASSERT((s32) ctx > 0);
+    memset((void*) ctx, 0, sizeof(FSContext));
+    return (s32) ctx;
+}
+
+static
+s32 FS_ReqClose(IOSRequest* req)
+{
+    FSContext* ctx = (FSContext*) req->handle;
+    ASSERT(ctx);
+
+    for (s32 i = 0; i < FS_IPC_MAX_HANDLES; i++) {
+        FS_ReleaseHandle(ctx, i);
+    }
+    const s32 ret = IOS_Free(heap, (void*) ctx);
+    ASSERT(ret == IOS_SUCCESS);
     return 0;
 }
 
-static s32 FS_ReqClose(IOSRequest* req)
+static
+s32 FS_ReqIoctlv(IOSRequest* req)
 {
-    return 0;
-}
-
-static s32 FS_ReqIoctl(IOSRequest* req)
-{
-    switch (req->ioctl.cmd)
+    switch (req->ioctlv.cmd)
     {
-        // todo
+        case IOCTL_FOPEN: {
+            if (req->ioctlv.in_count != 2 && req->ioctlv.io_count != 0)
+                return IOS_EINVAL;
+            if (req->ioctlv.vec[0].len == 0
+             || req->ioctlv.vec[0].len > FS_MAX_PATH
+             || req->ioctlv.vec[1].len != sizeof(BYTE))
+                return IOS_EINVAL;
+            if (strnlen((char*) req->ioctlv.vec[0].data, req->ioctlv.vec[0].len)
+                == req->ioctlv.vec[0].len)
+                return IOS_EINVAL;
+
+            FSContext* ctx = (FSContext*) req->handle;
+            ASSERT(ctx);
+
+            s32 fd = FS_GetHandle(ctx);
+            /* 
+             * Hmm, what if someone changes the path by the time we get here?
+             * ... probably worrying about nothing, just noting this for later
+             */
+            FRESULT fret = f_open(ctx->fp[fd], (char*) req->ioctlv.vec[0].data,
+                *(BYTE*) req->ioctlv.vec[1].data);
+            if (fret != FR_OK)
+                FS_ReleaseHandle(ctx, fd);
+            return fret;
+        }
+
+        case IOCTL_FCLOSE: case IOCTL_FREAD: case IOCTL_FWRITE:
+        case IOCTL_FLSEEK: case IOCTL_FTRUNCATE: case IOCTL_FSYNC:
+        case IOCTL_FTELL: case IOCTL_FEOF: case IOCTL_FSIZE:
+        case IOCTL_FERROR:
+            return FS_FileCommand(req);     
     }
 }
 
-static s32 FS_IPCRequest(IOSRequest* req)
+static
+s32 FS_IPCRequest(IOSRequest* req)
 {
     switch (req->cmd)
     {
         case IOS_OPEN: return FS_ReqOpen(req);
         case IOS_CLOSE: return FS_ReqClose(req);
-        case IOS_IOCTL: return FS_ReqIoctl(req);
+        case IOS_IOCTLV: return FS_ReqIoctlv(req);
         default:
             printf(ERROR,
                 "FS_IPCRequest: Received unhandled command: %d", req->cmd);
@@ -124,7 +326,8 @@ static s32 FS_IPCRequest(IOSRequest* req)
     }
 }
 
-static s32 FS_StartRM(void* arg)
+static
+s32 FS_StartRM(void* arg)
 {
     s32 ret = IOS_CreateMessageQueue(__FsQueueData, 8);
     if (ret < 0) {
@@ -154,6 +357,8 @@ static s32 FS_StartRM(void* arg)
     }
     return 0;
 }
+
+static FATFS fatfs;
 
 void FS_Init()
 {

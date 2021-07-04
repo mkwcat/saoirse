@@ -66,3 +66,10 @@ void abort()
     IOS_CancelThread(0, 0);
     while (1) { }
 }
+
+void __assert_fail(const char* expr, const char* file, s32 line)
+{
+    printf(ERROR,
+        "Assertion failed:\n\n%s\nfile %s, line %d", expr, file, line);
+    abort();
+}
