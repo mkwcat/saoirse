@@ -1,8 +1,11 @@
 #pragma once
 
 #include "os.h"
-#include <gccore.h>
+#include "util.hpp"
 
+LIBOGC_SUCKS_BEGIN
+#include <ogc/es.h>
+LIBOGC_SUCKS_END
 
 enum class DiIoctl : u8
 {

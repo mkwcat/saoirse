@@ -2,7 +2,6 @@
 #include "irse.h"
 #include "os.h"
 #include "hollywood.h"
-#include <ogc/es.h>
 #include <cstdio>
 #include <array>
 #include <utility>

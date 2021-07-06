@@ -3,6 +3,7 @@
 #include <new>
 #include <string.h>
 #include <unistd.h>
+#include <ogc/cache.h>
 
 constexpr u32 VFILE_ADDR = 0x91000000;
 constexpr u32 VFILE_SIZE = 0x100000;
@@ -57,11 +58,14 @@ s32 IOSBoot::Entry(u32 entrypoint)
     
     irse::Log(LogS::Core, LogL::INFO, "Exploit: Setting up MEM1");
     u32* mem1 = reinterpret_cast<u32*>(MEM1_BASE);
-    mem1[0] = 0x4902468D; // ldr r1, =0x10100000; mov pc, r1;
-    mem1[1] = 0x49024788; // ldr r1, =entrypoint; blx r1;
-    mem1[2] = 0xE7FE0000; // deadlock
-    mem1[3] = 0x10100000;
-    mem1[4] = entrypoint;
+    mem1[0] = 0x4903468D; // ldr r1, =0x10100000; mov sp, r1;
+    mem1[1] = 0x49034788; // ldr r1, =entrypoint; blx r1;
+    /* Overwrite reserved handler to loop infinitely */
+    mem1[2] = 0x49036209; // ldr r1, =0xFFFF0014; str r1, [r1, #0x20];
+    mem1[3] = 0x47080000; // bx r1
+    mem1[4] = 0x10100000; // temporary stack
+    mem1[5] = entrypoint;
+    mem1[6] = 0xFFFF0014; // reserved handler
     DCFlushRange(MEM1_BASE, 32);
     
     IOS::Vector vec[3];

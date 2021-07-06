@@ -2,8 +2,6 @@
 
 #include "dvd.h"
 #include "File.hpp"
-#include <gccore.h>
-#include <gcutil.h>
 #include <wiiuse/wpad.h>
 #include "util.hpp"
 LIBOGC_SUCKS_BEGIN
@@ -11,12 +9,9 @@ LIBOGC_SUCKS_BEGIN
 LIBOGC_SUCKS_END
 
 #include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <dirent.h>
-#include <sys/types.h>
-#include <sys/stat.h>
+#include <cstring>
 #include <unistd.h>
+#include <mutex>
 
 #include "Boot.hpp"
 #include "GlobalsConfig.hpp"
@@ -180,6 +175,8 @@ static Stage stInit([[maybe_unused]] Stage from)
 
 static Stage stReturnToMenu([[maybe_unused]] Stage from)
 {
+    irse::Log(LogS::Core, LogL::WARN, "Exiting...");
+
     if (DVD::IsInserted()) {
         DVD::ResetDrive(false);
     }

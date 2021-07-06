@@ -3,9 +3,11 @@
 #include "util.hpp"
 
 LIBOGC_SUCKS_BEGIN
-#include <gccore.h>
-LIBOGC_SUCKS_END
+#include <ogc/ipc.h>
+#include <ogc/lwp.h>
+#include <ogc/message.h>
 #include <ogc/mutex.h>
+LIBOGC_SUCKS_END
 #include <bit>
 #include <cassert>
 

@@ -10,10 +10,12 @@
 #include <cstdio>
 #include <gcutil.h>
 #include <iostream>
+LIBOGC_SUCKS_BEGIN
 #include <ogc/cache.h>
 #include <ogc/es.h>
 #include <ogc/lwp_watchdog.h>
 #include <ogc/system.h>
+LIBOGC_SUCKS_END
 #include <optional>
 #include <span>
 #include <stdint.h>

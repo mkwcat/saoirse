@@ -2,13 +2,9 @@
 
 #include "util.hpp"
 
-#include <stdio.h>
+#include <stdlib.h>
 #include <stdarg.h>
-LIBOGC_SUCKS_BEGIN
-#include <gccore.h>
-LIBOGC_SUCKS_END
 #include "os.h"
-#include <mutex>
 
 enum class LogS {
     Core, DVD, Loader, Payload, IOS
