@@ -33,7 +33,6 @@
 #include <util.h>
 #include <ios.h>
 #include <unistd.h>
-#include <log.h>
 
 #define SDIO_HEAPSIZE				(5*1024)
  
@@ -501,7 +500,7 @@ bool sdio_Deinitialize(void)
 
 bool sdio_Open(void)
 {
-	if (__sd0_fd < 0 || __sd0_initialized==0) {
+	if (__sd0_fd < 0) {
 		__sd0_fd = IOS_Open(_sd0_fs,1);
 		if (__sd0_fd < 0)
 			return false;

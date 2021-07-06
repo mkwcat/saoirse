@@ -18,8 +18,10 @@ DSTATUS disk_status(BYTE pdrv)
 {
     if (pdrv == DRV_SDCARD)
     {
-        if (!sdio_IsInitialized() || !sdio_IsInserted())
+        if (!sdio_IsInitialized() || !sdio_IsInserted()) {
             return STA_NODISK;
+        }
+        return 0;
     }
     return STA_NOINIT;
 }
@@ -34,9 +36,8 @@ DSTATUS disk_initialize(BYTE pdrv)
             return STA_NODISK;
         }
         return 0;
-    } else {
-        printf(ERROR, "disk_initialize: unknown pdrv (%d)", pdrv);
     }
+    printf(ERROR, "disk_initialize: unknown pdrv (%d)", pdrv);
     return STA_NOINIT;
 }
 
@@ -117,101 +118,77 @@ DWORD get_fattime()
 #define IOCTL_FLSEEK     5
 #define IOCTL_FTRUNCATE  6
 #define IOCTL_FSYNC      7
-#define IOCTL_FTELL      8
-#define IOCTL_FEOF       9
-#define IOCTL_FSIZE      10
-#define IOCTL_FERROR     11
 
 static s32 FsQueue;
 static u32 __FsQueueData[8];
 static bool FsStarted = false;
+static FATFS fatfs;
 
 static inline
 void FS_BeginFile(const void* input, FIL* fp)
 {
     ASSERT(fp);
     memcpy((void*) fp, input, sizeof(FIL));
+    /* Replace the one pointer in the struct */
+    fp->obj.fs = &fatfs;
 }
 
 static inline
 void FS_ReplyFile(void* output, FIL* fp)
 {
     ASSERT(fp);
+    /* IOS automatically flushes the vectors for PPC requests */
     memcpy(output, (void*) fp, sizeof(FIL));
+    fp->obj.fs = NULL;
 }
 
 static
-s32 FS_FileCommand(IOSRequest* req)
+s32 FS_FileCommand(IOSRequest* req, FIL* fp)
 {
-    if (req->ioctlv.in_count < 1 || req->ioctlv.vec[0].len != sizeof(FIL)) {
-        printf(ERROR, "FS_FileCommand: Invalid input");
-        return IOS_EINVAL;
-    }
-    if ((u32) req->ioctlv.vec[0].data & 3) {
-        printf(ERROR, "FS_FileCommand: FIL must be aligned to 4 byte boundary");
-        return IOS_EINVAL;
-    }
-    FIL fp;
-    FS_BeginFile(req->ioctlv.vec[0].data, &fp);
-
     switch (req->ioctl.cmd)
     {
         case IOCTL_FCLOSE:
-            if (req->ioctlv.in_count != 1 && req->ioctlv.io_count != 0)
-                return IOS_EINVAL;
-            return f_close(&fp);
-        
-        case IOCTL_FREAD:
             if (req->ioctlv.in_count != 1 && req->ioctlv.io_count != 1)
                 return IOS_EINVAL;
-            UINT read;
-            f_read(&fp, req->ioctlv.vec[1].data, req->ioctlv.vec[1].len, &read);
-            return (s32) read;
+            return f_close(fp);
+        
+        case IOCTL_FREAD:
+            if (req->ioctlv.in_count != 1 && req->ioctlv.io_count != 3)
+                return IOS_EINVAL;
+            if (req->ioctlv.vec[3].len != sizeof(UINT)
+             || (u32) req->ioctlv.vec[3].data & 3)
+                return IOS_EINVAL;
+            UINT* read = (UINT*) req->ioctlv.vec[3].data;
+            return f_read(fp,
+                req->ioctlv.vec[2].data, req->ioctlv.vec[2].len, read);
         
         case IOCTL_FWRITE:
-            if (req->ioctlv.in_count != 2 && req->ioctlv.io_count != 0)
+            if (req->ioctlv.in_count != 2 && req->ioctlv.io_count != 2)
                 return IOS_EINVAL;
-            UINT wrote;
-            f_write(&fp,
-                req->ioctlv.vec[1].data, req->ioctlv.vec[1].len, &wrote);
-            return (s32) wrote;
+            if (req->ioctlv.vec[3].len != sizeof(UINT)
+             || (u32) req->ioctlv.vec[3].data & 3)
+                return IOS_EINVAL;
+            UINT* wrote = (UINT*) req->ioctlv.vec[3].data;
+            return f_write(fp,
+                req->ioctlv.vec[1].data, req->ioctlv.vec[1].len, wrote);
         
         case IOCTL_FLSEEK:
-            if (req->ioctlv.in_count != 2 && req->ioctlv.io_count != 0)
+            if (req->ioctlv.in_count != 2 && req->ioctlv.io_count != 1)
                 return IOS_EINVAL;
-            if (req->ioctlv.vec[1].len != sizeof(u32))
+            if (req->ioctlv.vec[1].len != sizeof(u32)
+             || (u32) req->ioctlv.vec[1].data & 3)
                 return IOS_EINVAL;
-            return f_lseek(&fp, *(FSIZE_t*) req->ioctlv.vec[1].data);
+            return f_lseek(fp, *(FSIZE_t*) req->ioctlv.vec[1].data);
         
         case IOCTL_FTRUNCATE:
-            if (req->ioctlv.in_count != 1 && req->ioctlv.io_count != 0)
+            if (req->ioctlv.in_count != 1 && req->ioctlv.io_count != 1)
                 return IOS_EINVAL;
-            return f_truncate(&fp);
+            return f_truncate(fp);
         
         case IOCTL_FSYNC:
-            if (req->ioctlv.in_count != 1 && req->ioctlv.io_count != 0)
+            if (req->ioctlv.in_count != 1 && req->ioctlv.io_count != 1)
                 return IOS_EINVAL;
-            return f_sync(&fp);
-        
-        case IOCTL_FTELL:
-            if (req->ioctlv.in_count != 1 && req->ioctlv.io_count != 0)
-                return IOS_EINVAL;
-            return f_tell(&fp);
-        
-        case IOCTL_FEOF:
-            if (req->ioctlv.in_count != 1 && req->ioctlv.io_count != 0)
-                return IOS_EINVAL;
-            return f_eof(&fp);
-        
-        case IOCTL_FSIZE:
-            if (req->ioctlv.in_count != 1 && req->ioctlv.io_count != 0)
-                return IOS_EINVAL;
-            return f_size(&fp);
-        
-        case IOCTL_FERROR:
-            if (req->ioctlv.in_count != 1 && req->ioctlv.io_count != 0)
-                return IOS_EINVAL;
-            return f_error(&fp);
+            return f_sync(fp);
     }
 
     return IOS_EINVAL;
@@ -260,15 +237,34 @@ s32 FS_ReqIoctlv(IOSRequest* req)
              */
             FRESULT fret = f_open(&fp, (char*) req->ioctlv.vec[0].data,
                 *(BYTE*) req->ioctlv.vec[1].data);
-            FS_ReplyFile(req->ioctlv.vec[0].data, &fp);
+            FS_ReplyFile(req->ioctlv.vec[2].data, &fp);
             return fret;
         }
 
         case IOCTL_FCLOSE: case IOCTL_FREAD: case IOCTL_FWRITE:
-        case IOCTL_FLSEEK: case IOCTL_FTRUNCATE: case IOCTL_FSYNC:
-        case IOCTL_FTELL: case IOCTL_FEOF: case IOCTL_FSIZE:
-        case IOCTL_FERROR:
-            return FS_FileCommand(req);     
+        case IOCTL_FLSEEK: case IOCTL_FTRUNCATE: case IOCTL_FSYNC: {
+            if (req->ioctlv.in_count < 1
+             || req->ioctlv.vec[0].len != sizeof(FIL)) {
+                printf(ERROR, "FS_FileCommand: Invalid input");
+                return IOS_EINVAL;
+            }
+            if (req->ioctlv.io_count < 1
+             || req->ioctlv.vec[req->ioctlv.in_count].len != sizeof(FIL)) {
+                printf(ERROR, "FS_FileCommand: Invalid output");
+                return IOS_EINVAL;
+            }
+            if ((u32) req->ioctlv.vec[0].data & 3
+             || (u32) req->ioctlv.vec[req->ioctlv.in_count].data & 3) {
+                printf(ERROR,
+                    "FS_FileCommand: FIL must be aligned to 4 byte boundary");
+                return IOS_EINVAL;
+            }
+            FIL fp;
+            FS_BeginFile(req->ioctlv.vec[0].data, &fp);
+            const FRESULT fret = FS_FileCommand(req, &fp);
+            FS_ReplyFile(req->ioctlv.vec[req->ioctlv.in_count].data, &fp);
+            return fret;
+        }
     }
 }
 
@@ -319,17 +315,8 @@ s32 FS_StartRM(void* arg)
     return 0;
 }
 
-static FATFS fatfs;
-
 void FS_Init()
 {
-    /*
-     * I don't think there's a static_assert kind of thing in C,
-     * but anyway, unaligned would break because of a hardware bug (and we don't
-     * have a proper memcpy implementation to work around it) 
-     */
-    ASSERT(sizeof(FIL) & 3 == 0);
-
     if (!sdio_Open()) {
         printf(ERROR, "FS_Init: sdio_Open returned false");
         abort();
@@ -338,7 +325,7 @@ void FS_Init()
     /* Mount SD Card */
     FRESULT fret = f_mount(&fatfs, "0:", 0);
     if (fret != FR_OK) {
-        /* FatFS shouldn't try to initialize the drive yet, so there will be no
+        /* FatFS won't try to initialize the drive yet, so there will be no
          * "not inserted" error */
         printf(ERROR, "FS_Init: f_mount SD Card failed: %d", fret);
     }

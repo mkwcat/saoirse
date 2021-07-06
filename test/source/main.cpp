@@ -1,6 +1,7 @@
 #include "irse.h"
 
 #include "dvd.h"
+#include "File.hpp"
 #include <gccore.h>
 #include <gcutil.h>
 #include <wiiuse/wpad.h>
@@ -151,6 +152,26 @@ static Stage stInit([[maybe_unused]] Stage from)
     /* Wait for DI to startup */
     usleep(2000);
     DVD::Init();
+
+    /* Test filesystem
+     * note this will fail if you don't have the test file lol */
+    file::init();
+    file fl("test_file.txt", FA_READ);
+    if (fl.result() != FR_OK) {
+        irse::Log(LogS::Core, LogL::INFO, "test f_open: %d", fl.result());
+        abort();
+    }
+
+    static char str[sizeof("This is a test file.")];
+    u32 read;
+    FRESULT fret = fl.read(str, sizeof(str) - 1, read);
+    if (fret != FR_OK) {
+        irse::Log(LogS::Core, LogL::ERROR, "test f_read: %d", fret);
+        abort();
+    }
+
+    irse::Log(LogS::Core, LogL::INFO, "str: %s", str);
+
     if (DVD::IsInserted()) {
         return Stage::SpinupDisc;
     }
@@ -299,7 +320,7 @@ static s32 Loop([[maybe_unused]] void* arg)
 s32 main([[maybe_unused]] s32 argc, [[maybe_unused]] char** argv)
 {
     // TODO: Do IOS reload at the right time (just before launch)
-    IOS_ReloadIOS(36);
+    IOS_ReloadIOS(58);
 
     /* Initialize Wii Remotes */
     WPAD_Init();
