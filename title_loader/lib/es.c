@@ -22,7 +22,6 @@ s32 ES_CloseLib(void)
 
 s32 ES_LaunchTitle(u64 titleID, const TicketView* view)
 {
-    s32 ret;
     IOVector vec[2];
 
     vec[0].data = (void*) &titleID;
@@ -32,7 +31,6 @@ s32 ES_LaunchTitle(u64 titleID, const TicketView* view)
 
     return IOS_Ioctlv(__esFd, IOCTL_ES_LAUNCH, 2, 0, vec);
 }
-
 
 s32 ES_GetNumTicketViews(u64 titleID, u32* cnt)
 {

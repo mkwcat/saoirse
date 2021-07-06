@@ -24,7 +24,7 @@ ELF2DOL := elf2dol
 TL_CC := arm-none-eabi-gcc 
 TL_CFLAGS := -std=c99 -march=armv5te -mbig-endian -mthumb-interwork -mthumb -DDEBUG -fno-builtin -ffreestanding \
 			 -ffunction-sections -n -nostartfiles -nodefaultlibs -Wl,-gc-sections -fomit-frame-pointer -lgcc \
-			 -DIOS -O4
+			 -DIOS -O4 -Wall -Wextra -Wpedantic -Werror -Wno-unused-parameter -std=c11
 
 # Source, include and build directories
 TL_DIR := title_loader

@@ -104,7 +104,7 @@ DWORD get_fattime()
 
 
 /* <----------
- * IPC Filesystem Interface
+ * IPC Filesystem Resource Manager
  * ----------> */
 
 #define FS_MAX_PATH 1024
@@ -129,8 +129,9 @@ void FS_BeginFile(const void* input, FIL* fp)
 {
     ASSERT(fp);
     memcpy((void*) fp, input, sizeof(FIL));
-    /* Replace the one pointer in the struct */
     fp->obj.fs = &fatfs;
+    fp->dir_sect = 0;
+    fp->dir_ptr = NULL;
 }
 
 static inline
@@ -223,7 +224,7 @@ s32 FS_ReqIoctlv(IOSRequest* req)
              || req->ioctlv.vec[1].len != sizeof(BYTE))
                 return IOS_EINVAL;
             if (strnlen((char*) req->ioctlv.vec[0].data, req->ioctlv.vec[0].len)
-                == req->ioctlv.vec[0].len)
+                == (s32) req->ioctlv.vec[0].len)
                 return IOS_EINVAL;
             if (req->ioctlv.vec[2].len != sizeof(FIL)
              || (u32) req->ioctlv.vec[2].data & 3)
@@ -265,6 +266,11 @@ s32 FS_ReqIoctlv(IOSRequest* req)
             FS_ReplyFile(req->ioctlv.vec[req->ioctlv.in_count].data, &fp);
             return fret;
         }
+
+        default:
+            printf(ERROR,
+                "FS_ReqIoctlv: Unhandled command: %d", req->ioctlv.cmd);
+            return IOS_EINVAL;
     }
 }
 
@@ -300,6 +306,9 @@ s32 FS_StartRM(void* arg)
         abort();
     }
 
+    s32 replyQueue = (s32) arg;
+    IOS_SendMessage(replyQueue, 0, 0);
+
     FsStarted = true;
     while (true) {
         IOSRequest* req;
@@ -315,7 +324,9 @@ s32 FS_StartRM(void* arg)
     return 0;
 }
 
-void FS_Init()
+static u32 FsStack[0x400 / 4];
+
+void FS_Init(s32 replyQueue)
 {
     if (!sdio_Open()) {
         printf(ERROR, "FS_Init: sdio_Open returned false");
@@ -330,6 +341,139 @@ void FS_Init()
         printf(ERROR, "FS_Init: f_mount SD Card failed: %d", fret);
     }
 
-    /* Should maybe create a thread */
-    FS_StartRM(NULL);
+    const s32 tid = IOS_CreateThread(FS_StartRM, (void*) replyQueue,
+        FsStack + sizeof(FsStack) / 4, sizeof(FsStack), 100, true);
+    if (tid < 0) {
+        printf(ERROR, "Failed to make FS thread: %d", tid);
+        abort();
+    }
+
+    const s32 ret = IOS_StartThread(tid);
+    if (ret != IOS_SUCCESS) {
+        printf(ERROR, "Failed to start FS thread: %d", ret);
+        abort();
+    }
+}
+
+
+/* <----------
+ * Filesystem Client
+ * ----------> */
+
+s32 storageFd = -1;
+
+s32 FS_CliInit()
+{
+    if (storageFd < 0)
+        storageFd = IOS_Open("/dev/storage", 0);
+    return storageFd;
+}
+
+FRESULT FS_Open(FIL* fp, const TCHAR* path, u8 mode)
+{
+    IOVector vec[2 + 1];
+
+    vec[0].data = (void*) path;
+    vec[0].len = strlen(path) + 1;
+
+    BYTE _mode = (BYTE) mode;
+    vec[1].data = &_mode;
+    vec[1].len = sizeof(BYTE);
+
+    vec[2].data = fp;
+    vec[2].len = sizeof(FIL);
+    return IOS_Ioctlv(storageFd, IOCTL_FOPEN, 2, 1, vec);
+}
+
+FRESULT FS_Close(FIL* fp)
+{
+    IOVector vec[1 + 1];
+
+    vec[0].data = fp;
+    vec[0].len = sizeof(FIL);
+    vec[1].data = fp;
+    vec[1].len = sizeof(FIL);
+    return IOS_Ioctlv(storageFd, IOCTL_FCLOSE, 1, 1, vec);
+}
+
+FRESULT FS_Read(FIL* fp, void* data, u32 len, u32* read)
+{
+    IOVector vec[1 + 3];
+
+    vec[0].data = fp;
+    vec[0].len = sizeof(FIL);
+    vec[1].data = fp;
+    vec[1].len = sizeof(FIL);
+
+    vec[2].data = data;
+    vec[2].len = len;
+
+    UINT _read;
+    vec[3].data = &_read;
+    vec[3].len = sizeof(UINT);
+
+    FRESULT ret = IOS_Ioctlv(storageFd, IOCTL_FREAD, 1, 3, vec);
+    *read = (u32) _read;
+    return ret;
+}
+
+FRESULT FS_Write(FIL* fp, const void* data, u32 len, u32* wrote)
+{
+    IOVector vec[2 + 2];
+
+    vec[0].data = fp;
+    vec[0].len = sizeof(FIL);
+    vec[2].data = fp;
+    vec[2].len = sizeof(FIL);
+
+    vec[1].data = (void*) data;
+    vec[1].len = len;
+
+    UINT _wrote;
+    vec[3].data = &_wrote;
+    vec[3].len = sizeof(UINT);
+
+    FRESULT ret = IOS_Ioctlv(storageFd, IOCTL_FWRITE, 2, 2, vec);
+    *wrote = (u32) _wrote;
+    return ret;
+}
+
+FRESULT FS_LSeek(FIL* fp, u32 offset)
+{
+    IOVector vec[2 + 1];
+
+    vec[0].data = fp;
+    vec[0].len = sizeof(FIL);
+    vec[2].data = fp;
+    vec[2].len = sizeof(FIL);
+
+    FSIZE_t _offset = offset;
+    vec[1].data = &_offset;
+    vec[1].len = sizeof(FSIZE_t);
+
+    return IOS_Ioctlv(storageFd, IOCTL_FLSEEK, 2, 1, vec);
+}
+
+FRESULT FS_Truncate(FIL* fp)
+{
+    IOVector vec[1 + 1];
+
+    vec[0].data = fp;
+    vec[0].len = sizeof(FIL);
+    vec[1].data = fp;
+    vec[1].len = sizeof(FIL);
+
+    return IOS_Ioctlv(storageFd, IOCTL_FTRUNCATE, 1, 1, vec);
+}
+
+FRESULT FS_Sync(FIL* fp)
+{
+    IOVector vec[1 + 1];
+
+    vec[0].data = fp;
+    vec[0].len = sizeof(FIL);
+    vec[1].data = fp;
+    vec[1].len = sizeof(FIL);
+
+    return IOS_Ioctlv(storageFd, IOCTL_FSYNC, 1, 1, vec);
 }

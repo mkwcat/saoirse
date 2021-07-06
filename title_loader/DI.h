@@ -2,4 +2,4 @@
 
 #include <types.h>
 
-void DI_CreateThread();
+void DI_Init(s32 replyQueue);

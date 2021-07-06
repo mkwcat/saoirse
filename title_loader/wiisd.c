@@ -126,8 +126,6 @@ struct _sdioresponse
 	u32 acmd12_response;
 };
  
-static s32 hId = -1;
- 
 static s32 __sd0_fd = -1;
 static u16 __sd0_rca = 0;
 static s32 __sd0_initialized = 0;

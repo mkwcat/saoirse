@@ -46,9 +46,21 @@ u32 _main(u32 arg)
     }
     heap = ret;
 
-    DI_CreateThread();
-    printf(INFO, "call FS_Init()");
-    FS_Init();
+    u32 startupQueueData[1];
+    ret = IOS_CreateMessageQueue(startupQueueData, 1);
+    if (ret < 0) {
+        printf(ERROR, "Failed to create startup queue");
+        abort();
+    }
+    s32 startupQueue = ret;
+    u32 msg;
+
+    FS_Init(startupQueue);
+    ret = IOS_ReceiveMessage(startupQueue, &msg, 0);
+    ASSERT(ret == IOS_SUCCESS);
+    FS_CliInit();
+    DI_Init(startupQueue);
+    
     IOS_CancelThread(0, 0);
     return YUV_YELLOW;
 }

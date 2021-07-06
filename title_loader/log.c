@@ -10,8 +10,6 @@ static s32 printBufQueue = -1;
 static u32 printBufQueueData;
 char logBuffer[256];
 
-static void sendPrint();
-
 void printf(s32 level, const char* format, ...)
 {
     IOSRequest* req;
