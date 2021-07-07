@@ -122,7 +122,7 @@ DWORD get_fattime()
 static s32 FsQueue;
 static u32 __FsQueueData[8];
 static bool FsStarted = false;
-static FATFS fatfs;
+FATFS fatfs;
 
 static inline
 void FS_BeginFile(const void* input, FIL* fp)

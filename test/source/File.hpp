@@ -60,6 +60,8 @@ public:
         return this->m_result;
     }
 
+    FIL& fil() { return m_f; }
+
 protected:
     FRESULT open(const TCHAR* path, BYTE mode);
     FRESULT close();

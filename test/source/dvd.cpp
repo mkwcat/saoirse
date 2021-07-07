@@ -255,10 +255,16 @@ DiErr DVDLow::DVDCommand::syncReplyAssertRet(DiErr expected)
     
     if (ret != expected) {
         irse::Log(LogS::DVD, LogL::ERROR,
-            "SyncReplyAssertRet: ret == %s, expected %s\n",
+            "SyncReplyAssertRet: ret == %s, expected %s",
             DVDLow::PrintErr(ret), DVDLow::PrintErr(expected));
         abort();
     }
     
     return ret;
+}
+
+s32 DVDProxy::ApplyPatches(Patch* patches, u32 patchCount)
+{
+    return di.ioctl(DiIoctl::Proxy_PatchDVD,
+        patches, patchCount * sizeof(Patch), nullptr, 0);
 }

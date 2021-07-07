@@ -32,12 +32,12 @@ static u32 __diMsgData[8];
 static bool DiStarted = false;
 static bool GameStarted = false;
 
-static DVDPatch* DiPatches;
-static u32 DiNumPatches;
+static DVDPatch* DiPatches = NULL;
+static u32 DiNumPatches = 0;
 
 #define DI_IOCTL_READ 0x71
-#define DI_PROXY_IOCTL_PATCHDVD 0x1000
-#define DI_PROXY_IOCTL_STARTGAME 0x1001
+#define DI_PROXY_IOCTL_PATCHDVD 0x00
+#define DI_PROXY_IOCTL_STARTGAME 0x01
 
 #define DI_EOK 0x1
 #define DI_ESECURITY 0x20
@@ -49,6 +49,7 @@ void DI_OpenPatchFile(FIL* fp, DVDPatch* patch)
 {
     memset(fp, 0, sizeof(FIL));
     fp->obj.fs = NULL; // automatically filled by FS
+    fp->obj.id = fatfs.id;
     fp->obj.sclust = patch->start_cluster;
     fp->obj.objsize = 0xFFFFFFFF;
     fp->flag = FA_READ;
@@ -61,19 +62,19 @@ u32 DI_SearchPatch(u32 offset)
 {
     for (s32 j = 0, i = DiNumPatches; i != 0; i >>= 1)
     {
-        j += i >> 1;
-        u32 p_start = DiPatches[j].disc_offset;
-        u32 p_end = p_start + DiPatches[j].disc_length;
+        s32 k = j + (i >> 1);
+        u32 p_start = DiPatches[k].disc_offset;
+        u32 p_end = p_start + DiPatches[k].disc_length;
 
         if (p_start == offset)
-            return j;
-        if (p_start > offset) {
+            return k;
+        if (offset > p_start) {
+            if (p_end > offset)
+                return k;
             /* Move right */
-            j++; i--;
+            j = k + 1; i--;
         }
-        /* else p_start < offset */
-        if (p_end > offset)
-            return j;
+        /* offset < p_start */
     }
     return DiNumPatches;
 }
@@ -117,6 +118,7 @@ s32 DI_Read(s32 handle, u8* outbuf, u32 offset, u32 length)
 
     for (u32 idx = DI_SearchPatch(offset); length != 0; idx++)
     {
+        printf(INFO, "DI_Read: Read patch %d of %d", idx, DiNumPatches);
         if (idx >= DiNumPatches) {
             printf(WARN, "DI_Read: Out of bounds DVD read");
             memset(outbuf, 0, length);
@@ -127,6 +129,16 @@ s32 DI_Read(s32 handle, u8* outbuf, u32 offset, u32 length)
         DI_OpenPatchFile(&f, &DiPatches[idx]);
 
         u32 read_len = DiPatches[idx].disc_length << 2;
+        if (DiPatches[idx].disc_offset != offset) {
+            const FRESULT fret = FS_LSeek(&f,
+                (offset - DiPatches[idx].disc_offset) << 2);
+            if (fret != FR_OK) {
+                printf(ERROR, "DI_Read: FS_LSeek failed: %d", fret);
+                abort();
+            }
+            read_len -= (offset - DiPatches[idx].disc_offset) << 2;
+        }
+        
         if (read_len > length)
             read_len = length;
         u32 read = 0;
@@ -138,6 +150,7 @@ s32 DI_Read(s32 handle, u8* outbuf, u32 offset, u32 length)
 
         outbuf += read_len;
         length -= read_len;
+        offset += read_len >> 2;
     }
 
     return DI_EOK;
@@ -170,6 +183,7 @@ bool DI_DoNewIOCTL(IOSRequest* req)
             }
             DiNumPatches = req->ioctl.in_len / sizeof(DVDPatch);
             memcpy(DiPatches, req->ioctl.in, req->ioctl.in_len);
+            IOS_ResourceReply(req, IOS_SUCCESS);
             return true;
         }
         

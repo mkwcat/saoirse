@@ -4,6 +4,7 @@
 #include <types.h>
 
 extern s32 storageFd;
+extern FATFS fatfs;
 
 void FS_Init(s32 replyQueue);
 s32 FS_CliInit();

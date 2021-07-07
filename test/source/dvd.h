@@ -2,6 +2,7 @@
 
 #include "os.h"
 #include "util.hpp"
+#include "File.hpp"
 
 LIBOGC_SUCKS_BEGIN
 #include <ogc/es.h>
@@ -17,7 +18,10 @@ enum class DiIoctl : u8
     Reset = 0x8A,
     OpenPartition = 0x8B,
     UnencryptedRead = 0x8D,
-    RequestDiscStatus = 0xDB
+    RequestDiscStatus = 0xDB,
+
+    Proxy_PatchDVD = 0x00,
+    Proxy_StartGame = 0x01
 };
 
 enum class DiErr : s32
@@ -117,5 +121,25 @@ DiErr ResetDrive(bool spinup);
 DiErr ReadDiskID(DiskID* out);
 DiErr ReadCachedDiskID(DiskID* out);
 bool IsInserted();
+
+}
+
+namespace DVDProxy
+{
+
+struct Patch
+{
+    u32 disc_offset;
+    u32 disc_length;
+
+    /* file info */
+    u8 drv;
+    DWORD start_cluster;
+    DWORD cur_cluster;
+    u32 file_offset;
+};
+
+s32 ApplyPatches(Patch* patches, u32 patchCount);
+void StartGame();
 
 }
