@@ -2,7 +2,7 @@
 
 /* ~~Maybe we could even define the functions as wrappers for IPC~~ */
 #define DIR FF_DIR
-#include "../../title_loader/lib/ff.h"
+#include "../../ios/efs/ff.h"
 #undef DIR
 
 #include <gctypes.h>

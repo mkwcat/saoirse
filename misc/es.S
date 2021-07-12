@@ -135,7 +135,7 @@ entryProc:
 		cmp     r0, #0
 		blt     entryEndDeleteQueue
 		adr     r0, devicePath             @ path
-		syscall IOS_LaunchElf
+		syscall IOS_LaunchRM
 		
 entryEndDeleteQueue:
 		mov     r4, r0

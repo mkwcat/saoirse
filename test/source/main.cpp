@@ -114,8 +114,8 @@ static Stage stDefault(Stage from)
     }
 }
 
-extern u8 title_loader_elf[];
-extern u32 title_loader_elf_size;
+extern u8 saoirse_ios_elf[];
+extern u32 saoirse_ios_elf_size;
 
 static Stage stInit([[maybe_unused]] Stage from)
 {
@@ -140,7 +140,7 @@ static Stage stInit([[maybe_unused]] Stage from)
     VIDEO_WaitVSync();
 
     irse::Log(LogS::Core, LogL::INFO, "Starting up IOS...");
-    const s32 ret = IOSBoot::Launch(title_loader_elf, title_loader_elf_size);
+    const s32 ret = IOSBoot::Launch(saoirse_ios_elf, saoirse_ios_elf_size);
     irse::Log(LogS::Core, LogL::INFO, "IOS Launch result: %d", ret);
     new IOSBoot::Log();
 
@@ -317,7 +317,7 @@ static s32 Loop([[maybe_unused]] void* arg)
 s32 main([[maybe_unused]] s32 argc, [[maybe_unused]] char** argv)
 {
     // TODO: Do IOS reload at the right time (just before launch)
-    IOS_ReloadIOS(58);
+    IOS_ReloadIOS(36);
 
     /* Initialize Wii Remotes */
     WPAD_Init();
