@@ -25,8 +25,13 @@ void printf(s32 level, const char* format, ...)
     while (stdoutFd < 0 && (stdoutFd = IOS_Open("/dev/stdout", 0)) < 0)
         usleep(1000);
 
+    IOSRequest* req;
+    const s32 ret = IOS_ReceiveMessage(printBufQueue, (u32*) &req, 0);
+    if (ret < 0)
+        _exit(YUV_CYAN);
+
     va_list args;
-	va_start(args, format);
+    va_start(args, format);
     /* Use the temporary log buffer then memcpy into the request
      * output to work around a hardware bug */
     strcpy(logBuffer, logColors[level]);
@@ -35,7 +40,9 @@ void printf(s32 level, const char* format, ...)
         PRINT_BUFFER_SIZE - 1, format, args);
     va_end(args);
 
-    IOS_Ioctl(stdoutFd, 1, NULL, 0, NULL, 0);
+    memcpy32(req->ioctl.io, logBuffer, PRINT_BUFFER_SIZE);
+    IOS_FlushDCache(req->ioctl.io, PRINT_BUFFER_SIZE);
+    IOS_ResourceReply(req, IOS_SUCCESS);
 }
 
 static void Log_IPCRequest(IOSRequest* req)
@@ -56,19 +63,6 @@ static void Log_IPCRequest(IOSRequest* req)
                 }
                 /* Will reply on next printf */
                 IOS_SendMessage(printBufQueue, (u32) req, 0);
-                break;
-            }
-            if (req->ioctl.cmd == 1) {
-                /* Write to console */
-                /* This will block until an IOCTL request is available */
-                const s32 ret = IOS_ReceiveMessage(
-                    printBufQueue, (u32*) &req, 0);
-                if (ret < 0 || req == NULL)
-                    _exit(YUV_WHITE);
-
-                memcpy32(req->ioctl.io, logBuffer, PRINT_BUFFER_SIZE);
-                IOS_FlushDCache(req->ioctl.io, PRINT_BUFFER_SIZE);
-                IOS_ResourceReply(req, IOS_SUCCESS);
                 break;
             }
             IOS_ResourceReply(req, IOS_EINVAL);

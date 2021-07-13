@@ -76,11 +76,11 @@ s32 IOSBoot::Entry(u32 entrypoint)
     IOS::IOVector<1, 2> vec;
     vec.in[0].data = NULL;
     vec.in[0].len = 0;
-    vec.in[1].data = reinterpret_cast<void*>(0xFFFE0028);
-    vec.in[1].len = 0;
+    vec.out[0].data = reinterpret_cast<void*>(0xFFFE0028);
+    vec.out[0].len = 0;
     /* Unused vector utilized for cache safety */
-    vec.out[0].data = MEM1_BASE;
-    vec.out[0].len = 32;
+    vec.out[1].data = MEM1_BASE;
+    vec.out[1].len = 32;
 
     irse::Log(LogS::Core, LogL::INFO, "Exploit: Doing exploit call");
     return sha.ioctlv(0, vec);
@@ -123,10 +123,31 @@ IOSBoot::Log::Log()
         }
     }
     if (this->logRM.fd() < 0) {
-
         irse::Log(LogS::Core, LogL::ERROR,
             "/dev/stdout open error: %d", this->logRM.fd());
         return;
     }
     this->restartEvent();
 }
+
+#if 0
+/* don't judge this code; it's not meant to be seen by eyes */
+
+void IOSBoot::SetupPrintHook()
+{
+    static const u8 hook_code[] = {
+        0x4A, 0x04, 0x68, 0x13, 0x18, 0xD0, 0x70, 0x01, 0x21, 0x00, 0x70,
+        0x41, 0x33, 0x01, 0x60, 0x13, 0x47, 0x70, 0x00, 0x00,
+        0x10, 0xC0, 0x00, 0x00 };
+    *(u32*) 0x90C00000 = 4;
+    DCFlushRange((void*) 0x90C00000, 0x10000);
+
+    *(u32*) 0xCD4F744C = ((u32) (&hook_code) & ~0xC0000000) | 1;
+}
+
+void IOSBoot::ReadPrintHook()
+{
+    DCInvalidateRange((void*) 0x90C00000, 0x10000);
+    printf("PRINT HOOK RESULT:\n%s", (char*) 0x90C00004);
+}
+#endif

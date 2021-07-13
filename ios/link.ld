@@ -4,13 +4,13 @@ ENTRY(__entry)
 
 PHDRS {
 	ios_note_hdr PT_NOTE AT(0) FLAGS(0);
-	text PT_LOAD;
-	data PT_LOAD;
+	text PT_LOAD FLAGS(5);
+	data PT_LOAD FLAGS(0x00F00000 | 6);
 }
 
 MEMORY {
-	exe(rx) 	: ORIGIN = 0x13AE0000, LENGTH = 0x10000
-	ram(rw) 	: ORIGIN = 0x13AE0000 + 0x10000, LENGTH = 0x50000
+	exe(rx) 	: ORIGIN = 0x13700000, LENGTH = 0x10000
+	ram(rw) 	: ORIGIN = 0x13700000 + 0x10000, LENGTH = 0x30000
 }
 
 SECTIONS

@@ -31,4 +31,9 @@ protected:
     char logBuffer[256];
 };
 
+#if 0
+void SetupPrintHook();
+void ReadPrintHook();
+#endif
+
 }

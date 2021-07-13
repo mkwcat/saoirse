@@ -33,7 +33,7 @@ name:; \
 	.space sSize; \
 	.size name, sSize
 
-IOS_STACK(Log_RMStack, 0x100);
+IOS_STACK(Log_RMStack, 0x400);
 IOS_STACK(FS_RMStack, 0x400);
 IOS_STACK(DI_RMStack, 0x400);
 
@@ -43,8 +43,8 @@ IOS_NOTE(
 	0,
 	Log_StartRM,
 	40,
-	0x100,
-	Log_RMStack
+	0x400,
+	Log_RMStack + 0x400
 );
 /* External Filesystem/Storage */
 IOS_NOTE(
@@ -52,7 +52,7 @@ IOS_NOTE(
     FS_StartRM,
 	80,
 	0x400,
-	FS_RMStack
+	FS_RMStack + 0x400
 );
 /* Drive Interface Proxy */
 IOS_NOTE(
@@ -60,6 +60,6 @@ IOS_NOTE(
 	DI_StartRM,
 	80,
 	0x400,
-	DI_RMStack
+	DI_RMStack + 0x400
 );
 IOS_NOTE_END();
