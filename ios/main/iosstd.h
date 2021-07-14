@@ -20,4 +20,6 @@ void memclear(void* ptr, u32 len);
 
 void usleep(u32 usec);
 
+s32 snprintf(char* str, u32 n, const char* format, ...);
+
 EXTERN_C_END

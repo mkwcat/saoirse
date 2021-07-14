@@ -289,6 +289,8 @@ s32 FS_IPCRequest(IOSRequest* req)
 
 s32 FS_StartRM(void* arg)
 {
+    printf(INFO, "Starting FS...");
+
     if (!sdio_Open()) {
         printf(ERROR, "FS_Init: sdio_Open returned false");
         abort();
@@ -315,9 +317,6 @@ s32 FS_StartRM(void* arg)
             "FS_StartRM: IOS_RegisterResourceManager failed: %d", ret);
         abort();
     }
-
-    s32 replyQueue = (s32) arg;
-    IOS_SendMessage(replyQueue, 0, 0);
 
     FsStarted = true;
     while (true) {

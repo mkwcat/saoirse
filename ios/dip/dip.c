@@ -322,9 +322,6 @@ s32 DI_StartRM(void* arg)
         abort();
     }
 
-    s32 replyQueue = (s32) arg;
-    IOS_SendMessage(replyQueue, 0, 0);
-
     DiStarted = true;
     while (1) {
         IOSRequest* req;

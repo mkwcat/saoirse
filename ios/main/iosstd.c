@@ -1,6 +1,7 @@
 #include "iosstd.h"
 #include <util.h>
 #include <ios.h>
+#include <vsprintf.h>
 #include "main.h"
 
 ATTRIBUTE_TARGET(thumb)
@@ -150,4 +151,13 @@ void usleep(u32 usec)
 
     IOS_DestroyTimer(timer);
     IOS_DestroyMessageQueue(queue);
+}
+
+s32 snprintf(char* str, u32 n, const char* format, ...)
+{
+    va_list args;
+    va_start(args, format);
+    const s32 ret = vsnprintf(str, n, format, args);
+    va_end(args);
+    return ret;
 }

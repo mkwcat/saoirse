@@ -30,14 +30,13 @@ void printf(s32 level, const char* format, ...)
     if (ret < 0)
         _exit(YUV_CYAN);
 
-    va_list args;
-    va_start(args, format);
     /* Use the temporary log buffer then memcpy into the request
      * output to work around a hardware bug */
-    strcpy(logBuffer, logColors[level]);
-    strcpy(logBuffer + strlen(logColors[level]), "[IOS] ");
-    vsnprintf(logBuffer + strlen(logColors[level]) + sizeof("[IOS] ") - 1,
-        PRINT_BUFFER_SIZE - 1, format, args);
+    const s32 pos = snprintf(logBuffer, PRINT_BUFFER_SIZE - 1,
+        "%s[IOS] ", logColors[level]);
+    va_list args;
+    va_start(args, format);
+    vsnprintf(logBuffer + pos, PRINT_BUFFER_SIZE - pos - 1, format, args);
     va_end(args);
 
     memcpy32(req->ioctl.io, logBuffer, PRINT_BUFFER_SIZE);
