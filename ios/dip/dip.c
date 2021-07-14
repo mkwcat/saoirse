@@ -11,8 +11,8 @@ typedef struct
 
     /* file info */
     u8 drv;
-    DWORD start_cluster;
-    DWORD cur_cluster;
+    u64 start_cluster;
+    u64 cur_cluster;
     u32 file_offset;
 } DVDPatch;
 

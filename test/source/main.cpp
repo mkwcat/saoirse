@@ -152,15 +152,15 @@ static Stage stInit([[maybe_unused]] Stage from)
      * note this will fail if you don't have the test file lol */
     file::init();
     file fl("test_file.txt", FA_READ);
-    if (fl.result() != FR_OK) {
+    if (fl.result() != FResult::FR_OK) {
         irse::Log(LogS::Core, LogL::INFO, "test f_open: %d", fl.result());
         abort();
     }
 
     static char str[sizeof("This is a test file.")];
     u32 read;
-    FRESULT fret = fl.read(str, sizeof(str) - 1, read);
-    if (fret != FR_OK) {
+    FResult fret = fl.read(str, sizeof(str) - 1, read);
+    if (fret != FResult::FR_OK) {
         irse::Log(LogS::Core, LogL::ERROR, "test f_read: %d", fret);
         abort();
     }

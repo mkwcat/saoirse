@@ -17,6 +17,12 @@ enum class StorageIOCTL
     Sync      = 7,
 };
 
+typedef unsigned char BYTE;
+typedef unsigned long DWORD;
+typedef unsigned int UINT;
+typedef unsigned long long FSIZE_t;
+
+
 static IOS::ResourceCtrl<StorageIOCTL> storage(-1);
 
 void file::init()
@@ -25,7 +31,7 @@ void file::init()
     ASSERT(storage.fd() >= 0);
 }
 
-FRESULT file::open(const TCHAR* path, u8 mode)
+FResult file::open(const char* path, u8 mode)
 {
     IOS::IOVector<2, 1> vec;
 
@@ -37,35 +43,35 @@ FRESULT file::open(const TCHAR* path, u8 mode)
     vec.in[1].len = sizeof(BYTE);
 
     vec.out[0].data = &this->m_f;
-    vec.out[0].len = sizeof(FIL);
+    vec.out[0].len = sizeof(EfsFile);
 
     s32 ret = storage.ioctlv(StorageIOCTL::Open, vec);
-    this->m_result = static_cast<FRESULT>(ret);
+    this->m_result = static_cast<FResult>(ret);
     return this->m_result;
 }
 
-FRESULT file::close()
+FResult file::close()
 {
     IOS::IOVector<1, 1> vec;
 
     vec.in[0].data = &this->m_f;
-    vec.in[0].len = sizeof(FIL);
+    vec.in[0].len = sizeof(EfsFile);
     vec.out[0].data = &this->m_f;
-    vec.out[0].len = sizeof(FIL);
+    vec.out[0].len = sizeof(EfsFile);
 
     s32 ret = storage.ioctlv(StorageIOCTL::Close, vec);
-    this->m_result = static_cast<FRESULT>(ret);
+    this->m_result = static_cast<FResult>(ret);
     return this->m_result;
 }
 
-FRESULT file::read(void* data, u32 len, u32& read)
+FResult file::read(void* data, u32 len, u32& read)
 {
     IOS::IOVector<1, 3> vec;
 
     vec.in[0].data = &this->m_f;
-    vec.in[0].len = sizeof(FIL);
+    vec.in[0].len = sizeof(EfsFile);
     vec.out[0].data = &this->m_f;
-    vec.out[0].len = sizeof(FIL);
+    vec.out[0].len = sizeof(EfsFile);
 
     vec.out[1].data = data;
     vec.out[1].len = len;
@@ -76,18 +82,18 @@ FRESULT file::read(void* data, u32 len, u32& read)
 
     s32 ret = storage.ioctlv(StorageIOCTL::Read, vec);
     read = _read;
-    this->m_result = static_cast<FRESULT>(ret);
+    this->m_result = static_cast<FResult>(ret);
     return this->m_result;
 }
 
-FRESULT file::write(const void* data, u32 len, u32& wrote)
+FResult file::write(const void* data, u32 len, u32& wrote)
 {
     IOS::IOVector<2, 2> vec;
 
     vec.in[0].data = &this->m_f;
-    vec.in[0].len = sizeof(FIL);
+    vec.in[0].len = sizeof(EfsFile);
     vec.out[0].data = &this->m_f;
-    vec.out[0].len = sizeof(FIL);
+    vec.out[0].len = sizeof(EfsFile);
 
     vec.in[1].data = data;
     vec.in[1].len = len;
@@ -98,52 +104,52 @@ FRESULT file::write(const void* data, u32 len, u32& wrote)
 
     s32 ret = storage.ioctlv(StorageIOCTL::Write, vec);
     wrote = _wrote;
-    this->m_result = static_cast<FRESULT>(ret);
+    this->m_result = static_cast<FResult>(ret);
     return this->m_result;
 }
 
-FRESULT file::lseek(u32 offset)
+FResult file::lseek(u32 offset)
 {
     IOS::IOVector<2, 1> vec;
 
     vec.in[0].data = &this->m_f;
-    vec.in[0].len = sizeof(FIL);
+    vec.in[0].len = sizeof(EfsFile);
     vec.out[0].data = &this->m_f;
-    vec.out[0].len = sizeof(FIL);
+    vec.out[0].len = sizeof(EfsFile);
 
     FSIZE_t _offset = offset;
     vec.in[1].data = &_offset;
     vec.in[1].len = sizeof(FSIZE_t);
 
     s32 ret = storage.ioctlv(StorageIOCTL::LSeek, vec);
-    this->m_result = static_cast<FRESULT>(ret);
+    this->m_result = static_cast<FResult>(ret);
     return this->m_result;
 }
 
-FRESULT file::truncate()
+FResult file::truncate()
 {
     IOS::IOVector<1, 1> vec;
 
     vec.in[0].data = &this->m_f;
-    vec.in[0].len = sizeof(FIL);
+    vec.in[0].len = sizeof(EfsFile);
     vec.out[0].data = &this->m_f;
-    vec.out[0].len = sizeof(FIL);
+    vec.out[0].len = sizeof(EfsFile);
 
     s32 ret = storage.ioctlv(StorageIOCTL::Truncate, vec);
-    this->m_result = static_cast<FRESULT>(ret);
+    this->m_result = static_cast<FResult>(ret);
     return this->m_result;
 }
 
-FRESULT file::sync()
+FResult file::sync()
 {
     IOS::IOVector<1, 1> vec;
 
     vec.in[0].data = &this->m_f;
-    vec.in[0].len = sizeof(FIL);
+    vec.in[0].len = sizeof(EfsFile);
     vec.out[0].data = &this->m_f;
-    vec.out[0].len = sizeof(FIL);
+    vec.out[0].len = sizeof(EfsFile);
 
     s32 ret = storage.ioctlv(StorageIOCTL::Sync, vec);
-    this->m_result = static_cast<FRESULT>(ret);
+    this->m_result = static_cast<FResult>(ret);
     return this->m_result;
 }

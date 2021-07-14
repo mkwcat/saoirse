@@ -5,6 +5,7 @@
 #include "wiisd.h"
 #include <main.h>
 #include <iosstd.h>
+#include <EfsFile.h>
 
 /* <----------
  * FatFS Disk I/O Support
@@ -123,22 +124,50 @@ static bool FsStarted = false;
 FATFS fatfs;
 
 static inline
-void FS_BeginFile(const void* input, FIL* fp)
+bool FS_BeginFile(const void* input, u32 in_len, FIL* fp)
 {
     ASSERT(fp);
-    memcpy((void*) fp, input, sizeof(FIL));
+    if (in_len != sizeof(EfsFile))
+        return false;
+    EfsFile* vfp = (EfsFile*) input;
+    memset((void*) fp, 0, sizeof(EfsFile));
+
     fp->obj.fs = &fatfs;
+    fp->obj.id = fatfs.id;
+    fp->obj.attr = vfp->fat.obj_attr;
+    fp->obj.stat = vfp->fat.obj_stat;
+    fp->obj.sclust = vfp->fat.obj_sclust;
+    fp->obj.objsize = vfp->fat.obj_size;
+    fp->fptr = vfp->fat.fptr;
+    fp->sect = vfp->fat.sect;
+    fp->clust = vfp->fat.clust;
+#if !FF_FS_READONLY
     fp->dir_sect = 0;
-    fp->dir_ptr = NULL;
+    /* Invalid pointer */
+    fp->dir_ptr = (BYTE*) 0xCECECECE;
+#endif
+    return true;
 }
 
 static inline
-void FS_ReplyFile(void* output, FIL* fp)
+bool FS_ReplyFile(void* output, u32 out_len, const FIL* fp)
 {
     ASSERT(fp);
-    /* IOS automatically flushes the vectors for PPC requests */
-    memcpy(output, (void*) fp, sizeof(FIL));
-    fp->obj.fs = NULL;
+    if (out_len != sizeof(EfsFile))
+        return false;
+    EfsFile* vfp = (EfsFile*) output;
+    memset(output, 0, sizeof(EfsFile));
+
+    vfp->dev = 0;
+    vfp->fs = 0;
+    vfp->fat.obj_attr = fp->obj.attr;
+    vfp->fat.obj_stat = fp->obj.stat;
+    vfp->fat.obj_sclust = fp->obj.sclust;
+    vfp->fat.obj_size = fp->obj.objsize;
+    vfp->fat.fptr = fp->fptr;
+    vfp->fat.sect = fp->sect;
+    vfp->fat.clust = fp->clust;
+    return true;
 }
 
 static
@@ -224,7 +253,7 @@ s32 FS_ReqIoctlv(IOSRequest* req)
             if (strnlen((char*) req->ioctlv.vec[0].data, req->ioctlv.vec[0].len)
                 == (s32) req->ioctlv.vec[0].len)
                 return IOS_EINVAL;
-            if (req->ioctlv.vec[2].len != sizeof(FIL)
+            if (req->ioctlv.vec[2].len != sizeof(EfsFile)
              || (u32) req->ioctlv.vec[2].data & 3)
                 return IOS_EINVAL;
 
@@ -236,19 +265,20 @@ s32 FS_ReqIoctlv(IOSRequest* req)
              */
             FRESULT fret = f_open(&fp, (char*) req->ioctlv.vec[0].data,
                 *(BYTE*) req->ioctlv.vec[1].data);
-            FS_ReplyFile(req->ioctlv.vec[2].data, &fp);
-            return fret;
+            return FS_ReplyFile(req->ioctlv.vec[2].data,
+                                req->ioctlv.vec[2].len, &fp)
+                   ? fret : IOS_EINVAL;
         }
 
         case IOCTL_FCLOSE: case IOCTL_FREAD: case IOCTL_FWRITE:
         case IOCTL_FLSEEK: case IOCTL_FTRUNCATE: case IOCTL_FSYNC: {
             if (req->ioctlv.in_count < 1
-             || req->ioctlv.vec[0].len != sizeof(FIL)) {
+             || req->ioctlv.vec[0].len != sizeof(EfsFile)) {
                 printf(ERROR, "FS_FileCommand: Invalid input");
                 return IOS_EINVAL;
             }
             if (req->ioctlv.io_count < 1
-             || req->ioctlv.vec[req->ioctlv.in_count].len != sizeof(FIL)) {
+             || req->ioctlv.vec[req->ioctlv.in_count].len != sizeof(EfsFile)) {
                 printf(ERROR, "FS_FileCommand: Invalid output");
                 return IOS_EINVAL;
             }
@@ -259,10 +289,13 @@ s32 FS_ReqIoctlv(IOSRequest* req)
                 return IOS_EINVAL;
             }
             FIL fp;
-            FS_BeginFile(req->ioctlv.vec[0].data, &fp);
+            if (!FS_BeginFile(req->ioctlv.vec[0].data,
+                              req->ioctlv.vec[0].len, &fp))
+                return IOS_EINVAL;
             const FRESULT fret = FS_FileCommand(req, &fp);
-            FS_ReplyFile(req->ioctlv.vec[req->ioctlv.in_count].data, &fp);
-            return fret;
+            return FS_ReplyFile(req->ioctlv.vec[req->ioctlv.in_count].data,
+                                req->ioctlv.vec[req->ioctlv.in_count].len, &fp)
+                   ? fret : IOS_EINVAL;
         }
 
         default:

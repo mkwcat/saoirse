@@ -13,7 +13,7 @@ TARGET		:=	saoirse_ios
 BUILD		:=	build
 SOURCES		:=	main efs dip
 DATA		:=	data  
-INCLUDES	:=  . main
+INCLUDES	:=  . main ../include
 BIN			:=  bin
 
 LIBS		:=	
@@ -72,7 +72,7 @@ LIBS        :=  -lgcc
 
 ARCH	=	-march=armv5te -mtune=arm9tdmi -mthumb -mthumb-interwork -mbig-endian
 
-CFLAGS	=	$(ARCH) $(INCLUDE) -Wall -Wextra -Wpedantic -Werror -Wno-unused-parameter -O3 -fomit-frame-pointer -fverbose-asm -ffunction-sections -fdata-sections -fno-exceptions -nostartfiles -fno-builtin -nodefaultlibs -ffreestanding
+CFLAGS	=	$(ARCH) $(INCLUDE) -DIOS -Wall -Wextra -Wpedantic -Werror -Wno-unused-parameter -O3 -fomit-frame-pointer -fverbose-asm -ffunction-sections -fdata-sections -fno-exceptions -nostartfiles -fno-builtin -nodefaultlibs -ffreestanding
 
 
 AFLAGS	=	$(ARCH) -x assembler-with-cpp

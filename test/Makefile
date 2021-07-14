@@ -19,7 +19,7 @@ TARGET		:=	$(notdir $(CURDIR))
 BUILD		:=	build
 SOURCES		:=	source
 DATA		:=	data  
-INCLUDES	:=
+INCLUDES	:=  ../include
 
 #---------------------------------------------------------------------------------
 # options for code generation
@@ -80,9 +80,8 @@ export OFILES	:=	$(addsuffix .o,$(BINFILES)) \
 #---------------------------------------------------------------------------------
 # build a list of include paths
 #---------------------------------------------------------------------------------
-export INCLUDE	:=	$(foreach dir,$(INCLUDES), -iquote $(CURDIR)/$(dir)) \
+export INCLUDE	:=	$(foreach dir,$(INCLUDES), -I$(CURDIR)/$(dir)) \
 					$(foreach dir,$(LIBDIRS),-I$(dir)/include) \
-					-I$(CURDIR)/$(BUILD) \
 					-I$(LIBOGC_INC)
 
 #---------------------------------------------------------------------------------
@@ -107,7 +106,6 @@ clean:
 #---------------------------------------------------------------------------------
 run:
 	wiiload $(TARGET).dol
-
 
 #---------------------------------------------------------------------------------
 else
