@@ -13,7 +13,7 @@ static IOS::File cacheFile(-1);
 static bool initialized = false;
 
 static DVDLow::DVDCommand sDvdBlocks[8];
-static Queue<DVDLow::DVDCommand*> dataQueue(8);
+static Queue<DVDLow::DVDCommand*>* dataQueue;
 
 constexpr const char* DVD_CACHE_FILE = "/title/00000001/00000002/data/cache.dat";
 constexpr std::size_t DVD_CACHE_SIZE = 0xB00000;
@@ -34,6 +34,10 @@ const char* DVDLow::PrintErr(DiErr err)
         DI_ERR_STR(OK);
         DI_ERR_STR(DriveError);
         DI_ERR_STR(CoverClosed);
+        DI_ERR_STR(Timeout);
+        DI_ERR_STR(Security);
+        DI_ERR_STR(Verify);
+        DI_ERR_STR(Invalid);
     }
 #undef DI_ERR_STR
     return "Unknown";
@@ -41,7 +45,7 @@ const char* DVDLow::PrintErr(DiErr err)
 
 DVDLow::DVDCommand* DVD::GetCommand()
 {
-    DVDLow::DVDCommand* block = dataQueue.receive();
+    DVDLow::DVDCommand* block = dataQueue->receive();
     ASSERT(block != nullptr);
 
     return block;
@@ -49,7 +53,7 @@ DVDLow::DVDCommand* DVD::GetCommand()
 
 void DVD::ReleaseCommand(DVDLow::DVDCommand* block)
 {
-    dataQueue.send(block);
+    dataQueue->send(block);
 }
 
 static s32 DVD_Callback(s32 result, void* usrdata)
@@ -68,13 +72,21 @@ void DVD::Init()
         return;
     initialized = true;
 
-    new (&di) IOS::ResourceCtrl<DiIoctl>("/dev/di/proxy");
+    new (&di) IOS::ResourceCtrl<DiIoctl>("/dev/di");
     ASSERT(di.fd() >= 0);
 
+    dataQueue = new Queue<DVDLow::DVDCommand*>(8);
     for (s32 i = 0; i < 8; i++)
-        dataQueue.send(&sDvdBlocks[i]);
+        dataQueue->send(&sDvdBlocks[i]);
 
     irse::Log(LogS::DVD, LogL::WARN, "DVD initialized");
+}
+
+void DVD::Deinit()
+{
+    di.~ResourceCtrl<DiIoctl>();
+    delete dataQueue;
+    initialized = false;
 }
 
 bool DVD::OpenCacheFile()
@@ -154,7 +166,7 @@ void DVDLow::ReadDiskIDAsync(DVDCommand& block, void* data)
     block.sendIoctl(DiIoctl::ReadDiskID, data, 0x20);
 }
 
-void DVDLow::OpenPartitionAsync(DVDCommand& block, u32 offset, signed_blob* meta)
+void DVDLow::OpenPartitionAsync(DVDCommand& block, u32 offset, ES::TMDFixed<512>* meta)
 {
     block.input.command = DiIoctl::OpenPartition;
     block.input.args[0] = offset;

@@ -12,7 +12,6 @@
 #include <iostream>
 LIBOGC_SUCKS_BEGIN
 #include <ogc/cache.h>
-#include <ogc/es.h>
 #include <ogc/lwp_watchdog.h>
 #include <ogc/system.h>
 LIBOGC_SUCKS_END
@@ -81,15 +80,15 @@ static void EncryptedRead(void* dst, u32 len, u32 ofs, CachePolicy invalidate)
 }
 
 
-void OpenPartition(s32 ofs, void* tmd_) {
+void OpenPartition(s32 ofs, ES::TMDFixed<512>* meta) {
     DVD::UniqueCommand cmd;
     assert(cmd.cmd() != nullptr);
-    DVDLow::OpenPartitionAsync(*cmd.cmd(), ofs,
-        reinterpret_cast<signed_blob*>(tmd_));
+    DVDLow::OpenPartitionAsync(*cmd.cmd(), ofs, meta);
     const auto result = cmd.cmd()->syncReply();
 
     if (result != DiErr::OK) {
-        irse::Log(LogS::Loader, LogL::ERROR, "Failed to open partition");
+        irse::Log(LogS::Loader, LogL::ERROR, "Failed to open partition: %s",
+            DVDLow::PrintErr(result));
         abort();
     }
 }
@@ -120,21 +119,6 @@ EntryPoint Apploader::load(
     // TODO: If we want to shrink the FST to fit some code a-la CTGP.
     [[maybe_unused]] int fst_expand)
 {
-    const Volume main_volume = readVolumes()[0];
-    
-    const auto partitions = readPartitions(main_volume);
-    DebugPause();
-    const Partition* boot_partition
-        = findBootPartition(main_volume, partitions);
-    DebugPause();
-    if (boot_partition == nullptr) {
-        return nullptr;
-    }
-    irse::Log(LogS::Loader, LogL::INFO,
-        "Boot partition: %p", reinterpret_cast<const void*>(boot_partition));
-
-    openPartition(*boot_partition);
-    DebugPause();
     const ApploaderInfo app_info = readAppInfo();
     dumpAppInfo(app_info);
     DebugPause();
@@ -148,9 +132,26 @@ EntryPoint Apploader::load(
     payload.loadSegmnts();
 
     DebugPause();
-
-
     return payload.getEntrypoint();
+}
+
+void Apploader::openBootPartition(ES::TMDFixed<512>* outMeta)
+{
+    const Volume main_volume = readVolumes()[0];
+    
+    const auto partitions = readPartitions(main_volume);
+    DebugPause();
+    const Partition* boot_partition
+        = findBootPartition(main_volume, partitions);
+    DebugPause();
+    if (boot_partition == nullptr) {
+        irse::Log(LogS::Loader, LogL::ERROR, "Failed to find boot partition");
+        abort();
+    }
+    irse::Log(LogS::Loader, LogL::INFO,
+        "Boot partition: %p", reinterpret_cast<const void*>(boot_partition));
+
+    openPartition(*boot_partition, outMeta);
 }
 
 void Apploader::dumpAppInfo(const ApploaderInfo& app_info)
@@ -179,11 +180,10 @@ ApploaderInfo Apploader::readAppInfo()
     return app_info;
 }
 
-void Apploader::openPartition(const Partition& boot_partition)
+void Apploader::openPartition(const Partition& boot_partition, ES::TMDFixed<512>* outMeta)
 {
     irse::Log(LogS::Loader, LogL::INFO, "Reading boot partition..");
-    std::array<u32, 0x4A00 / 4> ticket_metadata ATTRIBUTE_ALIGN(32) = {};
-    OpenPartition(boot_partition.offset, ticket_metadata.data());
+    OpenPartition(boot_partition.offset, outMeta);
 }
 
 const Partition*

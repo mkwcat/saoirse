@@ -1,12 +1,9 @@
 #pragma once
 
 #include "os.h"
+#include "es.h"
 #include "util.hpp"
 #include "File.hpp"
-
-LIBOGC_SUCKS_BEGIN
-#include <ogc/es.h>
-LIBOGC_SUCKS_END
 
 enum class DiIoctl : u8
 {
@@ -33,7 +30,11 @@ enum class DiErr : s32
     /* DIP driver errors */
     OK = (1 << 0),
     DriveError = (1 << 1),
-    CoverClosed = (1 << 2)
+    CoverClosed = (1 << 2),
+    Timeout = (1 << 4),
+    Security = (1 << 5),
+    Verify = (1 << 6),
+    Invalid = (1 << 7)
 };
 
 namespace DVDLow
@@ -72,7 +73,7 @@ struct DVDCommand
 const char* PrintErr(DiErr err);
 void ResetAsync(DVDCommand& block, bool spinup);
 void ReadDiskIDAsync(DVDCommand& block, void* data);
-void OpenPartitionAsync(DVDCommand& block, u32 offset, signed_blob* tmd);
+void OpenPartitionAsync(DVDCommand& block, u32 offset, ES::TMDFixed<512>* tmd);
 
 void UnencryptedReadAsync(DVDCommand& block, void* data, u32 len, u32 offset);
 void EncryptedReadAsync(DVDCommand& block, void* data, u32 len, u32 offset);
@@ -116,6 +117,7 @@ struct DiskID
 };
 
 void Init();
+void Deinit();
 bool OpenCacheFile();
 DiErr ResetDrive(bool spinup);
 DiErr ReadDiskID(DiskID* out);

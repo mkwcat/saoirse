@@ -1,10 +1,11 @@
 #include "irse.h"
 
 #include "dvd.h"
+#include "sdcard.h"
 #include "File.hpp"
-#include <wiiuse/wpad.h>
 #include "util.hpp"
 LIBOGC_SUCKS_BEGIN
+#include <wiiuse/wpad.h>
 #include <ogc/machine/processor.h>
 LIBOGC_SUCKS_END
 
@@ -19,30 +20,12 @@ LIBOGC_SUCKS_END
 
 using namespace irse;
 
-struct {
-    s32 verbosity;
-    bool useCache;
-} state;
-
 Queue<Stage> irse::events;
-
-static Thread mainThread;
 
 static struct {
     void *xfb = NULL;
     GXRModeObj *rmode = NULL;
 } display;
-
-static s32 Loop(void* arg);
-
-static Stage stDefault(Stage from);
-static Stage stInit(Stage from);
-static Stage stReturnToMenu(Stage from);
-static Stage stNoDisc(Stage from);
-static Stage stSpinupDisc(Stage from);
-static Stage stSpinupDiscNoCache(Stage from);
-static Stage stDiscError(Stage from);
-static Stage stReadDisc(Stage from);
 
 static constexpr std::array<const char*, 5> logSources = {
     "Core", "DVD", "Loader", "Payload", "IOS" };
@@ -139,38 +122,44 @@ static Stage stInit([[maybe_unused]] Stage from)
     irse::Log(LogS::Core, LogL::WARN, "Debug console initialized");
     VIDEO_WaitVSync();
 
+#if 0
     irse::Log(LogS::Core, LogL::INFO, "Starting up IOS...");
     const s32 ret = IOSBoot::Launch(saoirse_ios_elf, saoirse_ios_elf_size);
     irse::Log(LogS::Core, LogL::INFO, "IOS Launch result: %d", ret);
     new IOSBoot::Log();
+#endif
 
-    /* Wait for DI to startup */
-    usleep(2000);
     DVD::Init();
+    SDCard::Open();
+    return Stage::Wait;
+}
 
-    /* Test filesystem
-     * note this will fail if you don't have the test file lol */
-    file::init();
-    file fl("test_file.txt", FA_READ);
-    if (fl.result() != FResult::FR_OK) {
-        irse::Log(LogS::Core, LogL::INFO, "test f_open: %d", fl.result());
-        abort();
+static Stage stWait([[maybe_unused]] Stage from)
+{
+    static bool lastDiscState = false;
+    static bool lastCardState = false;
+
+    bool discState = DVD::IsInserted();
+    bool cardState = SDCard::IsInserted();
+
+    if (discState != lastDiscState) {
+        lastDiscState = discState;
+        return discState ? Stage::DiscInsert : Stage::DiscEject;
     }
 
-    static char str[sizeof("This is a test file.")];
-    u32 read;
-    FResult fret = fl.read(str, sizeof(str) - 1, read);
-    if (fret != FResult::FR_OK) {
-        irse::Log(LogS::Core, LogL::ERROR, "test f_read: %d", fret);
-        abort();
+    if (cardState != lastCardState) {
+        lastCardState = cardState;
+        return cardState ? Stage::SDInsert : Stage::SDEject;
     }
 
-    irse::Log(LogS::Core, LogL::INFO, "str: %s", str);
-
-    if (DVD::IsInserted()) {
-        return Stage::SpinupDisc;
+    /* temporary, the UI should handle this */
+    WPAD_ScanPads();
+    s32 down = WPAD_ButtonsDown(0);
+    if (down & WPAD_BUTTON_HOME) {
+        return Stage::ReturnToMenu;
     }
-    return Stage::NoDisc;
+
+    return Stage::Default;
 }
 
 static Stage stReturnToMenu([[maybe_unused]] Stage from)
@@ -183,18 +172,6 @@ static Stage stReturnToMenu([[maybe_unused]] Stage from)
     exit(0);
     /* Should never reach here */
     return Stage::ReturnToMenu;
-}
-
-static Stage stNoDisc(Stage from)
-{
-    if (from != Stage::Default) {
-        irse::Log(LogS::Core, LogL::WARN, "Waiting for disc insert...");
-    }
-
-    if (!DVD::IsInserted()) {
-        return Stage::Default;
-    }
-    return Stage::SpinupDiscNoCache;
 }
 
 static inline
@@ -219,28 +196,7 @@ bool startupDrive()
     return ret == DiErr::OK;
 }
 
-static Stage stSpinupDisc([[maybe_unused]] Stage from)
-{
-    if (!startupDrive())
-        return Stage::DiscError;
-
-    /* Initialize the system menu cache.dat */
-    state.useCache = DVD::OpenCacheFile();
-    if (state.useCache) {
-        DVD::DiskID cached ATTRIBUTE_ALIGN(32);
-        DiErr ret = DVD::ReadCachedDiskID(&cached);
-
-        if (ret == DiErr::OK && memcmp(MEM1_BASE, &cached.gameID, 6)) {
-            irse::Log(LogS::Core, LogL::WARN,
-                "Cached diskid does not equal real diskid");
-            state.useCache = false;
-        }
-    }
-
-    return Stage::ReadDisc;
-}
-
-static Stage stSpinupDiscNoCache([[maybe_unused]] Stage from)
+static Stage stDiscInsert([[maybe_unused]] Stage from)
 {
     if (!startupDrive())
         return Stage::DiscError;
@@ -255,19 +211,18 @@ static Stage stSpinupDiscNoCache([[maybe_unused]] Stage from)
     return Stage::ReadDisc;
 }
 
+static Stage stDiscEject([[maybe_unused]] Stage from)
+{
+    irse::Log(LogS::Core, LogL::INFO, "Disc ejected");
+    /* Notify UI controller of eject here */
+    return Stage::Wait;
+}
+
 static Stage stDiscError([[maybe_unused]] Stage from)
 {
-    if (from != Stage::Default) {
-        DVD::ResetDrive(false);
-        irse::Log(LogS::Core, LogL::WARN, "Disc error, waiting for eject...");
-        /* Drive reset will confuse the cover status at first */
-        return Stage::Default;
-    }
-
-    if (DVD::IsInserted()) {
-        return Stage::Default;
-    }
-    return Stage::NoDisc;
+    irse::Log(LogS::Core, LogL::ERROR, "Disc error! Waiting for eject...");
+    /* Notify UI controller of error here */
+    return Stage::Wait;
 }
 
 static Stage stReadDisc([[maybe_unused]] Stage from)
@@ -278,7 +233,21 @@ static Stage stReadDisc([[maybe_unused]] Stage from)
     WPAD_Shutdown();
 
     static Apploader loader;
+    ES::TMDFixed<512> meta ATTRIBUTE_ALIGN(32);
+
+    loader.openBootPartition(&meta);
     auto main = loader.load();
+    DVD::Deinit();
+
+    /* Cast as s32 removes high word the in title ID */
+    irse::Log(LogS::Core, LogL::INFO,
+        "Launching IOS%d", static_cast<s32>(meta.sysVersion));
+    IOS_ReloadIOS(static_cast<s32>(meta.sysVersion));
+    DVD::Init();
+    startupDrive();
+
+    loader.openBootPartition(&meta);
+    DVD::Deinit();
 
     SetupGlobals(0);
     
@@ -288,6 +257,18 @@ static Stage stReadDisc([[maybe_unused]] Stage from)
     main();
     /* Unreachable! */
     abort();
+}
+
+static Stage stSDInsert([[maybe_unused]] Stage from)
+{
+    irse::Log(LogS::Core, LogL::INFO, "SD Card inserted");
+    return Stage::Wait;
+}
+
+static Stage stSDEject([[maybe_unused]] Stage from)
+{
+    irse::Log(LogS::Core, LogL::INFO, "SD Card ejected");
+    return Stage::Wait;
 }
 
 static s32 Loop([[maybe_unused]] void* arg)
@@ -301,12 +282,14 @@ static s32 Loop([[maybe_unused]] void* arg)
 #define STAGE_CASE(name) case Stage::name: next =  st ## name(prev); break
             STAGE_CASE(Default);
             STAGE_CASE(Init);
+            STAGE_CASE(Wait);
             STAGE_CASE(ReturnToMenu);
-            STAGE_CASE(NoDisc);
-            STAGE_CASE(SpinupDisc);
-            STAGE_CASE(SpinupDiscNoCache);
+            STAGE_CASE(DiscInsert);
+            STAGE_CASE(DiscEject);
             STAGE_CASE(DiscError);
             STAGE_CASE(ReadDisc);
+            STAGE_CASE(SDInsert);
+            STAGE_CASE(SDEject);
 #undef STAGE_CASE
         }
         prev = stage;
@@ -316,25 +299,5 @@ static s32 Loop([[maybe_unused]] void* arg)
 
 s32 main([[maybe_unused]] s32 argc, [[maybe_unused]] char** argv)
 {
-    // TODO: Do IOS reload at the right time (just before launch)
-    IOS_ReloadIOS(36);
-
-    /* Initialize Wii Remotes */
-    WPAD_Init();
-
-    LWP_SetThreadPriority(LWP_GetSelf(), 50);
-    mainThread.create(Loop, nullptr, nullptr, 1024, LWP_PRIO_HIGHEST - 20);
-    
-    while (1) {
-        usleep(16000);
-        WPAD_ScanPads();
-
-        s32 down = WPAD_ButtonsDown(0);
-        if (down & WPAD_BUTTON_HOME) {
-            events.send(Stage::ReturnToMenu);
-            break;
-        }
-    }
-    while (1) { }
-    return 0;
+    return Loop(0);
 }

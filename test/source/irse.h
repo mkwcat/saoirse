@@ -20,8 +20,11 @@ void VLog(LogS src, LogL level, const char* format, va_list args);
 void Log(LogS src, LogL level, const char* format, ...);
 
 enum class Stage {
-    Default, Init, ReturnToMenu, NoDisc,
-    SpinupDisc, SpinupDiscNoCache, DiscError, ReadDisc
+    Default, Init, Wait, ReturnToMenu,
+
+    DiscInsert, DiscEject, DiscError, ReadDisc,
+
+    SDInsert, SDEject
 };
 
 extern Queue<Stage> events;
