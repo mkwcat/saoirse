@@ -1,6 +1,6 @@
 #pragma once
 
-#ifdef IOS
+#ifdef TARGET_IOS
 #   include <types.h>
 #else
 #   include <gctypes.h>

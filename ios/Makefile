@@ -30,6 +30,7 @@ AR			:= $(PREFIX)ar
 OBJCOPY		:= $(PREFIX)objcopy
 LD			:= $(PREFIX)g++
 AS			:= $(PREFIX)g++
+BIN2S       := bin2s
 
 #---------------------------------------------------------------------------------
 # linker script
@@ -72,12 +73,11 @@ LIBS        :=  -lgcc
 
 ARCH	=	-march=armv5te -mtune=arm9tdmi -mthumb -mthumb-interwork -mbig-endian
 
-CFLAGS	=	$(ARCH) $(INCLUDE) -DIOS -Wall -Wextra -Wpedantic -Werror -Wno-unused-parameter -O3 -fomit-frame-pointer -fverbose-asm -ffunction-sections -fdata-sections -fno-exceptions -nostartfiles -fno-builtin -nodefaultlibs -ffreestanding
-
+CFLAGS	=	$(ARCH) $(INCLUDE) -DTARGET_IOS -Wall -Wextra -Wpedantic -Werror -Wno-unused-parameter -O3 -fomit-frame-pointer -fverbose-asm -ffunction-sections -fdata-sections -fno-exceptions
 
 AFLAGS	=	$(ARCH) -x assembler-with-cpp
 
-LDFLAGS	= $(ARCH) -T$(LINKSCRIPT) $(LIBPATHS) $(LIBS) -s -n -Wl,--gc-sections -Wl,-static -Wl,-Map,$(BIN)/$(TARGET).map -nostartfiles -nodefaultlibs -ffreestanding
+LDFLAGS	= $(ARCH) -T$(LINKSCRIPT) $(LIBPATHS) $(LIBS) -s -n -Wl,--gc-sections -Wl,-static -Wl,-Map,$(BIN)/$(TARGET).map -nostartfiles
 
 
 default: $(OUTPUT).elf
@@ -89,6 +89,7 @@ clean:
 $(OUTPUT).elf: $(OFILES)
 	@echo linking $(notdir $@)...
 	@$(LD) -o $@ $(OFILES) $(LDFLAGS)
+	@$(BIN2S) $@ > ../test/source/$(TARGET)_elf.s
 
 	
 $(BUILD)/%_cpp.o : %.cpp

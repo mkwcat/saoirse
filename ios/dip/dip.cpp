@@ -1,7 +1,7 @@
 #include <efs/efs.h>
 #include <main.h>
 #include <ios.h>
-#include <iosstd.h>
+#include <cstring>
 #include <types.h>
 
 typedef struct
@@ -106,7 +106,7 @@ s32 DI_Read(s32 handle, u8* outbuf, u32 offset, u32 length)
         const s32 ret = DI_RealRead(handle, outbuf, offset,
             (0x80000000 - offset) << 2);
         if (ret != DI_EOK) {
-            printf(ERROR, "DI_Read: Partial read failed: %d", ret);
+            peli::Log(LogL::ERROR, "DI_Read: Partial read failed: %d", ret);
             /* If it fails, just memset 0 the output buffer */
             memset(outbuf, 0, (0x80000000 - offset) << 2);
         }
@@ -117,9 +117,10 @@ s32 DI_Read(s32 handle, u8* outbuf, u32 offset, u32 length)
 
     for (u32 idx = DI_SearchPatch(offset); length != 0; idx++)
     {
-        printf(INFO, "DI_Read: Read patch %d of %d", idx, DiNumPatches);
+        peli::Log(LogL::INFO,
+            "DI_Read: Read patch %d of %d", idx, DiNumPatches);
         if (idx >= DiNumPatches) {
-            printf(WARN, "DI_Read: Out of bounds DVD read");
+            peli::Log(LogL::WARN, "DI_Read: Out of bounds DVD read");
             memset(outbuf, 0, length);
             return DI_EOK; /* Just success, I guess? */
         }
@@ -132,7 +133,7 @@ s32 DI_Read(s32 handle, u8* outbuf, u32 offset, u32 length)
             const FRESULT fret = FS_LSeek(&f,
                 (offset - DiPatches[idx].disc_offset) << 2);
             if (fret != FR_OK) {
-                printf(ERROR, "DI_Read: FS_LSeek failed: %d", fret);
+                peli::Log(LogL::ERROR, "DI_Read: FS_LSeek failed: %d", fret);
                 abort();
             }
             read_len -= (offset - DiPatches[idx].disc_offset) << 2;
@@ -143,7 +144,7 @@ s32 DI_Read(s32 handle, u8* outbuf, u32 offset, u32 length)
         u32 read = 0;
         const FRESULT fret = FS_Read(&f, outbuf, read_len, &read);
         if (fret != FR_OK) {
-            printf(ERROR, "DI_Read: FS_Read failed: %d", fret);
+            peli::Log(LogL::ERROR, "DI_Read: FS_Read failed: %d", fret);
             memset(outbuf + read, 0, read_len - read);
         }
 
@@ -175,7 +176,7 @@ bool DI_DoNewIOCTL(IOSRequest* req)
 
             DiNumPatches = req->ioctl.in_len / sizeof(DVDPatch);
             if (req->ioctl.in_len > sizeof(DiPatches)) {
-                printf(ERROR, "DI_PROXY_IOCTL_PATCHDVD: "
+                peli::Log(LogL::ERROR, "DI_PROXY_IOCTL_PATCHDVD: "
                     "Not enough memory for DVD patches");
                 IOS_ResourceReply(req, IOS_ENOMEM);
                 return true;
@@ -188,7 +189,7 @@ bool DI_DoNewIOCTL(IOSRequest* req)
         case DI_PROXY_IOCTL_STARTGAME: {
             if (GameStarted)
                 return false;
-            printf(WARN, "DI_PROXY_IOCTL_STARTGAME: Starting game...");
+            peli::Log(LogL::WARN, "DI_PROXY_IOCTL_STARTGAME: Starting game...");
             GameStarted = true;
             IOS_ResourceReply(req, IOS_SUCCESS);
             return true;
@@ -200,17 +201,17 @@ bool DI_DoNewIOCTL(IOSRequest* req)
                 IOS_ResourceReply(req, DI_ESECURITY);
                 return true;
             }
-            DVDCommand* block = req->ioctl.in;
+            DVDCommand* block = reinterpret_cast<DVDCommand*>(req->ioctl.in);
             if (block->cmd != DI_IOCTL_READ) {
                 IOS_ResourceReply(req, DI_EBADARGUMENT);
                 return true;
             }
 
-            u8* outbuf = req->ioctl.io;
+            u8* outbuf = reinterpret_cast<u8*>(req->ioctl.io);
             u32 offset = block->args[1];
             u32 length = block->args[0];
             if (length > req->ioctl.io_len) {
-                printf(ERROR,
+                peli::Log(LogL::ERROR,
                     "DI_IOCTL_READ: Output size < read length (0x%X, 0x%x)",
                     length, req->ioctl.io_len);
                 IOS_ResourceReply(req, DI_ESECURITY);
@@ -255,7 +256,7 @@ void DI_ReqIoctl(IOSRequest* req)
         req->ioctl.in, req->ioctl.in_len,
         req->ioctl.io, req->ioctl.io_len, DiMsgQueue, req);
     if (ret != IOS_SUCCESS) {
-        printf(ERROR, "IOS_Ioctl(0x%02X) forward failed: %d",
+        peli::Log(LogL::ERROR, "IOS_Ioctl(0x%02X) forward failed: %d",
             req->ioctl.cmd, ret);
         abort();
     }
@@ -269,7 +270,7 @@ void DI_ReqIoctlv(IOSRequest* req)
         req->ioctlv.in_count, req->ioctlv.io_count, req->ioctlv.vec,
         DiMsgQueue, req);
     if (ret != IOS_SUCCESS) {
-        printf(ERROR, "IOS_Ioctlv(0x%02X) forward failed: %d",
+        peli::Log(LogL::ERROR, "IOS_Ioctlv(0x%02X) forward failed: %d",
             req->ioctlv.cmd, ret);
         abort();
     }
@@ -298,26 +299,27 @@ void DI_HandleRequest(IOSRequest* req)
             break;
 
         default:
-            printf(ERROR, "Received unhandled command: %d", req->cmd);
+            peli::Log(LogL::ERROR, "Received unhandled command: %d", req->cmd);
             /* Real DI just... does not reply to unknown commands? [check] */
             break;
     }
 }
 
-s32 DI_StartRM(void* arg)
+extern "C" s32 DI_StartRM(void* arg)
 {
-    printf(INFO, "Starting DI...");
+    peli::Log(LogL::INFO, "Starting DI...");
 
     s32 ret = IOS_CreateMessageQueue(__diMsgData, 8);
     if (ret < 0) {
-        printf(ERROR, "DI_ThreadEntry: IOS_CreateMessageQueue failed: %d", ret);
+        peli::Log(LogL::ERROR,
+            "DI_ThreadEntry: IOS_CreateMessageQueue failed: %d", ret);
         abort();
     }
     DiMsgQueue = ret;
 
     ret = IOS_RegisterResourceManager(DI_PROXY_PATH, DiMsgQueue);
     if (ret != IOS_SUCCESS) {
-        printf(ERROR,
+        peli::Log(LogL::ERROR,
             "DI_ThreadEntry: IOS_RegisterResourceManager failed: %d", ret);
         abort();
     }
@@ -327,7 +329,8 @@ s32 DI_StartRM(void* arg)
         IOSRequest* req;
         ret = IOS_ReceiveMessage(DiMsgQueue, (u32*) &req, 0);
         if (ret != IOS_SUCCESS) {
-            printf(ERROR, "DI_ThreadEntry: IOS_ReceiveMessage failed: %d", ret);
+            peli::Log(LogL::ERROR,
+                "DI_ThreadEntry: IOS_ReceiveMessage failed: %d", ret);
             abort();
         }
 

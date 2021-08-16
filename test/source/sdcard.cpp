@@ -29,16 +29,16 @@
  */
 
 #include "sdcard.h"
-#include "os.h"
+#include <os.h>
+#include <string.h>
 #ifdef TARGET_IOS
 #include <util.h>
 #include <ios.h>
-#include <iosstd.h>
+#include <main.h>
 #else
 #include <gcutil.h>
 #include <ogc/ipc.h>
 #include <ogc/cache.h>
-#include <string.h>
 #include <unistd.h>
 #endif
 
@@ -149,18 +149,18 @@ static char _sd0_fs[] ATTRIBUTE_ALIGN(32) = "/dev/sdio/slot0";
 static void SyncBeforeRead(const void* address, u32 len)
 {
 #ifdef TARGET_IOS
-	IOS_InvalidateDCache(address, len);
+	IOS_InvalidateDCache(const_cast<void*>(address), len);
 #else
-	DCInvalidateRange((void*) address, len);
+	DCInvalidateRange(const_cast<void*>(address), len);
 #endif
 }
 
 static void SyncBeforeWrite(const void* address, u32 len)
 {
 #ifdef TARGET_IOS
-	IOS_FlushDCache(address, len);
+	IOS_FlushDCache(const_cast<void*>(address), len);
 #else
-	DCFlushRange((void*) address, len);
+	DCFlushRange(const_cast<void*>(address), len);
 #endif
 }
 

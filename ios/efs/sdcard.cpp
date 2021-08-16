@@ -1,36 +1,46 @@
 /*
-	wiisd.c
-	Hardware routines for reading and writing to the Wii's internal
-	SD slot.
- Copyright (c) 2008
-   Michael Wiedenbauer (shagkur)
-   Dave Murphy (WinterMute)
-   Sven Peter <svpe@gmx.net>
-	
- Redistribution and use in source and binary forms, with or without modification,
- are permitted provided that the following conditions are met:
-  1. Redistributions of source code must retain the above copyright notice,
-     this list of conditions and the following disclaimer.
-  2. Redistributions in binary form must reproduce the above copyright notice,
-     this list of conditions and the following disclaimer in the documentation and/or
-     other materials provided with the distribution.
-  3. The name of the author may not be used to endorse or promote products derived
-     from this software without specific prior written permission.
- THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR IMPLIED
- WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY
- AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE AUTHOR BE
- LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
- LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
- THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
- EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-*/
+ * sdcard.cpp - Wii SD Card slot I/O
+ *
+ * wiisd.c from libogc:
+ * Copyright (c) 2008
+ *   Michael Wiedenbauer (shagkur)
+ *   Dave Murphy (WinterMute)
+ *   Sven Peter <svpe@gmx.net>
+ *   modified by palapeli
+ * 
+ * Redistribution and use in source and binary forms, with or without modification,
+ * are permitted provided that the following conditions are met:
+ *  1. Redistributions of source code must retain the above copyright notice,
+ *     this list of conditions and the following disclaimer.
+ *  2. Redistributions in binary form must reproduce the above copyright notice,
+ *     this list of conditions and the following disclaimer in the documentation and/or
+ *     other materials provided with the distribution.
+ *  3. The name of the author may not be used to endorse or promote products derived
+ *     from this software without specific prior written permission.
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR IMPLIED
+ * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY
+ * AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE AUTHOR BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+ * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+ * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
+ * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
 
-#include "wiisd.h"
+#include "sdcard.h"
+#include <os.h>
+#include <string.h>
+#ifdef TARGET_IOS
 #include <util.h>
 #include <ios.h>
-#include <iosstd.h>
+#include <main.h>
+#else
+#include <gcutil.h>
+#include <ogc/ipc.h>
+#include <ogc/cache.h>
+#include <unistd.h>
+#endif
 
 #define SDIO_HEAPSIZE				(5*1024)
  
@@ -46,7 +56,7 @@
 #define SDIOHCR_HOSTCONTROL_4BIT	0x02
 
 #define	SDIO_DEFAULT_TIMEOUT		0xe
- 
+
 #define IOCTL_SDIO_WRITEHCREG		0x01
 #define IOCTL_SDIO_READHCREG		0x02
 #define IOCTL_SDIO_READCREG			0x03
@@ -135,10 +145,29 @@ static s32 __sdio_initialized = 0;
  
 static char _sd0_fs[] ATTRIBUTE_ALIGN(32) = "/dev/sdio/slot0";
 
+
+static void SyncBeforeRead(const void* address, u32 len)
+{
+#ifdef TARGET_IOS
+	IOS_InvalidateDCache(const_cast<void*>(address), len);
+#else
+	DCInvalidateRange(const_cast<void*>(address), len);
+#endif
+}
+
+static void SyncBeforeWrite(const void* address, u32 len)
+{
+#ifdef TARGET_IOS
+	IOS_FlushDCache(const_cast<void*>(address), len);
+#else
+	DCFlushRange(const_cast<void*>(address), len);
+#endif
+}
+
 static s32 __sdio_sendcommand(u32 cmd,u32 cmd_type,u32 rsp_type,u32 arg,u32 blk_cnt,u32 blk_size,void *buffer,void *reply,u32 rlen)
 {
 	s32 ret;
-	IOVector iovec[3];
+	IOS::Vector iovec[3];
 	struct _sdiorequest request ATTRIBUTE_ALIGN(32);
 	struct _sdioresponse response ATTRIBUTE_ALIGN(32);
 
@@ -210,7 +239,7 @@ static s32 __sdio_gethcr(u8 reg, u8 size, u32 *val)
 	u32 hcr_value ATTRIBUTE_ALIGN(32);
 	u32 hcr_query[6] ATTRIBUTE_ALIGN(32);
  
-	if(val==NULL) return IOS_EINVAL;
+	if(val==NULL) return IOSErr::OK;
  
  	hcr_value = 0;
 	*val = 0;
@@ -484,7 +513,7 @@ static	bool __sd0_initio(void)
 	return false;
 }
 
-bool sdio_Deinitialize(void)
+bool SDCard::Deinitialize(void)
 {
 	if(__sd0_fd>=0)
 		IOS_Close(__sd0_fd);
@@ -494,44 +523,44 @@ bool sdio_Deinitialize(void)
 	return true;
 }
 
-bool sdio_Open(void)
+bool SDCard::Open(void)
 {
-	if (__sd0_fd < 0) {
-		__sd0_fd = IOS_Open(_sd0_fs,1);
-		if (__sd0_fd < 0)
-			return false;
+	const s32 ret = IOS_Open(_sd0_fs,1);
+	if (ret >= 0) {
+		__sd0_fd = ret;
+		return true;
 	}
-	return true;
+	return false;
 }
 
-bool sdio_Startup(void)
+bool SDCard::Startup(void)
 {
 	if(__sdio_initialized==1) return true;
  
-	if(!sdio_Open()) {
-		sdio_Deinitialize();
+	if(!Open()) {
+		Deinitialize();
 		return false;
 	}
  
 	if(__sd0_initio()==false) {
-		sdio_Deinitialize();
+		Deinitialize();
 		return false;
 	}
 	__sdio_initialized = 1;
 	return true;
 }
  
-bool sdio_Shutdown(void)
+bool SDCard::Shutdown(void)
 {
 	if(__sd0_initialized==0) return false;
 
-	sdio_Deinitialize();
+	Deinitialize();
  
 	__sd0_initialized = 0;
 	return true;
 }
 
-bool sdio_ReadSectors(sec_t sector, sec_t numSectors,void* buffer)
+bool SDCard::ReadSectors(sec_t sector, sec_t numSectors,void* buffer)
 {
 	s32 ret;
 	u8 *ptr;
@@ -550,7 +579,7 @@ bool sdio_ReadSectors(sec_t sector, sec_t numSectors,void* buffer)
 			else blk_off = sector;
 			if(numSectors > 8)secs_to_read = 8;
 			else secs_to_read = numSectors;
-			IOS_InvalidateDCache(rw_buffer, secs_to_read*PAGE_SIZE512);
+			SyncBeforeRead(rw_buffer, secs_to_read*PAGE_SIZE512);
 			ret = __sdio_sendcommand(SDIO_CMD_READMULTIBLOCK,SDIOCMD_TYPE_AC,SDIO_RESPONSE_R1,blk_off,secs_to_read,PAGE_SIZE512,rw_buffer,NULL,0);
 			if(ret>=0) {
 				memcpy(ptr,rw_buffer,PAGE_SIZE512*secs_to_read);
@@ -562,7 +591,7 @@ bool sdio_ReadSectors(sec_t sector, sec_t numSectors,void* buffer)
 		}
 	} else {
 		if(__sd0_sdhc == 0) sector *= PAGE_SIZE512;
-		IOS_InvalidateDCache(buffer, PAGE_SIZE512*numSectors);
+		SyncBeforeRead(buffer, PAGE_SIZE512*numSectors);
 		ret = __sdio_sendcommand(SDIO_CMD_READMULTIBLOCK,SDIOCMD_TYPE_AC,SDIO_RESPONSE_R1,sector,numSectors,PAGE_SIZE512,buffer,NULL,0);
 	}
 
@@ -571,7 +600,7 @@ bool sdio_ReadSectors(sec_t sector, sec_t numSectors,void* buffer)
 	return (ret>=0);
 }
 
-bool sdio_WriteSectors(sec_t sector, sec_t numSectors,const void* buffer)
+bool SDCard::WriteSectors(sec_t sector, sec_t numSectors,const void* buffer)
 {
 	s32 ret;
 	u8 *ptr;
@@ -591,7 +620,7 @@ bool sdio_WriteSectors(sec_t sector, sec_t numSectors,const void* buffer)
 			if(numSectors > 8)secs_to_write = 8;
 			else secs_to_write = numSectors;
 			memcpy(rw_buffer,ptr,PAGE_SIZE512*secs_to_write);
-			IOS_FlushDCache(rw_buffer, PAGE_SIZE512*secs_to_write);
+			SyncBeforeWrite(rw_buffer, PAGE_SIZE512*secs_to_write);
 			ret = __sdio_sendcommand(SDIO_CMD_WRITEMULTIBLOCK,SDIOCMD_TYPE_AC,SDIO_RESPONSE_R1,blk_off,secs_to_write,PAGE_SIZE512,rw_buffer,NULL,0);
 			if(ret>=0) {
 				ptr += PAGE_SIZE512*secs_to_write;
@@ -602,7 +631,7 @@ bool sdio_WriteSectors(sec_t sector, sec_t numSectors,const void* buffer)
 		}
 	} else {
 		if(__sd0_sdhc == 0) sector *= PAGE_SIZE512;
-		IOS_FlushDCache(buffer, PAGE_SIZE512*numSectors);
+		SyncBeforeWrite(buffer, PAGE_SIZE512*numSectors);
 		ret = __sdio_sendcommand(SDIO_CMD_WRITEMULTIBLOCK,SDIOCMD_TYPE_AC,SDIO_RESPONSE_R1,sector,numSectors,PAGE_SIZE512,(char *)buffer,NULL,0);
 	}
 
@@ -611,18 +640,18 @@ bool sdio_WriteSectors(sec_t sector, sec_t numSectors,const void* buffer)
 	return (ret>=0);
 }
 
-bool sdio_ClearStatus(void)
+bool SDCard::ClearStatus(void)
 {
 	return true;
 }
 
-bool sdio_IsInserted(void)
+bool SDCard::IsInserted(void)
 {
 	return ((__sdio_getstatus() & SDIO_STATUS_CARD_INSERTED) ==
 			SDIO_STATUS_CARD_INSERTED);
 }
 
-bool sdio_IsInitialized(void)
+bool SDCard::IsInitialized(void)
 {
 	return __sdio_initialized == 1;
 }

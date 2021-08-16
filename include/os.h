@@ -1,20 +1,26 @@
 #pragma once
 
-#include "util.hpp"
+// TODO: some common stuff needs to be ported to IOS
 
+#ifdef TARGET_IOS
+#   include <ios.h>
+#   include <main.h>
+#else
+#   include "util.hpp"
 LIBOGC_SUCKS_BEGIN
-#include <ogc/ipc.h>
-#include <ogc/lwp.h>
-#include <ogc/message.h>
-#include <ogc/mutex.h>
+#   include <ogc/ipc.h>
+#   include <ogc/lwp.h>
+#   include <ogc/message.h>
+#   include <ogc/mutex.h>
 LIBOGC_SUCKS_END
+#   include <cassert>
+#endif
 #include <bit>
-#include <cassert>
 
 #define DASSERT assert
 #define ASSERT assert
 
-#ifdef T_IOS
+#ifdef TARGET_IOS
 #define MEM1_BASE ((void*) 0x00000000)
 #else
 #define MEM1_BASE ((void*) 0x80000000)
@@ -22,15 +28,15 @@ LIBOGC_SUCKS_END
 
 namespace IOSErr
 {
-
-constexpr s32 OK = 0;
-constexpr s32 NoAccess = -1;
-constexpr s32 Invalid = -4;
-constexpr s32 NotFound = -6;
-
+  enum {
+      OK = 0,
+      NoAccess = -1,
+      Invalid = -4,
+      NotFound = -6
+  };
 }
 
-#ifdef T_IOS
+#ifdef TARGET_IOS
 /* IOS implementation */
 template<typename T>
 class Queue
@@ -121,18 +127,15 @@ private:
 
 #endif
 
-#ifdef T_IOS
+#ifdef TARGET_IOS
 typedef s32 mutexid;
 #else
 typedef mutex_t mutexid;
 #endif
 
+#ifndef TARGET_IOS
 class Mutex
 {
-#ifdef T_IOS
-public:
-    static_assert(0, "Not implemented!");
-#else
 public:
     Mutex(const Mutex& from) = delete;
     Mutex() {
@@ -157,16 +160,14 @@ public:
 
 protected:
     mutexid m_mutex;
-#endif
 };
+#endif
 
+#ifndef TARGET_IOS
 class Thread
 {
     typedef s32 (*Proc)(void* arg);
-#ifdef T_IOS
-public:
-    static_assert(0, "Not implemented!");
-#else
+
 public:
     Thread(const Thread& rhs) = delete;
 
@@ -198,9 +199,8 @@ protected:
     Proc f_proc;
     bool m_valid;
     lwp_t m_tid;
-#endif
 };
-
+#endif
 
 namespace IOS
 {
@@ -225,7 +225,11 @@ constexpr s32 Write = 2;
 constexpr s32 RW = Read | Write;
 }
 
+#ifdef TARGET_IOS
+typedef IOVector Vector;
+#else
 typedef struct _ioctlv Vector;
+#endif
 
 template<u32 in_count, u32 out_count>
 struct IOVector
@@ -290,7 +294,7 @@ struct Request
 
 
 
-#ifdef T_IOS
+#ifdef TARGET_IOS
 //! TODO
 #define IPC_QUEUE_CALLBACK(callback, req)
 #else
@@ -325,6 +329,7 @@ public:
     s32 seek(s32 where, s32 whence) {
         return IOS_Seek(this->m_fd, where, whence);
     }
+#ifndef TARGET_IOS
     s32 readAsync(void* data, u32 length, ipccallback callback, void* usrdata) {
         return IOS_ReadAsync(this->m_fd, data, length,
             IPC_QUEUE_CALLBACK(callback, usrdata));
@@ -339,6 +344,7 @@ public:
         return IOS_SeekAsync(this->m_fd, where, whence,
             IPC_QUEUE_CALLBACK(callback, usrdata));
     }
+#endif
 
 protected:
     s32 m_fd;
@@ -368,6 +374,7 @@ public:
             in_count, out_count, reinterpret_cast<Vector*>(&vec));
     }
     
+#ifndef TARGET_IOS
     s32 ioctlAsync(Ioctl cmd, void* input, u32 inputLen,
                    void* output, u32 outputLen,
                    ipccallback callback, void* usrdata) {
@@ -392,6 +399,7 @@ public:
             in_count, out_count, reinterpret_cast<Vector*>(&vec),
             IPC_QUEUE_CALLBACK(callback, usrdata));
     }
+#endif
 
     s32 fd() const {
         return this->m_fd;
@@ -435,11 +443,13 @@ public:
             reinterpret_cast<void*>(stat), sizeof(Stat));
     }
 
+#ifndef TARGET_IOS
     s32 statsAsync(Stat* stat, ipccallback callback, void* usrdata) {
         return this->ioctlAsync(FileIoctl::GetFileStats, nullptr, 0,
             reinterpret_cast<void*>(stat), sizeof(Stat),
             IPC_QUEUE_CALLBACK(callback, usrdata));
     }
+#endif
 };
 
 } // namespace IOS

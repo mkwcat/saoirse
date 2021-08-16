@@ -1,10 +1,10 @@
 #include "main.h"
-#include <iosstd.h>
+#include <cstring>
+#include <cstdio>
 #include <types.h>
 #include <util.h>
 #include <ios.h>
 #include <stdarg.h>
-#include <vsprintf.h>
 #include <hollywood.h>
 
 #define PRINT_BUFFER_SIZE 256
@@ -18,9 +18,9 @@ char logBuffer[PRINT_BUFFER_SIZE];
 static const char* logColors[3] = {
     "\x1b[37;1m", "\x1b[33;1m", "\x1b[31;1m" };
 
-void printf(s32 level, const char* format, ...)
+void peli::Log(LogL level, const char* format, ...)
 {
-    if (level >= 3)
+    if (static_cast<s32>(level) >= 3)
         abort();
     while (stdoutFd < 0 && (stdoutFd = IOS_Open("/dev/stdout", 0)) < 0)
         usleep(1000);
@@ -28,20 +28,46 @@ void printf(s32 level, const char* format, ...)
     IOSRequest* req;
     const s32 ret = IOS_ReceiveMessage(printBufQueue, (u32*) &req, 0);
     if (ret < 0)
-        _exit(YUV_CYAN);
+        exitClr(YUV_CYAN);
 
     /* Use the temporary log buffer then memcpy into the request
      * output to work around a hardware bug */
     const s32 pos = snprintf(logBuffer, PRINT_BUFFER_SIZE - 1,
-        "%s[IOS] ", logColors[level]);
+        "%s[IOS] ", logColors[static_cast<s32>(level)]);
     va_list args;
     va_start(args, format);
     vsnprintf(logBuffer + pos, PRINT_BUFFER_SIZE - pos - 1, format, args);
     va_end(args);
 
-    memcpy32(req->ioctl.io, logBuffer, PRINT_BUFFER_SIZE);
+    memcpy(req->ioctl.io, logBuffer, PRINT_BUFFER_SIZE);
     IOS_FlushDCache(req->ioctl.io, PRINT_BUFFER_SIZE);
     IOS_ResourceReply(req, IOS_SUCCESS);
+}
+
+void usleep(u32 usec)
+{
+    u32 queueData;
+    const s32 queue = IOS_CreateMessageQueue(&queueData, 1);
+    if (queue < 0) {
+        peli::Log(LogL::ERROR, "usleep: failed to create message queue: %d", queue);
+        abort();
+    }
+
+    const s32 timer = IOS_CreateTimer(usec, 0, queue, 1);
+    if (timer < 0) {
+        peli::Log(LogL::ERROR, "usleep: failed to create timer: %d", timer);
+        abort();
+    }
+
+    u32 msg;
+    const s32 ret = IOS_ReceiveMessage(queue, &msg, 0);
+    if (ret < 0 || msg != 1) {
+        peli::Log(LogL::ERROR, "usleep: IOS_ReceiveMessage failure: %d", ret);
+        abort();
+    }
+
+    IOS_DestroyTimer(timer);
+    IOS_DestroyMessageQueue(queue);
 }
 
 static void Log_IPCRequest(IOSRequest* req)
@@ -73,25 +99,25 @@ static void Log_IPCRequest(IOSRequest* req)
     }
 }
 
-s32 Log_StartRM(void* arg)
+extern "C" s32 Log_StartRM(void* arg)
 {
     s32 ret = IOS_CreateMessageQueue(&printBufQueueData, 1);
     if (ret < 0)
-        _exit(YUV_DARK_RED);
+        exitClr(YUV_DARK_RED);
     printBufQueue = ret;
 
     s32 queue = IOS_CreateMessageQueue(stdoutQueueData, 8);
     if (queue < 0)
-        _exit(YUV_WHITE);
+        exitClr(YUV_WHITE);
     
     ret = IOS_RegisterResourceManager("/dev/stdout", queue);
     if (ret < 0)
-        _exit(YUV_WHITE);
+        exitClr(YUV_WHITE);
     
     while (1) {
         IOSRequest* req;
         if (IOS_ReceiveMessage(queue, (u32*) &req, 0) < 0)
-            _exit(YUV_WHITE);
+            exitClr(YUV_WHITE);
         
         Log_IPCRequest(req);
     }
@@ -102,15 +128,15 @@ void kwrite32(u32 address, u32 value)
 {
     const s32 queue = IOS_CreateMessageQueue((u32*) address, 1);
     if (queue < 0)
-        _exit(YUV_PINK);
+        exitClr(YUV_PINK);
     
     const s32 ret = IOS_SendMessage(queue, value, 0);
     if (ret < 0)
-        _exit(YUV_PINK);
+        exitClr(YUV_PINK);
     IOS_DestroyMessageQueue(queue);
 }
 
-void _exit(u32 color)
+void exitClr(u32 color)
 {
     /* write to HW_VISOLID */
     kwrite32(HW_VISOLID, color | 1);
@@ -119,14 +145,14 @@ void _exit(u32 color)
 
 void abort()
 {
-    printf(ERROR, "Abort was called!");
+    peli::Log(LogL::ERROR, "Abort was called!");
     IOS_CancelThread(0, 0);
     while (1) { }
 }
 
 void __assert_fail(const char* expr, const char* file, s32 line)
 {
-    printf(ERROR,
+    peli::Log(LogL::ERROR,
         "Assertion failed:\n\n%s\nfile %s, line %d", expr, file, line);
     abort();
 }

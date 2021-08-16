@@ -5,7 +5,7 @@
 
 EXTERN_C_START
 
-enum LogL { INFO, WARN, ERROR };
+enum class LogL { INFO, WARN, ERROR };
 
 #define YUV_RED         ((84 << 24) | (255 << 16) | (76 << 8))
 #define YUV_DARK_RED    ((106 << 24) | (192 << 16) | (38 << 8))
@@ -35,11 +35,15 @@ enum LogL { INFO, WARN, ERROR };
 #define YUV_11 YUV_WHITE
 #define YUV_12 YUV_GRAY
 
-void printf(s32 level, const char* format, ...);
+namespace peli
+{
+void Log(LogL level, const char* format, ...);
+}
 
-void _exit(u32 color);
-void abort();
+void exitClr(u32 color);
 void __assert_fail(const char* expr, const char* file, s32 line);
+void abort();
+void usleep(u32 usec);
 
 #define assert(expr) \
     (((expr) ? (void) 0 : __assert_fail(#expr, __FILE__, __LINE__)))

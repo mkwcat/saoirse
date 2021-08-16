@@ -1,10 +1,10 @@
 #include <ios.h>
+#include <cstring>
 #include "ff.h"
 #include "diskio.h"
 #include <types.h>
-#include "wiisd.h"
+#include "sdcard.h"
 #include <main.h>
-#include <iosstd.h>
 #include <EfsFile.h>
 
 /* <----------
@@ -17,7 +17,7 @@ DSTATUS disk_status(BYTE pdrv)
 {
     if (pdrv == DRV_SDCARD)
     {
-        if (!sdio_IsInitialized() || !sdio_IsInserted()) {
+        if (!SDCard::IsInitialized() || !SDCard::IsInserted()) {
             return STA_NODISK;
         }
         return 0;
@@ -29,14 +29,15 @@ DSTATUS disk_initialize(BYTE pdrv)
 {
     if (pdrv == DRV_SDCARD)
     {
-        if (!sdio_Startup()) {
+        if (!SDCard::Startup()) {
             /* No way to differentiate between error and not inserted */
-            printf(WARN, "disk_initialize: sdio_Startup returned false");
+            peli::Log(LogL::WARN,
+                "disk_initialize: SDCard::Startup returned false");
             return STA_NODISK;
         }
         return 0;
     }
-    printf(ERROR, "disk_initialize: unknown pdrv (%d)", pdrv);
+    peli::Log(LogL::ERROR, "disk_initialize: unknown pdrv (%d)", pdrv);
     return STA_NOINIT;
 }
 
@@ -46,13 +47,13 @@ DRESULT disk_read(BYTE pdrv, BYTE* buff, LBA_t sector, UINT count)
     {
         if (disk_status(pdrv) != 0)
             return RES_ERROR;
-        if (!sdio_ReadSectors(sector, count, buff)) {
-            printf(ERROR, "disk_read: sdio_ReadSectors failed");
+        if (!SDCard::ReadSectors(sector, count, buff)) {
+            peli::Log(LogL::ERROR, "disk_read: SDCard::ReadSectors failed");
             return RES_ERROR;
         }
         return RES_OK;
     }
-    return STA_NOINIT;
+    return RES_NOTRDY;
 }
 
 DRESULT disk_write(BYTE pdrv, const BYTE* buff, LBA_t sector, UINT count)
@@ -61,13 +62,13 @@ DRESULT disk_write(BYTE pdrv, const BYTE* buff, LBA_t sector, UINT count)
     {
         if (disk_status(pdrv) != 0)
             return RES_ERROR;
-        if (!sdio_WriteSectors(sector, count, buff)) {
-            printf(ERROR, "disk_write: sdio_WriteSectors failed");
+        if (!SDCard::WriteSectors(sector, count, buff)) {
+            peli::Log(LogL::ERROR, "disk_write: SDCard::WriteSectors failed");
             return RES_ERROR;
         }
         return RES_OK;
     }
-    return STA_NOINIT;
+    return RES_NOTRDY;
 }
 
 DRESULT disk_ioctl(BYTE pdrv, BYTE cmd, void* buff)
@@ -90,7 +91,7 @@ DRESULT disk_ioctl(BYTE pdrv, BYTE cmd, void* buff)
             return RES_NOTRDY;
         
         default:
-            printf(ERROR, "disk_ioctl: unknown command: %d", cmd);
+            peli::Log(LogL::ERROR, "disk_ioctl: unknown command: %d", cmd);
             return RES_PARERR;
     }
 }
@@ -171,55 +172,59 @@ bool FS_ReplyFile(void* output, u32 out_len, const FIL* fp)
 }
 
 static
-s32 FS_FileCommand(IOSRequest* req, FIL* fp)
+FRESULT FS_FileCommand(IOSRequest* req, FIL* fp)
 {
     switch (req->ioctl.cmd)
     {
         case IOCTL_FCLOSE:
             if (req->ioctlv.in_count != 1 && req->ioctlv.io_count != 1)
-                return IOS_EINVAL;
+                return static_cast<FRESULT>(IOS_EINVAL);
             return f_close(fp);
         
         case IOCTL_FREAD:
             if (req->ioctlv.in_count != 1 && req->ioctlv.io_count != 3)
-                return IOS_EINVAL;
+                return static_cast<FRESULT>(IOS_EINVAL);
             if (req->ioctlv.vec[3].len != sizeof(UINT)
              || (u32) req->ioctlv.vec[3].data & 3)
-                return IOS_EINVAL;
-            UINT* read = (UINT*) req->ioctlv.vec[3].data;
-            return f_read(fp,
-                req->ioctlv.vec[2].data, req->ioctlv.vec[2].len, read);
+                return static_cast<FRESULT>(IOS_EINVAL);
+            {
+                UINT* read = (UINT*) req->ioctlv.vec[3].data;
+                return f_read(fp,
+                    req->ioctlv.vec[2].data, req->ioctlv.vec[2].len, read);
+            }
         
         case IOCTL_FWRITE:
             if (req->ioctlv.in_count != 2 && req->ioctlv.io_count != 2)
-                return IOS_EINVAL;
+                return static_cast<FRESULT>(IOS_EINVAL);
             if (req->ioctlv.vec[3].len != sizeof(UINT)
              || (u32) req->ioctlv.vec[3].data & 3)
-                return IOS_EINVAL;
-            UINT* wrote = (UINT*) req->ioctlv.vec[3].data;
-            return f_write(fp,
-                req->ioctlv.vec[1].data, req->ioctlv.vec[1].len, wrote);
+                return static_cast<FRESULT>(IOS_EINVAL);
+            {
+                UINT* wrote = (UINT*) req->ioctlv.vec[3].data;
+                return f_write(fp,
+                    req->ioctlv.vec[1].data, req->ioctlv.vec[1].len, wrote);
+            }
         
         case IOCTL_FLSEEK:
             if (req->ioctlv.in_count != 2 && req->ioctlv.io_count != 1)
-                return IOS_EINVAL;
+                return static_cast<FRESULT>(IOS_EINVAL);
             if (req->ioctlv.vec[1].len != sizeof(u32)
              || (u32) req->ioctlv.vec[1].data & 3)
-                return IOS_EINVAL;
+                return static_cast<FRESULT>(IOS_EINVAL);
             return f_lseek(fp, *(FSIZE_t*) req->ioctlv.vec[1].data);
         
         case IOCTL_FTRUNCATE:
             if (req->ioctlv.in_count != 1 && req->ioctlv.io_count != 1)
-                return IOS_EINVAL;
+                return static_cast<FRESULT>(IOS_EINVAL);
             return f_truncate(fp);
         
         case IOCTL_FSYNC:
             if (req->ioctlv.in_count != 1 && req->ioctlv.io_count != 1)
-                return IOS_EINVAL;
+                return static_cast<FRESULT>(IOS_EINVAL);
             return f_sync(fp);
     }
 
-    return IOS_EINVAL;
+    return static_cast<FRESULT>(IOS_EINVAL);;
 }
 
 static
@@ -251,7 +256,7 @@ s32 FS_ReqIoctlv(IOSRequest* req)
              || req->ioctlv.vec[1].len != sizeof(BYTE))
                 return IOS_EINVAL;
             if (strnlen((char*) req->ioctlv.vec[0].data, req->ioctlv.vec[0].len)
-                == (s32) req->ioctlv.vec[0].len)
+                == req->ioctlv.vec[0].len)
                 return IOS_EINVAL;
             if (req->ioctlv.vec[2].len != sizeof(EfsFile)
              || (u32) req->ioctlv.vec[2].data & 3)
@@ -274,17 +279,17 @@ s32 FS_ReqIoctlv(IOSRequest* req)
         case IOCTL_FLSEEK: case IOCTL_FTRUNCATE: case IOCTL_FSYNC: {
             if (req->ioctlv.in_count < 1
              || req->ioctlv.vec[0].len != sizeof(EfsFile)) {
-                printf(ERROR, "FS_FileCommand: Invalid input");
+                peli::Log(LogL::ERROR, "FS_FileCommand: Invalid input");
                 return IOS_EINVAL;
             }
             if (req->ioctlv.io_count < 1
              || req->ioctlv.vec[req->ioctlv.in_count].len != sizeof(EfsFile)) {
-                printf(ERROR, "FS_FileCommand: Invalid output");
+                peli::Log(LogL::ERROR, "FS_FileCommand: Invalid output");
                 return IOS_EINVAL;
             }
             if ((u32) req->ioctlv.vec[0].data & 3
              || (u32) req->ioctlv.vec[req->ioctlv.in_count].data & 3) {
-                printf(ERROR,
+                peli::Log(LogL::ERROR,
                     "FS_FileCommand: FIL must be aligned to 4 byte boundary");
                 return IOS_EINVAL;
             }
@@ -299,7 +304,7 @@ s32 FS_ReqIoctlv(IOSRequest* req)
         }
 
         default:
-            printf(ERROR,
+            peli::Log(LogL::ERROR,
                 "FS_ReqIoctlv: Unhandled command: %d", req->ioctlv.cmd);
             return IOS_EINVAL;
     }
@@ -314,18 +319,18 @@ s32 FS_IPCRequest(IOSRequest* req)
         case IOS_CLOSE: return FS_ReqClose(req);
         case IOS_IOCTLV: return FS_ReqIoctlv(req);
         default:
-            printf(ERROR,
+            peli::Log(LogL::ERROR,
                 "FS_IPCRequest: Received unhandled command: %d", req->cmd);
             return IOS_EINVAL;
     }
 }
 
-s32 FS_StartRM(void* arg)
+extern "C" s32 FS_StartRM(void* arg)
 {
-    printf(INFO, "Starting FS...");
+    peli::Log(LogL::INFO, "Starting FS...");
 
-    if (!sdio_Open()) {
-        printf(ERROR, "FS_Init: sdio_Open returned false");
+    if (!SDCard::Open()) {
+        peli::Log(LogL::ERROR, "FS_Init: SDCard::Open returned false");
         abort();
     }
 
@@ -334,19 +339,20 @@ s32 FS_StartRM(void* arg)
     if (fret != FR_OK) {
         /* FatFS won't try to initialize the drive yet, so there will be no
          * "not inserted" error */
-        printf(ERROR, "FS_Init: f_mount SD Card failed: %d", fret);
+        peli::Log(LogL::ERROR, "FS_Init: f_mount SD Card failed: %d", fret);
     }
 
     s32 ret = IOS_CreateMessageQueue(__FsQueueData, 8);
     if (ret < 0) {
-        printf(ERROR, "FS_StartRM: IOS_CreateMessageQueue failed: %d", ret);
+        peli::Log(LogL::ERROR,
+            "FS_StartRM: IOS_CreateMessageQueue failed: %d", ret);
         abort();
     }
     FsQueue = ret;
 
     ret = IOS_RegisterResourceManager(DEVICE_STORAGE_PATH, FsQueue);
     if (ret != IOS_SUCCESS) {
-        printf(ERROR,
+        peli::Log(LogL::ERROR,
             "FS_StartRM: IOS_RegisterResourceManager failed: %d", ret);
         abort();
     }
@@ -356,7 +362,8 @@ s32 FS_StartRM(void* arg)
         IOSRequest* req;
         ret = IOS_ReceiveMessage(FsQueue, (u32*) &req, 0);
         if (ret != IOS_SUCCESS) {
-            printf(ERROR, "FS_StartRM: IOS_ReceiveMessage failed: %d", ret);
+            peli::Log(LogL::ERROR,
+                "FS_StartRM: IOS_ReceiveMessage failed: %d", ret);
             abort();
         }
 
@@ -380,6 +387,8 @@ s32 FS_CliInit()
     return storageFd;
 }
 
+constexpr FRESULT fsCliRet(s32 ret) { return static_cast<FRESULT>(ret); }
+
 FRESULT FS_Open(FIL* fp, const TCHAR* path, u8 mode)
 {
     IOVector vec[2 + 1];
@@ -393,7 +402,7 @@ FRESULT FS_Open(FIL* fp, const TCHAR* path, u8 mode)
 
     vec[2].data = fp;
     vec[2].len = sizeof(FIL);
-    return IOS_Ioctlv(storageFd, IOCTL_FOPEN, 2, 1, vec);
+    return fsCliRet(IOS_Ioctlv(storageFd, IOCTL_FOPEN, 2, 1, vec));
 }
 
 FRESULT FS_Close(FIL* fp)
@@ -404,7 +413,7 @@ FRESULT FS_Close(FIL* fp)
     vec[0].len = sizeof(FIL);
     vec[1].data = fp;
     vec[1].len = sizeof(FIL);
-    return IOS_Ioctlv(storageFd, IOCTL_FCLOSE, 1, 1, vec);
+    return fsCliRet(IOS_Ioctlv(storageFd, IOCTL_FCLOSE, 1, 1, vec));
 }
 
 FRESULT FS_Read(FIL* fp, void* data, u32 len, u32* read)
@@ -423,7 +432,7 @@ FRESULT FS_Read(FIL* fp, void* data, u32 len, u32* read)
     vec[3].data = &_read;
     vec[3].len = sizeof(UINT);
 
-    FRESULT ret = IOS_Ioctlv(storageFd, IOCTL_FREAD, 1, 3, vec);
+    FRESULT ret = fsCliRet(IOS_Ioctlv(storageFd, IOCTL_FREAD, 1, 3, vec));
     *read = (u32) _read;
     return ret;
 }
@@ -444,7 +453,7 @@ FRESULT FS_Write(FIL* fp, const void* data, u32 len, u32* wrote)
     vec[3].data = &_wrote;
     vec[3].len = sizeof(UINT);
 
-    FRESULT ret = IOS_Ioctlv(storageFd, IOCTL_FWRITE, 2, 2, vec);
+    FRESULT ret = fsCliRet(IOS_Ioctlv(storageFd, IOCTL_FWRITE, 2, 2, vec));
     *wrote = (u32) _wrote;
     return ret;
 }
@@ -462,7 +471,7 @@ FRESULT FS_LSeek(FIL* fp, u32 offset)
     vec[1].data = &_offset;
     vec[1].len = sizeof(FSIZE_t);
 
-    return IOS_Ioctlv(storageFd, IOCTL_FLSEEK, 2, 1, vec);
+    return fsCliRet(IOS_Ioctlv(storageFd, IOCTL_FLSEEK, 2, 1, vec));
 }
 
 FRESULT FS_Truncate(FIL* fp)
@@ -474,7 +483,7 @@ FRESULT FS_Truncate(FIL* fp)
     vec[1].data = fp;
     vec[1].len = sizeof(FIL);
 
-    return IOS_Ioctlv(storageFd, IOCTL_FTRUNCATE, 1, 1, vec);
+    return fsCliRet(IOS_Ioctlv(storageFd, IOCTL_FTRUNCATE, 1, 1, vec));
 }
 
 FRESULT FS_Sync(FIL* fp)
@@ -486,5 +495,5 @@ FRESULT FS_Sync(FIL* fp)
     vec[1].data = fp;
     vec[1].len = sizeof(FIL);
 
-    return IOS_Ioctlv(storageFd, IOCTL_FSYNC, 1, 1, vec);
+    return fsCliRet(IOS_Ioctlv(storageFd, IOCTL_FSYNC, 1, 1, vec));
 }
