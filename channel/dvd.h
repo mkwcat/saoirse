@@ -1,8 +1,8 @@
 #pragma once
 
-#include "os.h"
-#include "es.h"
-#include "util.hpp"
+#include <os.h>
+#include <es.h>
+#include <util.h>
 #include "File.hpp"
 
 enum class DiIoctl : u8

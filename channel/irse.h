@@ -1,10 +1,9 @@
 #pragma once
 
-#include "util.hpp"
-
+#include <util.h>
 #include <stdlib.h>
 #include <stdarg.h>
-#include "os.h"
+#include <os.h>
 
 enum class LogS {
     Core, DVD, Loader, Payload, IOS

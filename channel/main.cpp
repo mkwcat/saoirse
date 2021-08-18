@@ -1,9 +1,9 @@
 #include "irse.h"
 
 #include "dvd.h"
-#include "sdcard.h"
+#include <sdcard.h>
 #include "File.hpp"
-#include "util.hpp"
+#include <util.h>
 LIBOGC_SUCKS_BEGIN
 #include <wiiuse/wpad.h>
 #include <ogc/machine/processor.h>
@@ -121,13 +121,6 @@ static Stage stInit([[maybe_unused]] Stage from)
     irse::LogConfig(0xFFFFFFFF, LogL::INFO);
     irse::Log(LogS::Core, LogL::WARN, "Debug console initialized");
     VIDEO_WaitVSync();
-
-#if 0
-    irse::Log(LogS::Core, LogL::INFO, "Starting up IOS...");
-    const s32 ret = IOSBoot::Launch(saoirse_ios_elf, saoirse_ios_elf_size);
-    irse::Log(LogS::Core, LogL::INFO, "IOS Launch result: %d", ret);
-    new IOSBoot::Log();
-#endif
 
     DVD::Init();
     SDCard::Open();
@@ -248,6 +241,13 @@ static Stage stReadDisc([[maybe_unused]] Stage from)
 
     loader.openBootPartition(&meta);
     DVD::Deinit();
+
+    irse::Log(LogS::Core, LogL::INFO, "Starting up IOS...");
+    const s32 ret = IOSBoot::Launch(saoirse_ios_elf, saoirse_ios_elf_size);
+    irse::Log(LogS::Core, LogL::INFO, "IOS Launch result: %d", ret);
+    IOSBoot::Log* log = new IOSBoot::Log();
+    sleep(1);
+    delete log;
 
     SetupGlobals(0);
     

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <gctypes.h>
+#include <types.h>
 
 using EntryPoint = void (*)();
 

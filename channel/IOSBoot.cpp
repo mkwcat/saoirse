@@ -105,7 +105,10 @@ s32 IOSBoot::Log::Callback(s32 result, [[maybe_unused]] void* usrdata)
         return 0;
     }
     puts(obj->logBuffer);
-    obj->restartEvent();
+    if (!obj->reset)
+        obj->restartEvent();
+    else
+        obj->reset = false;
     return 0;
 }
 

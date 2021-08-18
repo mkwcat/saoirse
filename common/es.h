@@ -1,5 +1,5 @@
 #pragma once
-#include <gctypes.h>
+#include <types.h>
 
 namespace ES
 {

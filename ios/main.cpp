@@ -14,12 +14,16 @@ static s32 stdoutFd = -1;
 static s32 printBufQueue = -1;
 static u32 printBufQueueData;
 char logBuffer[PRINT_BUFFER_SIZE];
+static bool logEnabled = true;
 
 static const char* logColors[3] = {
     "\x1b[37;1m", "\x1b[33;1m", "\x1b[31;1m" };
 
 void peli::Log(LogL level, const char* format, ...)
 {
+    if (!logEnabled)
+        return;
+
     if (static_cast<s32>(level) >= 3)
         abort();
     while (stdoutFd < 0 && (stdoutFd = IOS_Open("/dev/stdout", 0)) < 0)
@@ -75,10 +79,15 @@ static void Log_IPCRequest(IOSRequest* req)
     switch (req->cmd)
     {
         case IOS_OPEN:
-        case IOS_CLOSE:
             IOS_ResourceReply(req, 0);
             break;
-        
+
+        case IOS_CLOSE:
+            logEnabled = false;
+            peli::Log(LogL::INFO, "Closing log...");
+            IOS_ResourceReply(req, 0);
+            break;
+
         case IOS_IOCTL:
             if (req->ioctl.cmd == 0) {
                 /* Read from console */
@@ -139,7 +148,7 @@ void kwrite32(u32 address, u32 value)
 void exitClr(u32 color)
 {
     /* write to HW_VISOLID */
-    kwrite32(HW_VISOLID, color | 1);
+    kwrite32(static_cast<u32>(ACRReg::VISOLID) + HW_BASE_TRUSTED, color | 1);
     while (1) { }
 }
 

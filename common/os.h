@@ -6,7 +6,7 @@
 #   include <ios.h>
 #   include <main.h>
 #else
-#   include "util.hpp"
+#   include <util.h>
 LIBOGC_SUCKS_BEGIN
 #   include <ogc/ipc.h>
 #   include <ogc/lwp.h>
@@ -317,9 +317,15 @@ public:
 
     ~Resource() {
         if (this->m_fd >= 0)
-            IOS_Close(this->m_fd);
+            close();
     }
 
+    s32 close() {
+        const s32 ret = IOS_Close(this->m_fd);
+        if (ret >= 0)
+            this->m_fd = -1;
+        return ret;
+    }
     s32 read(void* data, u32 length) {
         return IOS_Read(this->m_fd, data, length);
     }

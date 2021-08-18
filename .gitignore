@@ -1,5 +1,3 @@
 bin
-build
-*.elf
-*.dol
-test/source/saoirse_ios_elf.s
+build_ios
+build_channel

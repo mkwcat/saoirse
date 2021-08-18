@@ -1,10 +1,6 @@
 #pragma once
 
-#ifdef TARGET_IOS
-#   include <types.h>
-#else
-#   include <gctypes.h>
-#endif
+#include <types.h>
 
 typedef u32 sec_t;
 

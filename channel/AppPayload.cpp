@@ -4,7 +4,7 @@
 
 #include "dvd.h"
 #include "irse.h"
-#include "util.hpp"
+#include <util.h>
 
 static s32 payloadPrintf(const char* format, ...)
 {

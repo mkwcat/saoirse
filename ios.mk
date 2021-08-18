@@ -10,10 +10,10 @@
 # INCLUDES is a list of directories containing extra header files
 #---------------------------------------------------------------------------------
 TARGET		:=	saoirse_ios
-BUILD		:=	build
-SOURCES		:=	main efs dip
+BUILD		:=	build_ios
+SOURCES		:=	ios common
 DATA		:=	data  
-INCLUDES	:=  . main ../include
+INCLUDES	:=      ios common
 BIN			:=  bin
 
 LIBS		:=	
@@ -30,12 +30,11 @@ AR			:= $(PREFIX)ar
 OBJCOPY		:= $(PREFIX)objcopy
 LD			:= $(PREFIX)g++
 AS			:= $(PREFIX)g++
-BIN2S       := bin2s
 
 #---------------------------------------------------------------------------------
 # linker script
 #---------------------------------------------------------------------------------
-LINKSCRIPT		:= link.ld
+LINKSCRIPT		:= ios.ld
 
 TARGET := saoirse_ios
 
@@ -89,9 +88,7 @@ clean:
 $(OUTPUT).elf: $(OFILES)
 	@echo linking $(notdir $@)...
 	@$(LD) -o $@ $(OFILES) $(LDFLAGS)
-	@$(BIN2S) $@ > ../test/source/$(TARGET)_elf.s
 
-	
 $(BUILD)/%_cpp.o : %.cpp
 	@echo $(notdir $<)
 	@$(CXX) -MMD -MF $(BUILD)/$*_cpp.d $(CFLAGS) -c $< -o$@

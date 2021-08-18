@@ -1,9 +1,12 @@
-#ifndef __TYPES_H__
-#define __TYPES_H__
+#pragma once
 
-/*! \file gctypes.h 
+#ifndef TARGET_IOS
+#   include <gctypes.h>
+#else
+
+/* for IOS */
+/*! \file types.h 
 \brief Data type definitions
-
 */ 
 
 #include <stdbool.h>
@@ -71,7 +74,7 @@ typedef unsigned int BOOL;
 /*+----------------------------------------------------------------------------------------------+*/
 #ifndef BIG_ENDIAN
 #define BIG_ENDIAN     1234
-#endif /* BIGE_ENDIAN */
+#endif /* BIG_ENDIAN */
 /*+----------------------------------------------------------------------------------------------+*/
 #ifndef BYTE_ORDER
 #define BYTE_ORDER     BIG_ENDIAN
@@ -83,7 +86,6 @@ typedef unsigned int BOOL;
    }
 #endif /* __cplusplus */
 
-#endif /* TYPES_H */
-
+#endif
 
 /* END OF FILE */

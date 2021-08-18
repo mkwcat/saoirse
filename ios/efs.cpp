@@ -1,3 +1,4 @@
+#include "efs.h"
 #include <ios.h>
 #include <cstring>
 #include "ff.h"

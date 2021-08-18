@@ -15,18 +15,19 @@ include $(DEVKITPPC)/wii_rules
 # SOURCES is a list of directories containing source code
 # INCLUDES is a list of directories containing extra header files
 #---------------------------------------------------------------------------------
-TARGET		:=	$(notdir $(CURDIR))
-BUILD		:=	build
-SOURCES		:=	source
+TARGET		:=	channel
+BUILD		:=	build_channel
+BIN         :=  bin
+SOURCES		:=	channel common
 DATA		:=	data  
-INCLUDES	:=  ../include source
+INCLUDES	:=  $(SOURCES)
 
 #---------------------------------------------------------------------------------
 # options for code generation
 #---------------------------------------------------------------------------------
 
-CFLAGS	= -g -O2 -Wall -Wextra -Wpedantic -Wno-register -Wnull-dereference -Wshadow -Werror -fno-exceptions -fno-unwind-tables -fno-rtti $(MACHDEP) $(INCLUDE)
-CXXFLAGS	=	$(CFLAGS) -std=c++20
+CFLAGS	= -g -O2 -Wall -Wextra -Wpedantic -Wnull-dereference -Wshadow -Werror -fno-exceptions -fno-asynchronous-unwind-tables -fno-unwind-tables $(MACHDEP) $(INCLUDE)
+CXXFLAGS	=	$(CFLAGS) -std=c++20 -fno-rtti -Wno-register
 
 LDFLAGS	=	-g $(MACHDEP) -Wl,-Map,$(notdir $@).map -Wl,--section-start,.init=0x80900000
 
@@ -90,13 +91,13 @@ export INCLUDE	:=	$(foreach dir,$(INCLUDES), -I$(CURDIR)/$(dir)) \
 export LIBPATHS	:=	$(foreach dir,$(LIBDIRS),-L$(dir)/lib) \
 					-L$(LIBOGC_LIB)
 
-export OUTPUT	:=	$(CURDIR)/$(TARGET)
+export OUTPUT	:=	$(CURDIR)/$(BIN)/$(TARGET)
 .PHONY: $(BUILD) clean
 
 #---------------------------------------------------------------------------------
 $(BUILD):
 	@[ -d $@ ] || mkdir -p $@
-	@$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile
+	@$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/channel.mk
 
 #---------------------------------------------------------------------------------
 clean:
@@ -105,7 +106,7 @@ clean:
 
 #---------------------------------------------------------------------------------
 run:
-	wiiload $(TARGET).dol
+	wiiload $(BIN)/$(TARGET).dol
 
 #---------------------------------------------------------------------------------
 else

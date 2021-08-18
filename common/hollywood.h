@@ -1,10 +1,7 @@
 #pragma once
 
-#include "util.hpp"
-#include <gctypes.h>
-LIBOGC_SUCKS_BEGIN
-#include <ogc/machine/processor.h>
-LIBOGC_SUCKS_END
+#include <util.h>
+#include <types.h>
 
 constexpr u32 HW_BASE = 0x0D000000;
 constexpr u32 HW_BASE_TRUSTED = 0x0D800000;

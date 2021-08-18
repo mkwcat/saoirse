@@ -1,7 +1,7 @@
 #pragma once
 
 #include <EfsFile.h>
-#include <gctypes.h>
+#include <types.h>
 
 /* 
  * The struct must be 4 byte aligned due to a hardware bug and a memcpy

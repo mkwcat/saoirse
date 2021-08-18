@@ -3,10 +3,8 @@
 BIN2S := bin2s
 
 all:
-	@$(MAKE) -C ios
-	@$(BIN2S) ios/bin/saoirse_ios.elf > test/source/saoirse_ios_elf.s
-	@$(MAKE) -C test
+	@$(MAKE) --no-print-directory -f ios.mk
+	@$(MAKE) --no-print-directory -f channel.mk
 
 clean:
-	@$(MAKE) -C ios clean
-	@$(MAKE) -C test clean
+	@rm -fr build_ios build_channel bin

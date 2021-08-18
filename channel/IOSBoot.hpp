@@ -1,7 +1,7 @@
 #pragma once
 
-#include <gctypes.h>
-#include "os.h"
+#include <types.h>
+#include <os.h>
 #include "irse.h"
 
 namespace IOSBoot
@@ -15,9 +15,10 @@ class Log
 public:
     Log();
     ~Log() {
-        /* Destruction is dangerous, there is no timeout to the IPC calls */
-        irse::Log(LogS::Core, LogL::ERROR, "IOSBoot::Log destructor called!");
-        abort();
+        reset = true;
+        logRM.close();
+        // meh
+        while (reset) { }
     }
 
 protected:
@@ -27,6 +28,7 @@ protected:
             &Callback, reinterpret_cast<void*>(this));
     }
 
+    bool reset = false;
     IOS::ResourceCtrl<s32> logRM{"/dev/stdout"};
     char logBuffer[256];
 };
