@@ -37,9 +37,27 @@ template <typename T> static inline T round_down(T num, unsigned int align) {
 }
 
 template<class T>
-inline bool aligned(T addr, unsigned int align) {
+static inline bool aligned(T addr, unsigned int align) {
 	return !(reinterpret_cast<unsigned int>(addr) & (align - 1));
 }
+
+#include <cstddef>
+
+template<class T1, class T2>
+constexpr bool check_bounds(
+	T1 bounds, size_t bound_len, T2 buffer, size_t len)
+{
+	size_t low = reinterpret_cast<size_t>(bounds);
+	size_t high = low + bound_len;
+	size_t inside = reinterpret_cast<size_t>(buffer);
+	size_t insidehi = inside + len;
+
+	return /* overflow check */
+	(high >= low) && (insidehi >= inside)
+	&& /* simple bounds check */
+	(inside >= low) && (insidehi <= high);
+}
+
 #endif
 
 #ifndef TARGET_IOS

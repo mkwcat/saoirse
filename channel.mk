@@ -29,7 +29,7 @@ INCLUDES	:=  $(SOURCES)
 CFLAGS	= -g -O2 -Wall -Wextra -Wpedantic -Wnull-dereference -Wshadow -Werror -fno-exceptions -fno-asynchronous-unwind-tables -fno-unwind-tables $(MACHDEP) $(INCLUDE)
 CXXFLAGS	=	$(CFLAGS) -std=c++20 -fno-rtti -Wno-register
 
-LDFLAGS	=	-g $(MACHDEP) -Wl,-Map,$(notdir $@).map -Wl,--section-start,.init=0x80900000
+LDFLAGS	=	-g $(MACHDEP) -Wl,-Map,$(OUTPUT).map -Wl,--section-start,.init=0x80900000
 
 #---------------------------------------------------------------------------------
 # any extra libraries we wish to link with the project

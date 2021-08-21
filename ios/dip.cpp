@@ -1,20 +1,12 @@
+#include <dip.h>
 #include "efs.h"
 #include <main.h>
 #include <ios.h>
 #include <cstring>
 #include <types.h>
 
-typedef struct
+namespace DIP
 {
-    u32 disc_offset;
-    u32 disc_length;
-
-    /* file info */
-    u8 drv;
-    u64 start_cluster;
-    u64 cur_cluster;
-    u32 file_offset;
-} DVDPatch;
 
 typedef struct
 {
@@ -44,7 +36,7 @@ static u32 DiNumPatches = 0;
 
 
 static
-void DI_OpenPatchFile(FIL* fp, DVDPatch* patch)
+void OpenPatchFile(FIL* fp, DVDPatch* patch)
 {
     memset(fp, 0, sizeof(FIL));
     fp->obj.fs = NULL; // automatically filled by FS
@@ -57,7 +49,7 @@ void DI_OpenPatchFile(FIL* fp, DVDPatch* patch)
 }
 
 static inline
-u32 DI_SearchPatch(u32 offset)
+u32 SearchPatch(u32 offset)
 {
     for (s32 j = 0, i = DiNumPatches; i != 0; i >>= 1)
     {
@@ -79,7 +71,7 @@ u32 DI_SearchPatch(u32 offset)
 }
 
 static
-s32 DI_RealRead(s32 fd, void* outbuf, u32 offset, u32 length)
+s32 RealRead(s32 fd, void* outbuf, u32 offset, u32 length)
 {
     DVDCommand rblock;
     rblock.cmd = DI_IOCTL_READ;
@@ -89,21 +81,26 @@ s32 DI_RealRead(s32 fd, void* outbuf, u32 offset, u32 length)
         &rblock, sizeof(DVDCommand), outbuf, length);
 }
 
+static inline
+bool IsPatchedOffset(u32 wordOffset) {
+    return wordOffset & 0x80000000;
+}
+
 static
-s32 DI_Read(s32 handle, u8* outbuf, u32 offset, u32 length)
+s32 Read(s32 handle, u8* outbuf, u32 offset, u32 length)
 {
-    if (!(offset & 0x80000000))
+    if (!IsPatchedOffset(offset))
     {
-        if (!((offset + (length >> 2) - 1) & 0x80000000)) {
+        if (!IsPatchedOffset(offset + (length >> 2) - 1)) {
             /* Not patched read, forward to real DI */
-            return DI_RealRead(handle, outbuf, offset, length);
+            return RealRead(handle, outbuf, offset, length);
         }
         /* 
          * Part DVD read, part SD read
          * [TODO] see if this is actually needed, I'm assuming it's important
          * for dual layer discs?
          */
-        const s32 ret = DI_RealRead(handle, outbuf, offset,
+        const s32 ret = RealRead(handle, outbuf, offset,
             (0x80000000 - offset) << 2);
         if (ret != DI_EOK) {
             peli::Log(LogL::ERROR, "DI_Read: Partial read failed: %d", ret);
@@ -115,7 +112,7 @@ s32 DI_Read(s32 handle, u8* outbuf, u32 offset, u32 length)
         length -= (0x80000000 - offset) << 2;
     }
 
-    for (u32 idx = DI_SearchPatch(offset); length != 0; idx++)
+    for (u32 idx = SearchPatch(offset); length != 0; idx++)
     {
         peli::Log(LogL::INFO,
             "DI_Read: Read patch %d of %d", idx, DiNumPatches);
@@ -126,7 +123,7 @@ s32 DI_Read(s32 handle, u8* outbuf, u32 offset, u32 length)
         }
     
         FIL f;
-        DI_OpenPatchFile(&f, &DiPatches[idx]);
+        OpenPatchFile(&f, &DiPatches[idx]);
 
         u32 read_len = DiPatches[idx].disc_length << 2;
         if (DiPatches[idx].disc_offset != offset) {
@@ -218,7 +215,7 @@ bool DI_DoNewIOCTL(IOSRequest* req)
                 return true;
             }
             IOS_ResourceReply(req, 
-                DI_Read(req->handle, outbuf, offset, length & ~3));
+                Read(req->handle, outbuf, offset, length & ~3));
             return true;
         }
     }
@@ -227,7 +224,7 @@ bool DI_DoNewIOCTL(IOSRequest* req)
 }
 
 static inline
-void DI_ReqOpen(IOSRequest* req)
+void ReqOpen(IOSRequest* req)
 {
     s32 ret = IOS_ENOENT;
     if (!strcmp(req->open.path, DI_PROXY_PATH)) {
@@ -239,14 +236,14 @@ void DI_ReqOpen(IOSRequest* req)
 }
 
 static inline
-void DI_ReqClose(IOSRequest* req)
+void ReqClose(IOSRequest* req)
 {
     const s32 ret = IOS_Close(req->handle);
     IOS_ResourceReply(req, ret);
 }
 
 static inline
-void DI_ReqIoctl(IOSRequest* req)
+void ReqIoctl(IOSRequest* req)
 {
     if (DI_DoNewIOCTL(req))
         return;
@@ -263,7 +260,7 @@ void DI_ReqIoctl(IOSRequest* req)
 }
 
 static inline
-void DI_ReqIoctlv(IOSRequest* req)
+void ReqIoctlv(IOSRequest* req)
 {
     /* Probably won't be replacing any IOCTLVs */
     const s32 ret = IOS_IoctlvAsync(req->handle, req->ioctlv.cmd,
@@ -276,21 +273,21 @@ void DI_ReqIoctlv(IOSRequest* req)
     }
 }
 
-void DI_HandleRequest(IOSRequest* req)
+void HandleRequest(IOSRequest* req)
 {
     switch (req->cmd)
     {
         case IOS_OPEN:
-            DI_ReqOpen(req);
+            ReqOpen(req);
             break;
         case IOS_CLOSE:
-            DI_ReqClose(req);
+            ReqClose(req);
             break;
         case IOS_IOCTL:
-            DI_ReqIoctl(req);
+            ReqIoctl(req);
             break;
         case IOS_IOCTLV:
-            DI_ReqIoctlv(req);
+            ReqIoctlv(req);
             break;
         
         /* Reply from forwarded commands */
@@ -334,7 +331,9 @@ extern "C" s32 DI_StartRM(void* arg)
             abort();
         }
 
-        DI_HandleRequest(req);
+        HandleRequest(req);
     }
     return 0;
+}
+
 }
