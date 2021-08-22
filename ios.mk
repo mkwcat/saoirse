@@ -73,6 +73,7 @@ LIBS        :=  -lgcc
 ARCH	=	-march=armv5te -mtune=arm9tdmi -mthumb -mthumb-interwork -mbig-endian
 
 CFLAGS	=	$(ARCH) $(INCLUDE) -DTARGET_IOS -Wall -Wextra -Wpedantic -Werror -Wno-unused-parameter -O3 -fomit-frame-pointer -fverbose-asm -ffunction-sections -fdata-sections -fno-exceptions
+CXXFLAGS = $(CFLAGS) -std=c++20 -fno-rtti
 
 AFLAGS	=	$(ARCH) -x assembler-with-cpp
 
@@ -91,7 +92,7 @@ $(OUTPUT).elf: $(OFILES)
 
 $(BUILD)/%_cpp.o : %.cpp
 	@echo $(notdir $<)
-	@$(CXX) -MMD -MF $(BUILD)/$*_cpp.d $(CFLAGS) -c $< -o$@
+	@$(CXX) -MMD -MF $(BUILD)/$*_cpp.d $(CXXFLAGS) -c $< -o$@
 
 $(BUILD)/%_c.o : %.c
 	@echo $(notdir $<)

@@ -3,6 +3,7 @@
 #include <os.h>
 #include <es.h>
 #include <util.h>
+#include <dip.h>
 #include "File.hpp"
 
 enum class DiIoctl : u8
@@ -117,6 +118,7 @@ struct DiskID
 };
 
 void Init();
+void InitProxy();
 void Deinit();
 bool OpenCacheFile();
 DiErr ResetDrive(bool spinup);
@@ -129,19 +131,7 @@ bool IsInserted();
 namespace DVDProxy
 {
 
-struct Patch
-{
-    u32 disc_offset;
-    u32 disc_length;
-
-    /* file info */
-    u8 drv;
-    u64 start_cluster;
-    u64 cur_cluster;
-    u32 file_offset;
-};
-
-s32 ApplyPatches(Patch* patches, u32 patchCount);
+s32 ApplyPatches(DIP::DVDPatch* patches, u32 patchCount);
 void StartGame();
 
 }
