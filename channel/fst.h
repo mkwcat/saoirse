@@ -33,11 +33,9 @@ public:
 
     struct Entry
     {
-        explicit Entry(const char* name) : m_name(name) { }
-        virtual ~Entry() {
-            if (m_parent != nullptr)
-                m_parent->remove(this);
-        }
+        explicit Entry(const char* name)
+            : m_name(name), m_parent(nullptr) { }
+        virtual ~Entry() { }
         virtual bool isDir() const = 0;
         DirEntry* dir() {
             assert(isDir());
@@ -69,7 +67,6 @@ public:
         using Entry::Entry;
         DirEntry(const DirEntry&) = delete;
         ~DirEntry() {
-            this->~Entry();
             for (auto it : m_children)
                 delete it;
         }
@@ -101,11 +98,12 @@ public:
     };
 
     void write(void* fst);
-    void addDirEntry(const DirEntry* dir);
     /* Returns total FST size */
     u32 build(const DirEntry* root);
 
 private:
+    void addDirEntry(const DirEntry* dir);
+
     std::vector<FSTEntry> m_entries;
     std::vector<const std::string*> m_names;
     u32 m_namesLen;
@@ -114,6 +112,9 @@ private:
 class FSTReader
 {
 public:
+    static constexpr u32 maxEntries = 10000;
+    static constexpr u32 maxDirDepth = 64;
+
     FSTBuilder::DirEntry* process(const FSTEntry* fst, u32 fstLength);
 
 private:

@@ -66,20 +66,35 @@ static s32 DVD_Callback(s32 result, void* usrdata)
     return 0;
 }
 
+static void initialize(const char* path)
+{
+    new (&di) IOS::ResourceCtrl<DiIoctl>(path);
+    printf("fd: %d\n", di.fd());
+    ASSERT(di.fd() >= 0);
+
+    dataQueue = new Queue<DVDLow::DVDCommand*>(8);
+    for (s32 i = 0; i < 8; i++)
+        dataQueue->send(&sDvdBlocks[i]);
+}
+
 void DVD::Init()
 {
     if (initialized)
         return;
     initialized = true;
 
-    new (&di) IOS::ResourceCtrl<DiIoctl>("/dev/di");
-    ASSERT(di.fd() >= 0);
-
-    dataQueue = new Queue<DVDLow::DVDCommand*>(8);
-    for (s32 i = 0; i < 8; i++)
-        dataQueue->send(&sDvdBlocks[i]);
-
+    initialize("/dev/di");
     irse::Log(LogS::DVD, LogL::WARN, "DVD initialized");
+}
+
+void DVD::InitProxy()
+{
+    if (initialized)
+        return;
+    initialized = true;
+
+    initialize("/dev/do");
+    irse::Log(LogS::DVD, LogL::WARN, "DVD Proxy initialized");
 }
 
 void DVD::Deinit()
@@ -275,8 +290,8 @@ DiErr DVDLow::DVDCommand::syncReplyAssertRet(DiErr expected)
     return ret;
 }
 
-s32 DVDProxy::ApplyPatches(Patch* patches, u32 patchCount)
+s32 DVDProxy::ApplyPatches(DIP::DVDPatch* patches, u32 patchCount)
 {
     return di.ioctl(DiIoctl::Proxy_PatchDVD,
-        patches, patchCount * sizeof(Patch), nullptr, 0);
+        patches, patchCount * sizeof(DIP::DVDPatch), nullptr, 0);
 }

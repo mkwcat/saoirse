@@ -9,6 +9,9 @@ LIBOGC_SUCKS_BEGIN
 #include <ogc/machine/processor.h>
 LIBOGC_SUCKS_END
 
+#include <ff.h>
+#include <disk.h>
+
 #include <stdio.h>
 #include <cstring>
 #include <unistd.h>
@@ -27,8 +30,8 @@ static struct {
     GXRModeObj *rmode = NULL;
 } display;
 
-static constexpr std::array<const char*, 5> logSources = {
-    "Core", "DVD", "Loader", "Payload", "IOS" };
+static constexpr std::array<const char*, 7> logSources = {
+    "Core", "DVD", "Loader", "Payload", "IOS", "FST", "DiskIO" };
 static constexpr std::array<const char*, 3> logColors = {
     "\x1b[37;1m", "\x1b[33;1m", "\x1b[31;1m" };
 static std::array<char, 256> logBuffer;
@@ -218,6 +221,95 @@ static Stage stDiscError([[maybe_unused]] Stage from)
     return Stage::Wait;
 }
 
+#include "fst.h"
+
+#if 0
+static void fstTest()
+{
+    FSTEntry* fst = *reinterpret_cast<FSTEntry**>(0x80000038);
+    FSTBuilder::DirEntry* root;
+    {
+        FSTReader reader;
+        root = reader.process(fst, 0x81800000 - reinterpret_cast<u32>(fst));
+        assert(root != nullptr);
+    }
+
+    FSTBuilder::Entry* castle_course = root->find("Race/Course/castle_course.szs");
+    FSTBuilder::Entry* senior_course = root->find("Race/Course/rainbow_course.szs");
+
+    assert(castle_course != nullptr);
+    assert(senior_course != nullptr);
+
+    castle_course->file()->m_wordOffset = senior_course->file()->m_wordOffset;
+    castle_course->file()->m_byteLength = senior_course->file()->m_byteLength;
+
+    {
+        FSTBuilder builder;
+        builder.build(root);
+        builder.write(reinterpret_cast<void*>(fst));
+    }
+
+    irse::Log(LogS::Core, LogL::WARN,
+        "Overwrote castle_course with rainbow_course");
+}
+#endif
+
+static DIP::DVDPatch fstTest()
+{
+    assert(FSServ::MountSDCard());
+    FIL fil;
+    FRESULT fret = f_open(&fil, "0:/beginner_course.szs", FA_READ);
+    printf("f_open result: %d\n", fret);
+    if (fret != FR_OK) {
+        sleep(2); abort();
+    }
+
+    DIP::DVDPatch patch = {
+        .disc_offset = 0x80000000,
+        .disc_length = static_cast<u32>(f_size(&fil)),
+        .start_cluster = fil.obj.sclust,
+        .cur_cluster = fil.clust,
+        .file_offset = 0,
+        .drv = 0
+    };
+
+    assert(FSServ::UnmountSDCard());
+
+    FSTEntry* fst = *reinterpret_cast<FSTEntry**>(0x80000038);
+    FSTBuilder::DirEntry* root;
+    {
+        FSTReader reader;
+        root = reader.process(fst, 0x81800000 - reinterpret_cast<u32>(fst));
+        assert(root != nullptr);
+    }
+
+    FSTBuilder::Entry* dvdFile = root->find("Race/Course/beginner_course.szs");
+    assert(dvdFile != nullptr);
+
+    dvdFile->file()->m_wordOffset = patch.disc_offset;
+    dvdFile->file()->m_byteLength = patch.disc_length;
+
+    /* remove entry test */
+    auto ent = root->find("thp");
+    root->remove(ent);
+    delete ent;
+
+    {
+        FSTBuilder builder;
+        builder.build(root);
+        builder.write(reinterpret_cast<void*>(fst));
+    }
+    
+    return patch;
+}
+
+/* temporary lol */
+static void patchMkwDIPath()
+{
+    strcpy(reinterpret_cast<char*>(0x80381570), "/dev/do");
+    DCFlushRange(reinterpret_cast<void*>(0x80381560), 32);
+}
+
 static Stage stReadDisc([[maybe_unused]] Stage from)
 {
     irse::Log(LogS::Core, LogL::INFO,
@@ -232,24 +324,33 @@ static Stage stReadDisc([[maybe_unused]] Stage from)
     auto main = loader.load();
     DVD::Deinit();
 
+    DIP::DVDPatch patch = fstTest();
+
     /* Cast as s32 removes high word the in title ID */
     irse::Log(LogS::Core, LogL::INFO,
         "Launching IOS%d", static_cast<s32>(meta.sysVersion));
     IOS_ReloadIOS(static_cast<s32>(meta.sysVersion));
-    DVD::Init();
-    startupDrive();
-
-    loader.openBootPartition(&meta);
-    DVD::Deinit();
 
     irse::Log(LogS::Core, LogL::INFO, "Starting up IOS...");
     const s32 ret = IOSBoot::Launch(saoirse_ios_elf, saoirse_ios_elf_size);
     irse::Log(LogS::Core, LogL::INFO, "IOS Launch result: %d", ret);
     IOSBoot::Log* log = new IOSBoot::Log();
-    sleep(1);
+    usleep(10000);
+
+    DVD::InitProxy();
+    startupDrive();
+
+    loader.openBootPartition(&meta);
+
+    DVDProxy::ApplyPatches(&patch, 1);
+    //DVDProxy::StartGame();
+
+    DVD::Deinit();
+
     delete log;
 
     SetupGlobals(0);
+    patchMkwDIPath();
     
     // TODO: Proper shutdown
     SYS_ResetSystem(SYS_SHUTDOWN, 0, 0);

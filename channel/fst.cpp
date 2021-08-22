@@ -115,8 +115,8 @@ const char* FSTReader::entryName(u32 entry)
     const char* name = m_names + nameOffset;
 
     if (!check_bounds(m_fst, m_fstLen, name, 1)) {
-        irse::Log(LogS::Loader, LogL::ERROR,
-            "FST invalid name offset (entry %u)", entry);
+        irse::Log(LogS::FST, LogL::ERROR,
+            "Invalid name offset (entry %u)", entry);
         return nullptr;
     }
 
@@ -124,7 +124,7 @@ const char* FSTReader::entryName(u32 entry)
         + m_fstLen - reinterpret_cast<u32>(name);
     if (strnlen(name, maxLen) == maxLen) {
         irse::Log(LogS::Loader, LogL::ERROR,
-            "FST name reads off the end of the file (entry %u)", entry);
+            "Name extends past the end of the file (entry %u)", entry);
         return nullptr;
     }
     return name;
@@ -133,7 +133,7 @@ const char* FSTReader::entryName(u32 entry)
 bool FSTReader::processDirEntry(FSTBuilder::DirEntry* dir, u32 entry)
 {
     assert(m_fst[entry].isDir);
-    assert(m_dirDepth < 32);
+    assert(m_curEntry < m_numEntries);
     
     if (m_curEntry + 1 >= m_fst[entry].dir.lastEntry)
         return true;
@@ -145,7 +145,21 @@ bool FSTReader::processDirEntry(FSTBuilder::DirEntry* dir, u32 entry)
 
     if (m_fst[m_curEntry].isDir) {
         /* New directory */
+        if (m_dirDepth + 1 >= maxDirDepth) {
+            irse::Log(LogS::FST, LogL::ERROR,
+                "Directory depth exceeds max (%u)", maxDirDepth);
+            return false;
+        } 
+
+        if (m_fst[m_curEntry].dir.lastEntry > m_fst[entry].dir.lastEntry) {
+            irse::Log(LogS::FST, LogL::ERROR,
+                "Subdirectory contains too many entries (entry %u)",
+                m_curEntry);
+            return false;
+        }
+
         FSTBuilder::DirEntry* newDir = new FSTBuilder::DirEntry(name);
+        newDir->m_parent = dir;
         m_dirDepth++;
         if (!processDirEntry(newDir, m_curEntry))
             return false;
@@ -157,6 +171,7 @@ bool FSTReader::processDirEntry(FSTBuilder::DirEntry* dir, u32 entry)
             = new FSTBuilder::FileEntry(name,
                     m_fst[m_curEntry].file.wordOffset,
                     m_fst[m_curEntry].file.byteLength);
+        newFile->m_parent = dir;
         *dir += newFile;
     }
 
@@ -169,22 +184,24 @@ FSTBuilder::DirEntry* FSTReader::process(const FSTEntry* fst, u32 fstLength)
     m_fstLen = fstLength;
 
     if (!m_fst->isDir) {
-        irse::Log(LogS::Loader, LogL::ERROR,
-            "FST root entry is not a directory");
+        irse::Log(LogS::FST, LogL::ERROR, "Root entry is not a directory");
         return nullptr;
     }
     if (!check_bounds(m_fst, m_fstLen, m_fst, sizeof(FSTEntry))) {
-        irse::Log(LogS::Loader, LogL::ERROR,
-            "Not enough space in FST for root entry");
+        irse::Log(LogS::FST, LogL::ERROR, "Not enough space for root entry");
         return nullptr;
     }
 
-    /* Field is used here for entry count */
     m_numEntries = m_fst->dir.lastEntry;
+
+    if (m_numEntries >= maxEntries) {
+        irse::Log(LogS::FST, LogL::ERROR,
+            "Entry count exceeds max (%u > %u)", m_numEntries, maxEntries);
+    }
     if (!check_bounds(m_fst, m_fstLen, m_fst, sizeof(FSTEntry) * m_numEntries))
     {
-        irse::Log(LogS::Loader, LogL::ERROR,
-            "Not enough space for all FST entries");
+        irse::Log(LogS::FST, LogL::ERROR,
+            "Entry count extends past the end of the file");
         return nullptr;
     }
 

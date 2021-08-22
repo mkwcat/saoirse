@@ -6,7 +6,8 @@
 #include <os.h>
 
 enum class LogS {
-    Core, DVD, Loader, Payload, IOS
+    Core, DVD, Loader, Payload, IOS,
+    FST, DiskIO
 };
 enum class LogL { INFO, WARN, ERROR };
 

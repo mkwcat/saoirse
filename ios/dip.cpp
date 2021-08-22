@@ -1,5 +1,6 @@
 #include <dip.h>
-#include "efs.h"
+#include <ff.h>
+#include <disk.h>
 #include <main.h>
 #include <ios.h>
 #include <cstring>
@@ -15,7 +16,7 @@ typedef struct
     u32 args[7];
 } DVDCommand;
 
-#define DI_PROXY_PATH "/dev/di/proxy"
+#define DI_PROXY_PATH "/dev/do"
 
 static s32 DiMsgQueue = -1;
 static u32 __diMsgData[8];
@@ -39,7 +40,7 @@ static
 void OpenPatchFile(FIL* fp, DVDPatch* patch)
 {
     memset(fp, 0, sizeof(FIL));
-    fp->obj.fs = NULL; // automatically filled by FS
+    fp->obj.fs = &fatfs; // automatically filled by FS
     fp->obj.id = fatfs.id;
     fp->obj.sclust = patch->start_cluster;
     fp->obj.objsize = 0xFFFFFFFF;
@@ -89,16 +90,17 @@ bool IsPatchedOffset(u32 wordOffset) {
 static
 s32 Read(s32 handle, u8* outbuf, u32 offset, u32 length)
 {
+    peli::Log(LogL::INFO, "Read!");
+
     if (!IsPatchedOffset(offset))
     {
         if (!IsPatchedOffset(offset + (length >> 2) - 1)) {
             /* Not patched read, forward to real DI */
+            peli::Log(LogL::INFO, "Forwarding read to real DI");
             return RealRead(handle, outbuf, offset, length);
         }
         /* 
          * Part DVD read, part SD read
-         * [TODO] see if this is actually needed, I'm assuming it's important
-         * for dual layer discs?
          */
         const s32 ret = RealRead(handle, outbuf, offset,
             (0x80000000 - offset) << 2);
@@ -127,7 +129,7 @@ s32 Read(s32 handle, u8* outbuf, u32 offset, u32 length)
 
         u32 read_len = DiPatches[idx].disc_length << 2;
         if (DiPatches[idx].disc_offset != offset) {
-            const FRESULT fret = FS_LSeek(&f,
+            const FRESULT fret = f_lseek(&f,
                 (offset - DiPatches[idx].disc_offset) << 2);
             if (fret != FR_OK) {
                 peli::Log(LogL::ERROR, "DI_Read: FS_LSeek failed: %d", fret);
@@ -138,8 +140,9 @@ s32 Read(s32 handle, u8* outbuf, u32 offset, u32 length)
         
         if (read_len > length)
             read_len = length;
-        u32 read = 0;
-        const FRESULT fret = FS_Read(&f, outbuf, read_len, &read);
+        UINT read = 0;
+        peli::Log(LogL::INFO, "doing read!");
+        const FRESULT fret = f_read(&f, outbuf, read_len, &read);
         if (fret != FR_OK) {
             peli::Log(LogL::ERROR, "DI_Read: FS_Read failed: %d", fret);
             memset(outbuf + read, 0, read_len - read);
@@ -226,11 +229,10 @@ bool DI_DoNewIOCTL(IOSRequest* req)
 static inline
 void ReqOpen(IOSRequest* req)
 {
+    peli::Log(LogL::INFO, "receive open");
     s32 ret = IOS_ENOENT;
     if (!strcmp(req->open.path, DI_PROXY_PATH)) {
-        ret = FS_CliInit();
-        if (ret >= 0)
-            ret = IOS_Open("/dev/di", req->open.mode);
+        ret = IOS_Open("/dev/di", req->open.mode);
     }
     IOS_ResourceReply(req, ret);
 }
@@ -320,6 +322,8 @@ extern "C" s32 DI_StartRM(void* arg)
             "DI_ThreadEntry: IOS_RegisterResourceManager failed: %d", ret);
         abort();
     }
+
+    peli::Log(LogL::INFO, "DI started");
 
     DiStarted = true;
     while (1) {

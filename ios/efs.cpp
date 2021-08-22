@@ -1,108 +1,12 @@
 #include "efs.h"
-#include <ios.h>
-#include <cstring>
-#include "ff.h"
-#include "diskio.h"
 #include <types.h>
-#include "sdcard.h"
 #include <main.h>
+#include <ios.h>
+#include <ff.h>
+#include <disk.h>
+#include <sdcard.h>
 #include <EfsFile.h>
-
-/* <----------
- * FatFS Disk I/O Support
- * ----------> */
-
-#define DRV_SDCARD 0
-
-DSTATUS disk_status(BYTE pdrv)
-{
-    if (pdrv == DRV_SDCARD)
-    {
-        if (!SDCard::IsInitialized() || !SDCard::IsInserted()) {
-            return STA_NODISK;
-        }
-        return 0;
-    }
-    return STA_NOINIT;
-}
-
-DSTATUS disk_initialize(BYTE pdrv)
-{
-    if (pdrv == DRV_SDCARD)
-    {
-        if (!SDCard::Startup()) {
-            /* No way to differentiate between error and not inserted */
-            peli::Log(LogL::WARN,
-                "disk_initialize: SDCard::Startup returned false");
-            return STA_NODISK;
-        }
-        return 0;
-    }
-    peli::Log(LogL::ERROR, "disk_initialize: unknown pdrv (%d)", pdrv);
-    return STA_NOINIT;
-}
-
-DRESULT disk_read(BYTE pdrv, BYTE* buff, LBA_t sector, UINT count)
-{
-    if (pdrv == DRV_SDCARD)
-    {
-        if (disk_status(pdrv) != 0)
-            return RES_ERROR;
-        if (!SDCard::ReadSectors(sector, count, buff)) {
-            peli::Log(LogL::ERROR, "disk_read: SDCard::ReadSectors failed");
-            return RES_ERROR;
-        }
-        return RES_OK;
-    }
-    return RES_NOTRDY;
-}
-
-DRESULT disk_write(BYTE pdrv, const BYTE* buff, LBA_t sector, UINT count)
-{
-    if (pdrv == DRV_SDCARD)
-    {
-        if (disk_status(pdrv) != 0)
-            return RES_ERROR;
-        if (!SDCard::WriteSectors(sector, count, buff)) {
-            peli::Log(LogL::ERROR, "disk_write: SDCard::WriteSectors failed");
-            return RES_ERROR;
-        }
-        return RES_OK;
-    }
-    return RES_NOTRDY;
-}
-
-DRESULT disk_ioctl(BYTE pdrv, BYTE cmd, void* buff)
-{
-    switch (cmd)
-    {
-        case CTRL_SYNC:
-            if (pdrv == DRV_SDCARD) {
-                /* /dev/sdio must handle the AHB buffers itself */
-                return RES_OK;
-            }
-            return RES_NOTRDY;
-        
-        case GET_SECTOR_SIZE:
-            if (pdrv == DRV_SDCARD) {
-                /* Always 512 */
-                *(WORD*) buff = 512;
-                return RES_OK;
-            }
-            return RES_NOTRDY;
-        
-        default:
-            peli::Log(LogL::ERROR, "disk_ioctl: unknown command: %d", cmd);
-            return RES_PARERR;
-    }
-}
-
-/* todo */
-DWORD get_fattime()
-{
-    return 0;
-}
-
+#include <cstring>
 
 /* <----------
  * IPC Filesystem Resource Manager
@@ -123,7 +27,7 @@ DWORD get_fattime()
 static s32 FsQueue;
 static u32 __FsQueueData[8];
 static bool FsStarted = false;
-FATFS fatfs;
+
 
 static inline
 bool FS_BeginFile(const void* input, u32 in_len, FIL* fp)
@@ -335,13 +239,12 @@ extern "C" s32 FS_StartRM(void* arg)
         abort();
     }
 
-    /* Mount SD Card */
-    FRESULT fret = f_mount(&fatfs, "0:", 0);
-    if (fret != FR_OK) {
-        /* FatFS won't try to initialize the drive yet, so there will be no
-         * "not inserted" error */
-        peli::Log(LogL::ERROR, "FS_Init: f_mount SD Card failed: %d", fret);
-    }
+    FSServ::MountSDCard();
+    peli::Log(LogL::ERROR, "SD card mounted");
+
+    FIL testFile;
+    FRESULT fret = f_open(&testFile, "0:/", FA_READ);
+    peli::Log(LogL::INFO, "Test open result: %d", fret);
 
     s32 ret = IOS_CreateMessageQueue(__FsQueueData, 8);
     if (ret < 0) {
