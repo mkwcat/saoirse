@@ -400,5 +400,7 @@ static s32 Loop([[maybe_unused]] void* arg)
 
 s32 main([[maybe_unused]] s32 argc, [[maybe_unused]] char** argv)
 {
+    if (IOS_GetVersion() != 58)
+        IOS_ReloadIOS(58);
     return Loop(0);
 }
