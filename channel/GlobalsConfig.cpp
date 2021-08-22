@@ -2,6 +2,8 @@
 
 #include "GlobalsConfig.hpp"
 #include <ogc/cache.h>
+#include <ogc/video.h>
+#include <ogc/gx_struct.h>
 #include <stdint.h>
 #include <string.h>
 
@@ -117,20 +119,10 @@ void SetArenaLow(uint32_t low) { os0->info.arena_low = low; }
 uint32_t GetArenaHigh() { return os0->info.arena_high; }
 void SetArenaHigh(uint32_t high) { os0->info.arena_high = high; }
 
-void SetupGlobals(int fst_expand) {
-    switch (os0->disc.gamename[3]) {
-    case 'E':
-    case 'J':
-        os0->threads.tv_mode = OS_TV_MODE_NTSC;
-        break;
-    case 'P':
-    case 'D':
-    case 'F':
-    case 'X':
-    case 'Y':
-        os0->threads.tv_mode = OS_TV_MODE_PAL;
-        break;
-    }
+void SetupGlobals(int fst_expand)
+{
+    GXRModeObj* mode = VIDEO_GetPreferredMode(nullptr);
+    os0->threads.tv_mode = mode->viTVMode;
 
     os0->info.boot_type = OS_BOOT_NORMAL;
     os0->info.version = 1;
