@@ -12,7 +12,7 @@ s32 USB::ctrlMsg(s32 devId, u8 requestType, u8 request, u16 value, u16 index,
     if (!length && data)
         return IOSErr::Invalid;
 
-    Message msg ATTRIBUTE_ALIGN(32) = {
+    Input msg ATTRIBUTE_ALIGN(32) = {
         .fd = devId,
         .heapBuffers = 0,
         .ctrl = {
@@ -22,16 +22,25 @@ s32 USB::ctrlMsg(s32 devId, u8 requestType, u8 request, u16 value, u16 index,
             .index = index,
             .length = length,
             .data = data
-        },
-        .vec = {
-            {.data = &msg, .len = 64},
-            {.data = data, .len = length}
         }
     };
 
-    bool isInput = requestType & DirDevice2Host;
-    return ven.ioctlv(USBv5Ioctl::CtrlTransfer,
-        isInput ? 2 : 1, isInput ? 0 : 1, msg.vec);
+    if (requestType & CtrlType::Dir_Device2Host) {
+        IOS::IVector<2> vec;
+        vec.in[0].data = &msg;
+        vec.in[0].len = sizeof(Input);
+        vec.in[1].data = data;
+        vec.in[1].len = length;
+        return ven.ioctlv(USBv5Ioctl::CtrlTransfer, vec);
+    } else {
+        IOS::IOVector<1, 1> vec;
+        vec.in[0].data = &msg;
+        vec.in[0].len = sizeof(Input);
+        vec.out[0].data = data;
+        vec.out[0].len = length;
+        return ven.ioctlv(USBv5Ioctl::CtrlTransfer, vec);
+    }
+    
 }
 
 s32 USB::intrBulkMsg(s32 devId, USBv5Ioctl ioctl, u8 endpoint, u16 length,
@@ -44,14 +53,10 @@ s32 USB::intrBulkMsg(s32 devId, USBv5Ioctl ioctl, u8 endpoint, u16 length,
     if (!length && data)
         return IOSErr::Invalid;
     
-    Message msg ATTRIBUTE_ALIGN(32) = {
+    Input msg ATTRIBUTE_ALIGN(32) = {
         .fd = devId,
         .heapBuffers = 0,
-        .pad = {0},
-        .vec = {
-            {.data = &msg, .len = 64},
-            {.data = data, .len = length}
-        }
+        .args = {0},
     };
 
     if (ioctl == USBv5Ioctl::IntrTransfer) {
@@ -70,6 +75,31 @@ s32 USB::intrBulkMsg(s32 devId, USBv5Ioctl ioctl, u8 endpoint, u16 length,
         return IOSErr::Invalid;
     }
 
-    bool isInput = endpoint & DirEndpointIn;
-    return ven.ioctlv(ioctl, isInput ? 2 : 1, isInput ? 0 : 1, msg.vec);
+    if (endpoint & DirEndpointIn) {
+        IOS::IVector<2> vec;
+        vec.in[0].data = &msg;
+        vec.in[0].len = sizeof(Input);
+        vec.in[1].data = data;
+        vec.in[1].len = length;
+        return ven.ioctlv(ioctl, vec);
+    } else {
+        IOS::IOVector<1, 1> vec;
+        vec.in[0].data = &msg;
+        vec.in[0].len = sizeof(Input);
+        vec.out[0].data = data;
+        vec.out[0].len = length;
+        return ven.ioctlv(ioctl, vec);
+    }
+}
+
+s32 USB::clearHalt(s32 devId, u8 endpoint)
+{
+    s32 msg[8] ATTRIBUTE_ALIGN(32) = {
+        devId,
+        0,
+        endpoint,
+        0, 0, 0, 0, 0
+    };
+    return ven.ioctl(USBv5Ioctl::CancelEndpoint, reinterpret_cast<void*>(msg),
+                     sizeof(msg), nullptr, 0);
 }

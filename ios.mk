@@ -73,7 +73,7 @@ LIBS        :=  -lgcc
 ARCH	=	-march=armv5te -mtune=arm9tdmi -mthumb -mthumb-interwork -mbig-endian
 
 CFLAGS	=	$(ARCH) $(INCLUDE) -DTARGET_IOS -Wall -Wextra -Wpedantic -Werror -Wno-unused-parameter -O3 -fomit-frame-pointer -fverbose-asm -ffunction-sections -fdata-sections -fno-exceptions
-CXXFLAGS = $(CFLAGS) -std=c++20 -fno-rtti
+CXXFLAGS = $(CFLAGS) -std=c++20 -fno-rtti -Wno-narrowing
 
 AFLAGS	=	$(ARCH) -x assembler-with-cpp
 

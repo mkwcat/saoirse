@@ -244,6 +244,24 @@ struct IOVector
     } out[out_count];
 };
 
+template<u32 in_count>
+struct IVector
+{
+    struct {
+        const void* data;
+        u32 len;
+    } in[in_count];
+};
+
+template<u32 out_count>
+struct OVector
+{
+    struct {
+        void* data;
+        u32 len;
+    } out[out_count];
+};
+
 struct Request
 {
     Command cmd;
@@ -379,6 +397,18 @@ public:
             this->m_fd, static_cast<u32>(cmd),
             in_count, out_count, reinterpret_cast<Vector*>(&vec));
     }
+    template<u32 in_count>
+    s32 ioctlv(Ioctl cmd, IVector<in_count>& vec) {
+        return IOS_Ioctlv(
+            this->m_fd, static_cast<u32>(cmd),
+            in_count, 0, reinterpret_cast<Vector*>(&vec));
+    }
+    template<u32 out_count>
+    s32 ioctlv(Ioctl cmd, OVector<out_count>& vec) {
+        return IOS_Ioctlv(
+            this->m_fd, static_cast<u32>(cmd),
+            0, out_count, reinterpret_cast<Vector*>(&vec));
+    }
     
 #ifndef TARGET_IOS
     s32 ioctlAsync(Ioctl cmd, void* input, u32 inputLen,
@@ -403,6 +433,22 @@ public:
         return IOS_IoctlvAsync(
             this->m_fd, static_cast<u32>(cmd),
             in_count, out_count, reinterpret_cast<Vector*>(&vec),
+            IPC_QUEUE_CALLBACK(callback, usrdata));
+    }
+    template<u32 in_count>
+    s32 ioctlvAsync(Ioctl cmd, IVector<in_count>& vec,
+                    ipccallback callback, void* usrdata) {
+        return IOS_IoctlvAsync(
+            this->m_fd, static_cast<u32>(cmd),
+            in_count, 0, reinterpret_cast<Vector*>(&vec),
+            IPC_QUEUE_CALLBACK(callback, usrdata));
+    }
+    template<u32 out_count>
+    s32 ioctlvAsync(Ioctl cmd, OVector<out_count>& vec,
+                    ipccallback callback, void* usrdata) {
+        return IOS_IoctlvAsync(
+            this->m_fd, static_cast<u32>(cmd),
+            0, out_count, reinterpret_cast<Vector*>(&vec),
             IPC_QUEUE_CALLBACK(callback, usrdata));
     }
 #endif

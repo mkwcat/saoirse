@@ -78,4 +78,11 @@ static inline void mask32(u32 address, u32 clear, u32 set) {
 	*(vu32*) address = ((*(vu32*) address) & ~clear) | set;
 }
 
+static inline u32 bswap32(u32 val) {
+	return ((val & 0xFF) << 24)
+	     | ((val & 0xFF00) << 8)
+		 | ((val & 0xFF0000) >> 8)
+		 | ((val & 0xFF000000) >> 24);
+}
+
 #endif

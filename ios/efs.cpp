@@ -8,6 +8,16 @@
 #include <EfsFile.h>
 #include <cstring>
 
+static size_t strnlen(const char* s, size_t maxlen)
+{
+    size_t len;
+    for (len = 0; len < maxlen; len++, s++) {
+        if (!*s)
+            break;
+    }
+    return len;
+}
+
 /* <----------
  * IPC Filesystem Resource Manager
  * ----------> */
@@ -147,6 +157,8 @@ s32 FS_ReqClose(IOSRequest* req)
 {
     return 0;
 }
+
+
 
 static
 s32 FS_ReqIoctlv(IOSRequest* req)
