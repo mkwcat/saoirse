@@ -44,9 +44,9 @@ typedef struct {
 typedef enum {
     OS_TV_MODE_NTSC,
     OS_TV_MODE_PAL,
+    OS_TV_MODE_MPAL,
     OS_TV_MODE_DEBUG,
     OS_TV_MODE_DEBUG_PAL,
-    OS_TV_MODE_MPAL,
     OS_TV_MODE_PAL60,
 } os_tv_mode_t;
 
@@ -122,7 +122,23 @@ void SetArenaHigh(uint32_t high) { os0->info.arena_high = high; }
 void SetupGlobals(int fst_expand)
 {
     GXRModeObj* mode = VIDEO_GetPreferredMode(nullptr);
-    os0->threads.tv_mode = mode->viTVMode;
+
+    switch (os0->disc.gamename[3]) {
+    case 'E':
+    case 'J':
+        os0->threads.tv_mode = OS_TV_MODE_NTSC;
+        break;
+    case 'P':
+    case 'D':
+    case 'F':
+    case 'X':
+    case 'Y':
+        if (mode->viTVMode == OS_TV_MODE_PAL)
+            os0->threads.tv_mode = OS_TV_MODE_PAL;
+        else
+            os0->threads.tv_mode = OS_TV_MODE_PAL60;
+        break;
+    }
 
     os0->info.boot_type = OS_BOOT_NORMAL;
     os0->info.version = 1;
