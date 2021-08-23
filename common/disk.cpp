@@ -13,7 +13,7 @@ constexpr BYTE DRV_SDCARD = 0;
 
 DSTATUS disk_status(BYTE pdrv)
 {
-    DiskLog(LogL::INFO, "disk_status: drv: %d", pdrv);
+    //DiskLog(LogL::INFO, "disk_status: drv: %d", pdrv);
     if (pdrv == DRV_SDCARD)
     {
         if (!SDCard::IsInitialized() || !SDCard::IsInserted()) {
@@ -27,7 +27,7 @@ DSTATUS disk_status(BYTE pdrv)
 
 DSTATUS disk_initialize(BYTE pdrv)
 {
-    DiskLog(LogL::INFO, "disk_initialize: drv: %d", pdrv);
+    //DiskLog(LogL::INFO, "disk_initialize: drv: %d", pdrv);
     if (pdrv == DRV_SDCARD)
     {
         if (!SDCard::Startup()) {
@@ -44,7 +44,7 @@ DSTATUS disk_initialize(BYTE pdrv)
 
 DRESULT disk_read(BYTE pdrv, BYTE* buff, LBA_t sector, UINT count)
 {
-    DiskLog(LogL::INFO, "disk read sec: %d, cnt: %d", sector, count);
+    //DiskLog(LogL::INFO, "disk read sec: %d, cnt: %d", sector, count);
     if (pdrv == DRV_SDCARD)
     {
         if (disk_status(pdrv) != 0)

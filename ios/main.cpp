@@ -108,9 +108,17 @@ static void Log_IPCRequest(IOSRequest* req)
     }
 }
 
+u8 mainHeapData[0x1000] ATTRIBUTE_ALIGN(32);
+s32 mainHeap = -1;
+
 extern "C" s32 Log_StartRM(void* arg)
 {
-    s32 ret = IOS_CreateMessageQueue(&printBufQueueData, 1);
+    s32 ret = IOS_CreateHeap(mainHeapData, sizeof(mainHeapData));
+    if (ret < 0)
+        exitClr(YUV_YELLOW);
+    mainHeap = ret;
+
+    ret = IOS_CreateMessageQueue(&printBufQueueData, 1);
     if (ret < 0)
         exitClr(YUV_DARK_RED);
     printBufQueue = ret;
@@ -131,6 +139,22 @@ extern "C" s32 Log_StartRM(void* arg)
         Log_IPCRequest(req);
     }
     return 0;
+}
+
+void* operator new(std::size_t size) {
+    return IOS_Alloc(mainHeap, size);
+}
+
+void* operator new[](std::size_t size) {
+    return IOS_Alloc(mainHeap, size);
+}
+
+void* operator new(std::size_t size, std::align_val_t align) {
+    return IOS_AllocAligned(mainHeap, size, static_cast<u32>(align));
+}
+
+void* operator new[](std::size_t size, std::align_val_t align) {
+    return IOS_AllocAligned(mainHeap, size, static_cast<u32>(align));
 }
 
 void kwrite32(u32 address, u32 value)

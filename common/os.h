@@ -47,6 +47,7 @@ public:
     explicit Queue(u32 count = 8) {
         this->m_base = new u32[count];
         const s32 ret = IOS_CreateMessageQueue(this->m_base, count);
+        this->m_queue = ret;
         ASSERT(ret >= 0);
     }
 
@@ -205,7 +206,7 @@ protected:
 namespace IOS
 {
 
-enum class Command
+enum class Command : u32
 {
     Open = 1,
     Close = 2,

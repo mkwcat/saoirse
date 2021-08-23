@@ -77,7 +77,7 @@ CXXFLAGS = $(CFLAGS) -std=c++20 -fno-rtti -Wno-narrowing
 
 AFLAGS	=	$(ARCH) -x assembler-with-cpp
 
-LDFLAGS	= $(ARCH) -T$(LINKSCRIPT) $(LIBPATHS) $(LIBS) -s -n -Wl,--gc-sections -Wl,-static -Wl,-Map,$(BIN)/$(TARGET).map -nostartfiles
+LDFLAGS	= $(ARCH) -T$(LINKSCRIPT) $(LIBPATHS) $(LIBS) -n -Wl,--gc-sections -Wl,-static -nostartfiles
 
 
 default: $(OUTPUT).elf
@@ -86,21 +86,25 @@ clean:
 	@echo cleaning...
 	@rm -rf $(BIN) $(BUILD)
 	
-$(OUTPUT).elf: $(OFILES)
-	@echo linking $(notdir $@)...
-	@$(LD) -o $@ $(OFILES) $(LDFLAGS)
+$(OUTPUT).elf: $(OUTPUT)_dbg.elf
+	@echo output ... $(notdir $@)
+	@$(LD) -s -o $@ $(OFILES) $(LDFLAGS) -Wl,-Map,$(BIN)/$(TARGET).map
+
+$(OUTPUT)_dbg.elf: $(OFILES)
+	@echo linking ... $(notdir $@)
+	@$(LD) -g -o $@ $(OFILES) $(LDFLAGS)
 
 $(BUILD)/%_cpp.o : %.cpp
 	@echo $(notdir $<)
-	@$(CXX) -MMD -MF $(BUILD)/$*_cpp.d $(CXXFLAGS) -c $< -o$@
+	@$(CXX) -g -MMD -MF $(BUILD)/$*_cpp.d $(CXXFLAGS) -c $< -o$@
 
 $(BUILD)/%_c.o : %.c
 	@echo $(notdir $<)
-	@$(CC) -MMD -MF $(BUILD)/$*_c.d $(CFLAGS)  -c $< -o$@
+	@$(CC) -g -MMD -MF $(BUILD)/$*_c.d $(CFLAGS)  -c $< -o$@
 
 $(BUILD)/%_s.o : %.s
 	@echo $(notdir $<)
-	@$(AS) -MMD -MF $(BUILD)/$*_s.d $(AFLAGS) -c $< -o$@
+	@$(AS) -g -MMD -MF $(BUILD)/$*_s.d $(AFLAGS) -c $< -o$@
 
 $(BUILD)/%_bin.o : %.bin
 	@echo $(notdir $<)

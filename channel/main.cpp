@@ -2,7 +2,6 @@
 
 #include "dvd.h"
 #include <sdcard.h>
-#include "File.hpp"
 #include <util.h>
 LIBOGC_SUCKS_BEGIN
 #include <wiiuse/wpad.h>
@@ -315,14 +314,14 @@ static Stage stReadDisc([[maybe_unused]] Stage from)
     irse::Log(LogS::Core, LogL::INFO,
         "DiskID: %.6s", reinterpret_cast<char*>(MEM1_BASE));
 
-    WPAD_Shutdown();
-
     static Apploader loader;
     ES::TMDFixed<512> meta ATTRIBUTE_ALIGN(32);
 
     loader.openBootPartition(&meta);
     auto main = loader.load();
+
     DVD::Deinit();
+    WPAD_Shutdown();
 
     DIP::DVDPatch patch = fstTest();
 
@@ -334,8 +333,9 @@ static Stage stReadDisc([[maybe_unused]] Stage from)
     irse::Log(LogS::Core, LogL::INFO, "Starting up IOS...");
     const s32 ret = IOSBoot::Launch(saoirse_ios_elf, saoirse_ios_elf_size);
     irse::Log(LogS::Core, LogL::INFO, "IOS Launch result: %d", ret);
+
     IOSBoot::Log* log = new IOSBoot::Log();
-    usleep(10000);
+    usleep(64000);
 
     DVD::InitProxy();
     startupDrive();

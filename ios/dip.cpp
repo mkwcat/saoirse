@@ -306,6 +306,8 @@ void HandleRequest(IOSRequest* req)
 
 extern "C" s32 DI_StartRM(void* arg)
 {
+    usleep(10000);
+
     peli::Log(LogL::INFO, "Starting DI...");
 
     s32 ret = IOS_CreateMessageQueue(__diMsgData, 8);

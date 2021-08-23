@@ -9,8 +9,8 @@ PHDRS {
 }
 
 MEMORY {
-	exe(rx) 	: ORIGIN = 0x13700000, LENGTH = 0x10000
-	ram(rw) 	: ORIGIN = 0x13700000 + 0x10000, LENGTH = 0x30000
+	exe(rx) 	: ORIGIN = 0x13700000, LENGTH = 0x20000
+	ram(rw) 	: ORIGIN = 0x13700000 + 0x20000, LENGTH = 0x30000
 }
 
 SECTIONS
@@ -43,3 +43,5 @@ SECTIONS
 	}
 }
 PROVIDE(__end__ = .);
+PROVIDE(__exidx_start = .);
+PROVIDE(__exidx_end = .);
