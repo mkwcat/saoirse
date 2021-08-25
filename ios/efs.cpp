@@ -1,14 +1,109 @@
 #include <types.h>
 #include <main.h>
 #include <ios.h>
+#include <nand.h>
 #include <os.h>
 #include <ff.h>
 #include <disk.h>
 #include <sdcard.h>
+
 #include <cstring>
+#include <cstdio>
 
 namespace EFS
 {
+
+#define EFS_DRIVE "0:/"
+
+static FIL* spFileDescriptorArray[NAND_MAX_FILE_DESCRIPTOR_AMOUNT];
+
+/*---------------------------------------------------------------------------*
+ * Name        : IsFileDescriptorValid
+ * Description : Checks if a file descriptor is valid.
+ * Arguments   : fd    The file descriptor to check.
+ * Returns     : 0     The file descriptor is invalid.
+ *               1     The file descriptor is valid.
+ *---------------------------------------------------------------------------*/
+static bool IsFileDescriptorValid(int fd)
+{
+	if (fd < 0 || fd > NAND_MAX_FILE_DESCRIPTOR_AMOUNT)
+		return false;
+
+	return (spFileDescriptorArray[fd] != NULL);
+}
+
+/*---------------------------------------------------------------------------*
+ * Name        : GetAvailableFileDescriptor
+ * Description : Gets an available index in the file descriptor array.
+ * Returns     : An available index in the file descriptor array, or -1 if
+ *               there is no index available in the file descriptor array.
+ *---------------------------------------------------------------------------*/
+static int GetAvailableFileDescriptor()
+{
+	for (int i = 0; i < NAND_MAX_FILE_DESCRIPTOR_AMOUNT; i++)
+		if (spFileDescriptorArray[i] == NULL)
+			return i;
+	return -1;
+}
+
+/*---------------------------------------------------------------------------*
+ * Name        : IsFilenameValid
+ * Description : Checks if a filename is a valid 8.3 filename.
+ * Arguments   : filename    The filename to check.
+ * Returns     : 0           The filename is not a valid 8.3 filename.
+ *               1           The filename is a valid 8.3 filename.
+ *---------------------------------------------------------------------------*/
+static bool IsFilenameValid(const char* filename)
+{
+	const int MIN_83_FILENAME_LENGTH           = 1;
+	const int MAX_83_FILENAME_LENGTH           = 8;
+	const int MAX_83_FILENAME_EXTENSION_LENGTH = 3;
+
+	enum
+	{
+		CHARACTER_SPACE  = 0x20,
+		CHARACTER_PERIOD = 0x2E,
+		CHARACTER_DELETE = 0x7F
+	};
+
+	int filenameLength;
+	const char* filenameExtension = NULL;
+	for (filenameLength = 0; filename[filenameLength]; filenameLength++)
+	{
+		char c = filename[filenameLength];
+
+		// A 8.3 filename must only contain characters that can be represented in ASCII, in the range below 0x80
+		if ((unsigned char)c > CHARACTER_DELETE)
+			return false;
+
+		// A 8.3 filename must not contain the space character
+		if (c == CHARACTER_SPACE)
+			return false;
+
+		// A 8.3 filename must not contain more than one period character
+		if (c == CHARACTER_PERIOD)
+		{
+			if (filenameExtension)
+				return false;
+
+			filenameExtension = &filename[filenameLength + 1];
+		}
+	}
+	
+	size_t filenameExtensionLength;
+	if (filenameExtension && (filenameExtensionLength = strlen(filenameExtension)))
+	{
+		// Don't include the length of the extension in the filename length
+		filenameLength = ((filenameExtension - 1) - filename);
+
+		// The filename extension, if present, must be 1-3 characters in length
+		if (filenameExtensionLength > MAX_83_FILENAME_EXTENSION_LENGTH)
+			return false;
+	}
+	
+	// The base filename must be 1-8 characters in length
+	return (filenameLength >= MIN_83_FILENAME_LENGTH && filenameLength <= MAX_83_FILENAME_LENGTH);
+}
 
 static s32 ForwardRequest([[maybe_unused]] IOS::Request* req)
 {
@@ -20,42 +115,116 @@ static s32 ForwardRequest([[maybe_unused]] IOS::Request* req)
  * Handle open request from the filesystem proxy.
  * Returns: File descriptor, or ISFS error code.
  */
-static s32 ReqOpen([[maybe_unused]] const char* path, [[maybe_unused]] u32 mode)
+static s32 ReqOpen(const char* path, u32 mode)
 {
-    /* TODO */
-    return IOSErr::NotFound;
+	int fd = GetAvailableFileDescriptor();
+	ASSERT(fd != -1);
+
+	if (!path)
+		return IOSErr::Invalid;
+
+	if (path[0] != NAND_DIRECTORY_SEPARATOR_CHAR)
+		return IOSErr::Invalid;
+	
+	if (strlen(path) >= NAND_MAX_FILEPATH_LENGTH)
+		return IOSErr::Invalid;
+	
+	if (mode > IOS_OPEN_RW)
+		return IOSErr::Invalid;
+
+	// The second check guarantees that there will be at least one instance of the "NAND_DIRECTORY_SEPARATOR_CHAR" character in the character string
+	const char* filename = strrchr(path, NAND_DIRECTORY_SEPARATOR_CHAR) + 1;
+	if (!IsFilenameValid(filename))
+	{
+		peli::Log(LogL::ERROR, "[EFS::ReqOpen] Filename '%s' is invalid !", filename);
+		return IOSErr::Invalid;
+	}
+
+	// Create the filepath to open
+	char efsFilepath[NAND_MAX_FILENAME_LENGTH + sizeof(EFS_DRIVE)];
+	ASSERT(snprintf(efsFilepath, NAND_MAX_FILENAME_LENGTH + sizeof(EFS_DRIVE), EFS_DRIVE "%s", filename) >= 0);
+
+	spFileDescriptorArray[fd] = new FIL;
+	if (f_open(spFileDescriptorArray[fd], efsFilepath, mode) != FR_OK)
+	{
+		peli::Log(LogL::ERROR, "[EFS::ReqOpen] Failed to open file '%s' !", efsFilepath);
+		return IOSErr::NotFound;
+	}
+	
+	peli::Log(LogL::INFO, "[EFS::ReqOpen] Successfully opened file '%s' (fd=%d, mode=%d) !", efsFilepath, fd, mode);
+
+	return fd;
 }
 
 /*
  * Close open file descriptor.
  * Returns: 0 for success, or IOS error code.
  */
-static s32 ReqClose([[maybe_unused]] s32 fd)
+static s32 ReqClose(s32 fd)
 {
-    /* TODO */
-    return IOSErr::Invalid;
+	if (!IsFileDescriptorValid(fd))
+		return IOSErr::Invalid;
+
+	if (f_close(spFileDescriptorArray[fd]) != FR_OK)
+	{
+		peli::Log(LogL::ERROR, "[EFS::ReqClose] Failed to close file descriptor %d !", fd);
+		return IOSErr::NotFound;
+	}
+
+	delete spFileDescriptorArray[fd];
+	spFileDescriptorArray[fd] = NULL;
+
+	peli::Log(LogL::INFO, "[EFS::ReqClose] Successfully closed file descriptor %d !", fd);
+
+	return IOSErr::OK;
 }
 
 /*
  * Read data from open file descriptor.
  * Returns: Amount read, or ISFS error code.
  */
-static s32 ReqRead([[maybe_unused]] s32 fd, [[maybe_unused]] void* data,
-                   [[maybe_unused]] u32 len)
+static s32 ReqRead(s32 fd, void* data, u32 len)
 {
-    /* TODO */
-    return IOSErr::Invalid;
+	if (!IsFileDescriptorValid(fd))
+		return IOSErr::Invalid;
+
+	if (!data)
+		return IOSErr::Invalid;
+
+	unsigned int bytesRead;
+	if (f_read(spFileDescriptorArray[fd], data, len, &bytesRead) != FR_OK)
+	{
+		peli::Log(LogL::ERROR, "[EFS::ReqRead] Failed to read %d bytes from file descriptor %d !", bytesRead, fd);
+		return IOSErr::NotFound;
+	}
+
+	peli::Log(LogL::INFO, "[EFS::ReqRead] Successfully read %d bytes from file descriptor %d !", bytesRead, fd);
+
+	return bytesRead;
 }
 
 /*
  * Write data to open file descriptor.
  * Returns: Amount wrote, or ISFS error code.
  */
-static s32 ReqWrite([[maybe_unused]] s32 fd, [[maybe_unused]] const void* data,
-                   [[maybe_unused]] u32 len)
+static s32 ReqWrite(s32 fd, const void* data, u32 len)
 {
-    /* TODO */
-    return IOSErr::Invalid;
+	if (!IsFileDescriptorValid(fd))
+		return IOSErr::Invalid;
+	
+	if (!data)
+		return IOSErr::Invalid;
+
+	unsigned int bytesWrote;
+	if (f_write(spFileDescriptorArray[fd], data, len, &bytesWrote) != FR_OK)
+	{
+		peli::Log(LogL::ERROR, "[EFS::ReqWrite] Failed to write %d bytes to file descriptor %d !", bytesWrote, fd);
+		return IOSErr::NotFound;
+	}
+
+	peli::Log(LogL::INFO, "[EFS::ReqWrite] Successfully wrote %d bytes to file descriptor %d !", bytesWrote, fd);
+
+	return bytesWrote;
 }
 
 static s32 IPCRequest(IOS::Request* req)
