@@ -165,9 +165,16 @@ s32 IOS_RegisterResourceManager(const char* device, s32 queue_id);
 s32 IOS_ResourceReply(const IOSRequest* request, s32 reply);
 
 /* <----------
- * ARM Cache
+ * ARM Memory and Cache
  * ----------> */
 void IOS_InvalidateDCache(void *address, u32 size);
 void IOS_FlushDCache(const void *address, u32 size);
+void* IOS_VirtualToPhysical(void* virt);
+
+/* <----------
+ * Misc IOS
+ * ----------> */
+s32 IOS_SetPPCACRPerms(u8 enable);
+s32 IOS_SetIpcAccessRights(u8* rights);
 
 EXTERN_C_END

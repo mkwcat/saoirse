@@ -77,4 +77,5 @@ name:;                                                                         \
         DEF_SYSCALL( IOS_GetVersion,              0x4D )
         DEF_SYSCALL( IOS_VirtualToPhysical,       0x4F )
         DEF_SYSCALL( IOS_SetPPCACRPerms,          0x54 )
+        DEF_SYSCALL( IOS_SetIpcAccessRights,      0x59 )
         DEF_SYSCALL( IOS_LaunchRM,                0x5A )

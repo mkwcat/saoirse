@@ -118,6 +118,24 @@ extern "C" s32 Log_StartRM(void* arg)
         exitClr(YUV_YELLOW);
     mainHeap = ret;
 
+#if 0
+    /*
+     * IPC mask. Not really a "mask", actually a hash lookup table.
+     * Forbids the following:
+     *   > /dev/boot2
+     *   > /
+     *   > /dev/di
+     *   > /dev/scruffy
+     * Planned to be used to overload certain resource managers when accessed
+     * from PowerPC, as can be done with a single instruction patch in the
+     * IOS_Open syscall.
+     */
+    u8 ipcMask[12] = {
+        0x00, 0xF0, 0x00, 0x18, 0x73, 0x40, 0x01, 0x8C, 0x8C, 0x09, 0x00, 0x00
+    };
+    ret = IOS_SetIpcAccessRights(ipcMask);
+#endif
+
     ret = IOS_CreateMessageQueue(&printBufQueueData, 1);
     if (ret < 0)
         exitClr(YUV_DARK_RED);

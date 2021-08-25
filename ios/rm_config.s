@@ -40,7 +40,7 @@ IOS_STACK(DI_RMStack, 0x400);
 IOS_NOTE_START();
 /* Debug Log Process (/dev/stdout) */
 IOS_NOTE(
-	0,
+	1,
 	Log_StartRM,
 	40,
 	0x400,
