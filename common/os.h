@@ -36,6 +36,23 @@ namespace IOSErr
   };
 }
 
+namespace ISFSError
+{
+  enum {
+      OK = 0,
+      Invalid = -101,
+      NoAccess = -102,
+      Corrupt = -103,
+      NotReady = -104,
+      Exists = -105,
+      NotFound = -106,
+      MaxOpen = -109,
+      MaxDepth = -110,
+      Locked = -111,
+      Unknown = -117
+  };
+}
+
 #ifdef TARGET_IOS
 /* IOS implementation */
 template<typename T>

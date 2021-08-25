@@ -26,10 +26,10 @@ static FIL* spFileDescriptorArray[NAND_MAX_FILE_DESCRIPTOR_AMOUNT];
  *---------------------------------------------------------------------------*/
 static bool IsFileDescriptorValid(int fd)
 {
-	if (fd < 0 || fd > NAND_MAX_FILE_DESCRIPTOR_AMOUNT)
-		return false;
+    if (fd < 0 || fd > NAND_MAX_FILE_DESCRIPTOR_AMOUNT)
+        return false;
 
-	return (spFileDescriptorArray[fd] != NULL);
+    return (spFileDescriptorArray[fd] != NULL);
 }
 
 /*---------------------------------------------------------------------------*
@@ -40,10 +40,10 @@ static bool IsFileDescriptorValid(int fd)
  *---------------------------------------------------------------------------*/
 static int GetAvailableFileDescriptor()
 {
-	for (int i = 0; i < NAND_MAX_FILE_DESCRIPTOR_AMOUNT; i++)
-		if (spFileDescriptorArray[i] == NULL)
-			return i;
-	return -1;
+    for (int i = 0; i < NAND_MAX_FILE_DESCRIPTOR_AMOUNT; i++)
+        if (spFileDescriptorArray[i] == NULL)
+            return i;
+    return -1;
 }
 
 /*---------------------------------------------------------------------------*
@@ -55,54 +55,54 @@ static int GetAvailableFileDescriptor()
  *---------------------------------------------------------------------------*/
 static bool IsFilenameValid(const char* filename)
 {
-	const int MIN_83_FILENAME_LENGTH           = 1;
-	const int MAX_83_FILENAME_LENGTH           = 8;
-	const int MAX_83_FILENAME_EXTENSION_LENGTH = 3;
+    const int MIN_83_FILENAME_LENGTH           = 1;
+    const int MAX_83_FILENAME_LENGTH           = 8;
+    const int MAX_83_FILENAME_EXTENSION_LENGTH = 3;
 
-	enum
-	{
-		CHARACTER_SPACE  = 0x20,
-		CHARACTER_PERIOD = 0x2E,
-		CHARACTER_DELETE = 0x7F
-	};
+    enum
+    {
+        CHARACTER_SPACE  = 0x20,
+        CHARACTER_PERIOD = 0x2E,
+        CHARACTER_DELETE = 0x7F
+    };
 
-	int filenameLength;
-	const char* filenameExtension = NULL;
-	for (filenameLength = 0; filename[filenameLength]; filenameLength++)
-	{
-		char c = filename[filenameLength];
+    int filenameLength;
+    const char* filenameExtension = NULL;
+    for (filenameLength = 0; filename[filenameLength]; filenameLength++)
+    {
+        char c = filename[filenameLength];
 
-		// A 8.3 filename must only contain characters that can be represented in ASCII, in the range below 0x80
-		if ((unsigned char)c > CHARACTER_DELETE)
-			return false;
+        // A 8.3 filename must only contain characters that can be represented in ASCII, in the range below 0x80
+        if ((unsigned char)c > CHARACTER_DELETE)
+            return false;
 
-		// A 8.3 filename must not contain the space character
-		if (c == CHARACTER_SPACE)
-			return false;
+        // A 8.3 filename must not contain the space character
+        if (c == CHARACTER_SPACE)
+            return false;
 
-		// A 8.3 filename must not contain more than one period character
-		if (c == CHARACTER_PERIOD)
-		{
-			if (filenameExtension)
-				return false;
+        // A 8.3 filename must not contain more than one period character
+        if (c == CHARACTER_PERIOD)
+        {
+            if (filenameExtension)
+                return false;
 
-			filenameExtension = &filename[filenameLength + 1];
-		}
-	}
-	
-	size_t filenameExtensionLength;
-	if (filenameExtension && (filenameExtensionLength = strlen(filenameExtension)))
-	{
-		// Don't include the length of the extension in the filename length
-		filenameLength = ((filenameExtension - 1) - filename);
+            filenameExtension = &filename[filenameLength + 1];
+        }
+    }
+    
+    size_t filenameExtensionLength;
+    if (filenameExtension && (filenameExtensionLength = strlen(filenameExtension)))
+    {
+        // Don't include the length of the extension in the filename length
+        filenameLength = ((filenameExtension - 1) - filename);
 
-		// The filename extension, if present, must be 1-3 characters in length
-		if (filenameExtensionLength > MAX_83_FILENAME_EXTENSION_LENGTH)
-			return false;
-	}
-	
-	// The base filename must be 1-8 characters in length
-	return (filenameLength >= MIN_83_FILENAME_LENGTH && filenameLength <= MAX_83_FILENAME_LENGTH);
+        // The filename extension, if present, must be 1-3 characters in length
+        if (filenameExtensionLength > MAX_83_FILENAME_EXTENSION_LENGTH)
+            return false;
+    }
+    
+    // The base filename must be 1-8 characters in length
+    return (filenameLength >= MIN_83_FILENAME_LENGTH && filenameLength <= MAX_83_FILENAME_LENGTH);
 }
 
 static s32 ForwardRequest([[maybe_unused]] IOS::Request* req)
@@ -111,49 +111,103 @@ static s32 ForwardRequest([[maybe_unused]] IOS::Request* req)
     return IOSErr::NotFound;
 }
 
+
+static s32 FResultToISFSError(FRESULT fret)
+{
+    switch (fret) {
+    case FR_OK:
+        return ISFSError::OK;
+    
+    case FR_INVALID_NAME:
+    case FR_INVALID_DRIVE:
+    case FR_INVALID_PARAMETER:
+    case FR_INVALID_OBJECT:
+        return ISFSError::Invalid;
+    
+    case FR_DISK_ERR:
+    case FR_INT_ERR:
+    case FR_NO_FILESYSTEM:
+        return ISFSError::Corrupt;
+    
+    case FR_NOT_READY:
+    case FR_NOT_ENABLED:
+        return ISFSError::NotReady;
+
+    case FR_NO_FILE:
+    case FR_NO_PATH:
+        return ISFSError::NotFound;
+        
+    case FR_DENIED:
+    case FR_WRITE_PROTECTED:
+        return ISFSError::NoAccess;
+    
+    case FR_EXIST:
+        return ISFSError::Exists;
+
+    case FR_LOCKED:
+        return ISFSError::Locked;
+
+    case FR_TOO_MANY_OPEN_FILES:
+        return ISFSError::MaxOpen;
+    
+    case FR_MKFS_ABORTED:
+    case FR_NOT_ENOUGH_CORE:
+    case FR_TIMEOUT:
+    default:
+        return ISFSError::Unknown;
+    }
+}
+
 /* 
  * Handle open request from the filesystem proxy.
  * Returns: File descriptor, or ISFS error code.
  */
 static s32 ReqOpen(const char* path, u32 mode)
 {
-	int fd = GetAvailableFileDescriptor();
-	ASSERT(fd != -1);
+    int fd = GetAvailableFileDescriptor();
+    if (fd < 0)
+        return ISFSError::MaxOpen;
 
-	if (!path)
-		return IOSErr::Invalid;
+    if (!path)
+        return ISFSError::Invalid;
 
-	if (path[0] != NAND_DIRECTORY_SEPARATOR_CHAR)
-		return IOSErr::Invalid;
-	
-	if (strlen(path) >= NAND_MAX_FILEPATH_LENGTH)
-		return IOSErr::Invalid;
-	
-	if (mode > IOS_OPEN_RW)
-		return IOSErr::Invalid;
+    if (path[0] != NAND_DIRECTORY_SEPARATOR_CHAR)
+        return ISFSError::Invalid;
+    
+    if (strlen(path) >= NAND_MAX_FILEPATH_LENGTH)
+        return ISFSError::Invalid;
+    
+    if (mode > IOS_OPEN_RW)
+        return ISFSError::Invalid;
 
-	// The second check guarantees that there will be at least one instance of the "NAND_DIRECTORY_SEPARATOR_CHAR" character in the character string
-	const char* filename = strrchr(path, NAND_DIRECTORY_SEPARATOR_CHAR) + 1;
-	if (!IsFilenameValid(filename))
-	{
-		peli::Log(LogL::ERROR, "[EFS::ReqOpen] Filename '%s' is invalid !", filename);
-		return IOSErr::Invalid;
-	}
+    // The second check guarantees that there will be at least one instance of the "NAND_DIRECTORY_SEPARATOR_CHAR" character in the character string
+    const char* filename = strrchr(path, NAND_DIRECTORY_SEPARATOR_CHAR) + 1;
+    if (!IsFilenameValid(filename))
+    {
+        peli::Log(LogL::ERROR, "[EFS::ReqOpen] Filename '%s' is invalid !", filename);
+        return ISFSError::Invalid;
+    }
 
-	// Create the filepath to open
-	char efsFilepath[NAND_MAX_FILENAME_LENGTH + sizeof(EFS_DRIVE)];
-	ASSERT(snprintf(efsFilepath, NAND_MAX_FILENAME_LENGTH + sizeof(EFS_DRIVE), EFS_DRIVE "%s", filename) >= 0);
+    // Create the filepath to open
+    char efsFilepath[NAND_MAX_FILENAME_LENGTH + sizeof(EFS_DRIVE)];
+    snprintf(efsFilepath, NAND_MAX_FILENAME_LENGTH + sizeof(EFS_DRIVE), EFS_DRIVE "%s", filename);
 
-	spFileDescriptorArray[fd] = new FIL;
-	if (f_open(spFileDescriptorArray[fd], efsFilepath, mode) != FR_OK)
-	{
-		peli::Log(LogL::ERROR, "[EFS::ReqOpen] Failed to open file '%s' !", efsFilepath);
-		return IOSErr::NotFound;
-	}
-	
-	peli::Log(LogL::INFO, "[EFS::ReqOpen] Successfully opened file '%s' (fd=%d, mode=%d) !", efsFilepath, fd, mode);
+    spFileDescriptorArray[fd] = new FIL;
+    ASSERT(IsFileDescriptorValid(fd));
+    const FRESULT fret = f_open(spFileDescriptorArray[fd], efsFilepath, mode);
+    if (fret != FR_OK)
+    {
+        peli::Log(LogL::ERROR,
+            "[EFS::ReqOpen] Failed to open file '%s', error: %d",
+            efsFilepath, fret);
+        
+        delete spFileDescriptorArray[fd];
+        return FResultToISFSError(fret);
+    }
+    
+    peli::Log(LogL::INFO, "[EFS::ReqOpen] Successfully opened file '%s' (fd=%d, mode=%d) !", efsFilepath, fd, mode);
 
-	return fd;
+    return fd;
 }
 
 /*
@@ -162,21 +216,21 @@ static s32 ReqOpen(const char* path, u32 mode)
  */
 static s32 ReqClose(s32 fd)
 {
-	if (!IsFileDescriptorValid(fd))
-		return IOSErr::Invalid;
+    if (!IsFileDescriptorValid(fd))
+        return ISFSError::Invalid;
 
-	if (f_close(spFileDescriptorArray[fd]) != FR_OK)
-	{
-		peli::Log(LogL::ERROR, "[EFS::ReqClose] Failed to close file descriptor %d !", fd);
-		return IOSErr::NotFound;
-	}
+    if (f_close(spFileDescriptorArray[fd]) != FR_OK)
+    {
+        peli::Log(LogL::ERROR, "[EFS::ReqClose] Failed to close file descriptor %d !", fd);
+        return ISFSError::Unknown;
+    }
 
-	delete spFileDescriptorArray[fd];
-	spFileDescriptorArray[fd] = NULL;
+    delete spFileDescriptorArray[fd];
+    spFileDescriptorArray[fd] = nullptr;
 
-	peli::Log(LogL::INFO, "[EFS::ReqClose] Successfully closed file descriptor %d !", fd);
+    peli::Log(LogL::INFO, "[EFS::ReqClose] Successfully closed file descriptor %d !", fd);
 
-	return IOSErr::OK;
+    return ISFSError::OK;
 }
 
 /*
@@ -185,22 +239,27 @@ static s32 ReqClose(s32 fd)
  */
 static s32 ReqRead(s32 fd, void* data, u32 len)
 {
-	if (!IsFileDescriptorValid(fd))
-		return IOSErr::Invalid;
+    if (!IsFileDescriptorValid(fd))
+        return ISFSError::Invalid;
 
-	if (!data)
-		return IOSErr::Invalid;
+    if (len == 0)
+        return ISFSError::OK;
 
-	unsigned int bytesRead;
-	if (f_read(spFileDescriptorArray[fd], data, len, &bytesRead) != FR_OK)
-	{
-		peli::Log(LogL::ERROR, "[EFS::ReqRead] Failed to read %d bytes from file descriptor %d !", bytesRead, fd);
-		return IOSErr::NotFound;
-	}
+    unsigned int bytesRead;
+    const FRESULT fret
+        = f_read(spFileDescriptorArray[fd], data, len, &bytesRead);
+    if (fret != FR_OK)
+    {
+        peli::Log(LogL::ERROR,
+                  "[EFS::ReqRead] Failed to read %d bytes from file descriptor "
+                  "%d, error: %d",
+                  bytesRead, fd, fret);
+        return FResultToISFSError(fret);
+    }
 
-	peli::Log(LogL::INFO, "[EFS::ReqRead] Successfully read %d bytes from file descriptor %d !", bytesRead, fd);
+    peli::Log(LogL::INFO, "[EFS::ReqRead] Successfully read %d bytes from file descriptor %d !", bytesRead, fd);
 
-	return bytesRead;
+    return bytesRead;
 }
 
 /*
@@ -209,22 +268,27 @@ static s32 ReqRead(s32 fd, void* data, u32 len)
  */
 static s32 ReqWrite(s32 fd, const void* data, u32 len)
 {
-	if (!IsFileDescriptorValid(fd))
-		return IOSErr::Invalid;
-	
-	if (!data)
-		return IOSErr::Invalid;
+    if (!IsFileDescriptorValid(fd))
+        return ISFSError::Invalid;
+    
+    if (len == 0)
+        return ISFSError::OK;
 
-	unsigned int bytesWrote;
-	if (f_write(spFileDescriptorArray[fd], data, len, &bytesWrote) != FR_OK)
-	{
-		peli::Log(LogL::ERROR, "[EFS::ReqWrite] Failed to write %d bytes to file descriptor %d !", bytesWrote, fd);
-		return IOSErr::NotFound;
-	}
+    unsigned int bytesWrote;
+    const FRESULT fret
+        = f_write(spFileDescriptorArray[fd], data, len, &bytesWrote);
+    if (fret != FR_OK)
+    {
+        peli::Log(LogL::ERROR,
+                  "[EFS::ReqWrite] Failed to write %d bytes to file descriptor "
+                  "%d, error: %d",
+                  bytesWrote, fd, fret);
+        return FResultToISFSError(fret);
+    }
 
-	peli::Log(LogL::INFO, "[EFS::ReqWrite] Successfully wrote %d bytes to file descriptor %d !", bytesWrote, fd);
+    peli::Log(LogL::INFO, "[EFS::ReqWrite] Successfully wrote %d bytes to file descriptor %d !", bytesWrote, fd);
 
-	return bytesWrote;
+    return bytesWrote;
 }
 
 static s32 IPCRequest(IOS::Request* req)
