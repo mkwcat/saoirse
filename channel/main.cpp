@@ -18,7 +18,9 @@ LIBOGC_SUCKS_END
 
 #include "Boot.hpp"
 #include "GlobalsConfig.hpp"
+
 #include "IOSBoot.hpp"
+#include <saoirse_ios_elf.h>
 
 using namespace irse;
 
@@ -98,9 +100,6 @@ static Stage stDefault(Stage from)
         return next;
     }
 }
-
-extern u8 saoirse_ios_elf[];
-extern u32 saoirse_ios_elf_size;
 
 static Stage stInit([[maybe_unused]] Stage from)
 {

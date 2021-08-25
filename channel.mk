@@ -20,7 +20,7 @@ BUILD		:=	build_channel
 BIN         :=  bin
 SOURCES		:=	channel common
 DATA		:=	data  
-INCLUDES	:=  $(SOURCES)
+INCLUDES	:=  $(SOURCES) $(BUILD)
 
 #---------------------------------------------------------------------------------
 # options for code generation
@@ -63,7 +63,7 @@ CFILES		:=	$(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.c)))
 CPPFILES	:=	$(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.cpp)))
 sFILES		:=	$(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.s)))
 SFILES		:=	$(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.S)))
-BINFILES	:=	$(foreach dir,$(DATA),$(notdir $(wildcard $(dir)/*.*)))
+BINFILES    :=  $(CURDIR)/$(BIN)/saoirse_ios.elf
 
 #---------------------------------------------------------------------------------
 # use CXX for linking C++ projects, CC for standard C
@@ -74,7 +74,7 @@ else
 	export LD	:=	$(CXX)
 endif
 
-export OFILES	:=	$(addsuffix .o,$(BINFILES)) \
+export OFILES	:=	$(addsuffix .o,$(notdir $(BINFILES))) \
 					$(CPPFILES:.cpp=.o) $(CFILES:.c=.o) \
 					$(sFILES:.s=.o) $(SFILES:.S=.o)
 
@@ -120,9 +120,9 @@ $(OUTPUT).dol: $(OUTPUT).elf
 $(OUTPUT).elf: $(OFILES)
 
 #---------------------------------------------------------------------------------
-# This rule links in binary data with the .jpg extension
+# This rule links in saoirse_ios.elf
 #---------------------------------------------------------------------------------
-%.jpg.o	:	%.jpg
+%.elf.o	:	$(CURDIR)/../$(BIN)/saoirse_ios.elf
 #---------------------------------------------------------------------------------
 	@echo $(notdir $<)
 	$(bin2o)
