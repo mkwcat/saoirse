@@ -105,12 +105,26 @@ static bool IsFilenameValid(const char* filename)
     return (filenameLength >= MIN_83_FILENAME_LENGTH && filenameLength <= MAX_83_FILENAME_LENGTH);
 }
 
-static s32 ForwardRequest([[maybe_unused]] IOS::Request* req)
+static s32 ForwardRequest(s32 fd, IOS::Request* req)
 {
-    /* TODO */
-    return IOSErr::NotFound;
-}
+    switch (req->cmd)
+    {
+    case IOS::Command::Close:
+        return IOS_Close(fd);
+    case IOS::Command::Read:
+        return IOS_Read(fd, req->read.data, req->read.len);
+    case IOS::Command::Write:
+        return IOS_Write(fd, req->write.data, req->write.len);
+    case IOS::Command::Seek:
+        return IOS_Seek(fd, req->seek.where, req->seek.whence);
+    case IOS::Command::Ioctl:
+        return IOS_Ioctl(fd, req->ioctl.cmd, req->ioctl.in, req->ioctl.in_len,
+                         req->ioctl.io, req->ioctl.io_len);
 
+    default:
+        return ISFSError::Invalid;
+    }
+}
 
 static s32 FResultToISFSError(FRESULT fret)
 {
@@ -295,6 +309,10 @@ static s32 IPCRequest(IOS::Request* req)
 {
     s32 ret = IOSErr::Invalid;
 
+    if (req->cmd != IOS::Command::Open && req->fd >= 100) {
+        return ForwardRequest(req->fd - 100, req);
+    }
+
     switch (req->cmd)
     {
     case IOS::Command::Open:
@@ -320,8 +338,12 @@ static s32 IPCRequest(IOS::Request* req)
     }
 
     /* Not Found (-6) forwards the message to real FS */
-    if (ret == IOSErr::NotFound)
-        return ForwardRequest(req);
+    if (ret == IOSErr::NotFound && req->cmd == IOS::Command::Open) {
+        /* [FIXME] UID and GID always 0 */
+        ret = IOS_Open(req->open.path, req->open.mode);
+        if (ret >= 0)
+            return ret + 100;
+    }
     return ret;
 }
 
