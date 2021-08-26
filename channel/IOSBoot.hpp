@@ -36,6 +36,7 @@ protected:
 #if 0
 void SetupPrintHook();
 void ReadPrintHook();
+void testIPCRightsPatch();
 #endif
 
 }

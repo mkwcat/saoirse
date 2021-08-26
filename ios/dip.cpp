@@ -231,7 +231,7 @@ void ReqOpen(IOSRequest* req)
 {
     peli::Log(LogL::INFO, "receive open");
     s32 ret = IOS_ENOENT;
-    if (!strcmp(req->open.path, DI_PROXY_PATH)) {
+    if (!strcmp(req->open.path, "/dev/di")) {
         ret = IOS_Open("/dev/di", req->open.mode);
     }
     IOS_ResourceReply(req, ret);
@@ -306,8 +306,6 @@ void HandleRequest(IOSRequest* req)
 
 extern "C" s32 DI_StartRM(void* arg)
 {
-    usleep(10000);
-
     peli::Log(LogL::INFO, "Starting DI...");
 
     s32 ret = IOS_CreateMessageQueue(__diMsgData, 8);
@@ -318,7 +316,7 @@ extern "C" s32 DI_StartRM(void* arg)
     }
     DiMsgQueue = ret;
 
-    ret = IOS_RegisterResourceManager(DI_PROXY_PATH, DiMsgQueue);
+    ret = IOS_RegisterResourceManager("/dev/d", DiMsgQueue);
     if (ret != IOS_SUCCESS) {
         peli::Log(LogL::ERROR,
             "DI_ThreadEntry: IOS_RegisterResourceManager failed: %d", ret);

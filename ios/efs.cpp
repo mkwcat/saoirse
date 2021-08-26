@@ -298,10 +298,7 @@ static s32 IPCRequest(IOS::Request* req)
     switch (req->cmd)
     {
     case IOS::Command::Open:
-        if (req->open.path[0] == '?')
-            ret = ReqOpen(req->open.path, req->open.mode);
-        else
-            ret = IOSErr::NotFound;
+        ret = ReqOpen(req->open.path, req->open.mode);
         break;
     
     case IOS::Command::Close:
@@ -338,23 +335,20 @@ static void OpenTestFile()
 
 extern "C" s32 FS_StartRM([[maybe_unused]] void* arg)
 {
-    usleep(10000);
-
     peli::Log(LogL::INFO, "Starting FS...");
 
     if (!SDCard::Open()) {
         peli::Log(LogL::ERROR, "FS_StartRM: SDCard::Open returned false");
         abort();
     }
-    FSServ::MountSDCard();
-    peli::Log(LogL::INFO, "SD card mounted");
-
-    OpenTestFile();
+    if (FSServ::MountSDCard()) {
+        OpenTestFile();
+        peli::Log(LogL::INFO, "SD card mounted");
+    }
 
     Queue<IOS::Request*> queue(8);
-
     /* [TODO] ? is temporary until we can actually mount over / */
-    const s32 ret = IOS_RegisterResourceManager("?", queue.id());
+    const s32 ret = IOS_RegisterResourceManager("", queue.id());
     if (ret != IOSErr::OK) {
         peli::Log(LogL::ERROR,
             "FS_StartRM: IOS_RegisterResourceManager failed: %d", ret);

@@ -34,32 +34,14 @@ name:; \
 	.size name, sSize
 
 IOS_STACK(Log_RMStack, 0x400);
-IOS_STACK(FS_RMStack, 0x400);
-IOS_STACK(DI_RMStack, 0x400);
 
 IOS_NOTE_START();
 /* Debug Log Process (/dev/stdout) */
 IOS_NOTE(
 	1,
 	Log_StartRM,
-	40,
+	100,
 	0x400,
 	Log_RMStack + 0x400
-);
-/* External Filesystem/Storage */
-IOS_NOTE(
-	0,
-    FS_StartRM,
-	80,
-	0x400,
-	FS_RMStack + 0x400
-);
-/* Drive Interface Proxy */
-IOS_NOTE(
-	0,
-	DI_StartRM,
-	80,
-	0x400,
-	DI_RMStack + 0x400
 );
 IOS_NOTE_END();

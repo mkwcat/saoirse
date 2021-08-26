@@ -6,6 +6,16 @@
 #include <unistd.h>
 #include <ogc/cache.h>
 
+template<class T>
+constexpr T sramMirrToReal(T address) {
+    return reinterpret_cast<T>(reinterpret_cast<u32>(address) - 0xF2B00000);
+}
+
+constexpr u32 syscall(u32 id) {
+    return 0xE6000010 | id << 5;
+}
+
+
 constexpr u32 VFILE_ADDR = 0x91000000;
 constexpr u32 VFILE_SIZE = 0x100000;
 
@@ -34,7 +44,6 @@ struct VFile
     u32 m_pad[8 - 3];
     u8 m_data[TSize];
 };
-
 
 /* 
  * Performs an IOS exploit and branches to the entrypoint in system mode.
@@ -152,5 +161,12 @@ void IOSBoot::ReadPrintHook()
 {
     DCInvalidateRange((void*) 0x90C00000, 0x10000);
     printf("PRINT HOOK RESULT:\n%s", (char*) 0x90C00004);
+}
+
+void IOSBoot::testIPCRightsPatch()
+{
+    static constexpr u32 ios58BranchSrc = sramMirrToReal(0xFFFF3180);
+
+    mask32(ios58BranchSrc, 0xFFFF0000, 0xE79C0000);
 }
 #endif

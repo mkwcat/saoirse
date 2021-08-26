@@ -117,7 +117,6 @@ struct DiskID
 };
 
 void Init();
-void InitProxy();
 void Deinit();
 bool OpenCacheFile();
 DiErr ResetDrive(bool spinup);

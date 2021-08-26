@@ -336,7 +336,7 @@ static Stage stReadDisc([[maybe_unused]] Stage from)
     IOSBoot::Log* log = new IOSBoot::Log();
     usleep(64000);
 
-    DVD::InitProxy();
+    DVD::Init();
     startupDrive();
 
     loader.openBootPartition(&meta);
