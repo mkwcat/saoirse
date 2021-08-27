@@ -416,7 +416,8 @@ static s32 __sd0_getcid()
     return ret;
 }
 
-static bool __sd0_initio() {
+static bool __sd0_initio()
+{
     s32 ret;
     s32 tries;
     u32 status;
@@ -556,7 +557,8 @@ fail:
     return false;
 }
 
-bool SDCard::Deinitialize() {
+bool SDCard::Deinitialize()
+{
     if (__sd0_fd >= 0)
         IOS_Close(__sd0_fd);
 
@@ -565,7 +567,8 @@ bool SDCard::Deinitialize() {
     return true;
 }
 
-bool SDCard::Open() {
+bool SDCard::Open()
+{
     const s32 ret = IOS_Open(_sd0_fs, 1);
     if (ret >= 0) {
         __sd0_fd = ret;
@@ -574,7 +577,8 @@ bool SDCard::Open() {
     return false;
 }
 
-bool SDCard::Startup() {
+bool SDCard::Startup()
+{
     if (__sdio_initialized == 1)
         return true;
 
@@ -586,7 +590,8 @@ bool SDCard::Startup() {
     return true;
 }
 
-bool SDCard::Shutdown() {
+bool SDCard::Shutdown()
+{
     if (__sd0_initialized == 0)
         return false;
 
@@ -596,7 +601,8 @@ bool SDCard::Shutdown() {
     return true;
 }
 
-bool SDCard::ReadSectors(sec_t sector, sec_t numSectors, void* buffer) {
+bool SDCard::ReadSectors(sec_t sector, sec_t numSectors, void* buffer)
+{
     s32 ret;
     u8* ptr;
     sec_t blk_off;
@@ -646,7 +652,8 @@ bool SDCard::ReadSectors(sec_t sector, sec_t numSectors, void* buffer) {
     return (ret >= 0);
 }
 
-bool SDCard::WriteSectors(sec_t sector, sec_t numSectors, const void* buffer) {
+bool SDCard::WriteSectors(sec_t sector, sec_t numSectors, const void* buffer)
+{
     s32 ret;
     u8* ptr;
     u32 blk_off;
@@ -698,7 +705,8 @@ bool SDCard::WriteSectors(sec_t sector, sec_t numSectors, const void* buffer) {
 
 bool SDCard::ClearStatus() { return true; }
 
-bool SDCard::IsInserted() {
+bool SDCard::IsInserted()
+{
     return ((__sdio_getstatus() & SDIO_STATUS_CARD_INSERTED) ==
             SDIO_STATUS_CARD_INSERTED);
 }

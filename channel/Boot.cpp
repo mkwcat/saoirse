@@ -1,8 +1,8 @@
-#include "AppPayload.hpp"
 #include "Boot.hpp"
+#include "AppPayload.hpp"
 #include "dvd.h"
-#include <util.h>
 #include "irse.h"
+#include <util.h>
 
 #include <algorithm>
 #include <array>
@@ -31,11 +31,7 @@ static void DebugPause() {
 static void DebugPause() {}
 #endif
 
-enum class CachePolicy {
-    None,
-    InvalidateDC,
-    FlushDC
-};
+enum class CachePolicy { None, InvalidateDC, FlushDC };
 
 static void EnforceCachePolicy(void* dst, u32 len, CachePolicy policy)
 {
@@ -55,8 +51,8 @@ static void UnencryptedRead(void* dst, u32 len, u32 ofs, CachePolicy invalidate)
     const auto result = cmd.cmd()->syncReply();
 
     if (result != DiErr::OK) {
-        irse::Log(LogS::Loader, LogL::ERROR,
-            "Failed to execute read: %s", DVDLow::PrintErr(result));
+        irse::Log(LogS::Loader, LogL::ERROR, "Failed to execute read: %s",
+                  DVDLow::PrintErr(result));
         return;
     }
 
@@ -72,15 +68,15 @@ static void EncryptedRead(void* dst, u32 len, u32 ofs, CachePolicy invalidate)
 
     if (result != DiErr::OK) {
         irse::Log(LogS::Loader, LogL::ERROR,
-            "Failed to execute encrypted read");
+                  "Failed to execute encrypted read");
         return;
     }
 
     EnforceCachePolicy(dst, len, invalidate);
 }
 
-
-void OpenPartition(s32 ofs, ES::TMDFixed<512>* meta) {
+void OpenPartition(s32 ofs, ES::TMDFixed<512>* meta)
+{
     DVD::UniqueCommand cmd;
     assert(cmd.cmd() != nullptr);
     DVDLow::OpenPartitionAsync(*cmd.cmd(), ofs, meta);
@@ -88,16 +84,18 @@ void OpenPartition(s32 ofs, ES::TMDFixed<512>* meta) {
 
     if (result != DiErr::OK) {
         irse::Log(LogS::Loader, LogL::ERROR, "Failed to open partition: %s",
-            DVDLow::PrintErr(result));
+                  DVDLow::PrintErr(result));
         abort();
     }
 }
 
-class PayloadManager {
+class PayloadManager
+{
 public:
     PayloadManager(const ApploaderInfo& info) : mPayload(info) {}
 
-    void loadSegmnts() {
+    void loadSegmnts()
+    {
         while (true) {
             const std::optional<AppPayload::CopyCommand> copy_cmd =
                 mPayload.popCopyCommand();
@@ -105,7 +103,8 @@ public:
                 break;
 
             EncryptedRead(copy_cmd->dest, copy_cmd->length,
-                round_down(copy_cmd->offset, 4), CachePolicy::FlushDC);
+                          round_down(copy_cmd->offset, 4),
+                          CachePolicy::FlushDC);
         }
     }
 
@@ -123,7 +122,6 @@ EntryPoint Apploader::load(
     dumpAppInfo(app_info);
     DebugPause();
 
-    
     // XXX Partition must be open
     PayloadManager payload(app_info);
     DebugPause();
@@ -138,18 +136,18 @@ EntryPoint Apploader::load(
 void Apploader::openBootPartition(ES::TMDFixed<512>* outMeta)
 {
     const Volume main_volume = readVolumes()[0];
-    
+
     const auto partitions = readPartitions(main_volume);
     DebugPause();
-    const Partition* boot_partition
-        = findBootPartition(main_volume, partitions);
+    const Partition* boot_partition =
+        findBootPartition(main_volume, partitions);
     DebugPause();
     if (boot_partition == nullptr) {
         irse::Log(LogS::Loader, LogL::ERROR, "Failed to find boot partition");
         abort();
     }
-    irse::Log(LogS::Loader, LogL::INFO,
-        "Boot partition: %p", reinterpret_cast<const void*>(boot_partition));
+    irse::Log(LogS::Loader, LogL::INFO, "Boot partition: %p",
+              reinterpret_cast<const void*>(boot_partition));
 
     openPartition(*boot_partition, outMeta);
 }
@@ -159,14 +157,12 @@ void Apploader::dumpAppInfo(const ApploaderInfo& app_info)
     auto mem_dump = [](std::span<u32> mem) {
         irse::Log(LogS::Loader, LogL::INFO, "MEMORY DUMP");
         for (std::size_t i = 0; i < mem.size(); i += 4) {
-            irse::Log(LogS::Loader, LogL::INFO,
-                "%p: %08X %08X %08X %08X",
-                reinterpret_cast<void*>(&mem[i]),
-                mem[i], mem[i + 1],
-                mem[i + 2], mem[i + 3]);
+            irse::Log(LogS::Loader, LogL::INFO, "%p: %08X %08X %08X %08X",
+                      reinterpret_cast<void*>(&mem[i]), mem[i], mem[i + 1],
+                      mem[i + 2], mem[i + 3]);
         }
     };
-    mem_dump({ (u32*)&app_info, 32 });
+    mem_dump({(u32*)&app_info, 32});
 }
 
 ApploaderInfo Apploader::readAppInfo()
@@ -175,12 +171,13 @@ ApploaderInfo Apploader::readAppInfo()
 
     irse::Log(LogS::Loader, LogL::INFO, "Reading apploader info..");
     EncryptedRead(&app_info, sizeof(app_info), 0x2440 / 4,
-        CachePolicy::InvalidateDC);
+                  CachePolicy::InvalidateDC);
     DebugPause();
     return app_info;
 }
 
-void Apploader::openPartition(const Partition& boot_partition, ES::TMDFixed<512>* outMeta)
+void Apploader::openPartition(const Partition& boot_partition,
+                              ES::TMDFixed<512>* outMeta)
 {
     irse::Log(LogS::Loader, LogL::INFO, "Reading boot partition..");
     OpenPartition(boot_partition.offset, outMeta);
@@ -188,11 +185,11 @@ void Apploader::openPartition(const Partition& boot_partition, ES::TMDFixed<512>
 
 const Partition*
 Apploader::findBootPartition(const Volume& main_volume,
-    const std::array<Partition, 4>& partitions)
+                             const std::array<Partition, 4>& partitions)
 {
     for (const auto& part : partitions) {
-        irse::Log(LogS::Loader, LogL::INFO,
-            "| Partition: %08X %08X", part.offset, part.type);
+        irse::Log(LogS::Loader, LogL::INFO, "| Partition: %08X %08X",
+                  part.offset, part.type);
     }
 
     if (main_volume.num_boot_info > partitions.size()) {
@@ -209,24 +206,24 @@ Apploader::findBootPartition(const Volume& main_volume,
         return nullptr;
     }
 
-    irse::Log(LogS::Loader, LogL::INFO,
-        "Partition: %08X %08X", found_it->offset, found_it->type);
+    irse::Log(LogS::Loader, LogL::INFO, "Partition: %08X %08X",
+              found_it->offset, found_it->type);
     return &*found_it;
 }
 
 std::array<Partition, 4> Apploader::readPartitions(const Volume& volume)
 {
     irse::Log(LogS::Loader, LogL::INFO,
-        "Reading partition headers offset: %i..",
-        static_cast<s32>(volume.ofs_partition_info));
+              "Reading partition headers offset: %i..",
+              static_cast<s32>(volume.ofs_partition_info));
 
     std::array<Partition, 4> partitions ATTRIBUTE_ALIGN(32);
 
     memset(&partitions, 'F', sizeof(partitions));
 
     UnencryptedRead(partitions.data(), sizeof(partitions),
-        volume.ofs_partition_info, CachePolicy::InvalidateDC);
-    
+                    volume.ofs_partition_info, CachePolicy::InvalidateDC);
+
     return partitions;
 }
 
@@ -237,10 +234,10 @@ std::array<Volume, 4> Apploader::readVolumes()
 
     memset(&volumes, 0, sizeof(volumes));
     UnencryptedRead(volumes.data(), sizeof(volumes), 0x00010000,
-        CachePolicy::InvalidateDC);
+                    CachePolicy::InvalidateDC);
     for (auto& v : volumes) {
-        irse::Log(LogS::Loader, LogL::INFO,
-            "| Volume %u %u", v.num_boot_info, v.ofs_partition_info);
+        irse::Log(LogS::Loader, LogL::INFO, "| Volume %u %u", v.num_boot_info,
+                  v.ofs_partition_info);
     }
 
     return volumes;

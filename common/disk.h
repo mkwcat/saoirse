@@ -5,6 +5,8 @@ extern FATFS fatfs;
 
 namespace FSServ
 {
+
 bool MountSDCard();
 bool UnmountSDCard();
+
 }

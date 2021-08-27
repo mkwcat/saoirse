@@ -1,37 +1,32 @@
 #include "IOSBoot.hpp"
 
 #include <new>
+#include <ogc/cache.h>
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
-#include <ogc/cache.h>
 
-template<class T>
-constexpr T sramMirrToReal(T address) {
+template <class T> constexpr T sramMirrToReal(T address)
+{
     return reinterpret_cast<T>(reinterpret_cast<u32>(address) - 0xF2B00000);
 }
 
-constexpr u32 syscall(u32 id) {
-    return 0xE6000010 | id << 5;
-}
-
+constexpr u32 syscall(u32 id) { return 0xE6000010 | id << 5; }
 
 constexpr u32 VFILE_ADDR = 0x91000000;
 constexpr u32 VFILE_SIZE = 0x100000;
 
-template<u32 TSize>
-struct VFile
-{
+template <u32 TSize> struct VFile {
     static constexpr u32 MAGIC = 0x46494C45; /* FILE */
 
-    VFile(const void* data, u32 len)
-        : m_magic(MAGIC),
-          m_length(len),
-          m_pos(0)
+    VFile(const void* data, u32 len) : m_magic(MAGIC), m_length(len), m_pos(0)
     {
         ASSERT(len <= TSize);
         ASSERT(len >= 0x34);
-        ASSERT(!memcmp(data, "\x7F" "ELF", 4));
+        ASSERT(!memcmp(data,
+                       "\x7F"
+                       "ELF",
+                       4));
         memcpy(m_data, data, len);
         m_data[7] = 0x61;
         m_data[8] = 1;
@@ -45,9 +40,9 @@ struct VFile
     u8 m_data[TSize];
 };
 
-/* 
+/*
  * Performs an IOS exploit and branches to the entrypoint in system mode.
- * 
+ *
  * Exploit summary:
  * - IOS does not check validation of vectors with length 0.
  * - All memory regions mapped as readable are executable (ARMv5 has no
@@ -55,10 +50,10 @@ struct VFile
  * - NULL/0 points to the beginning of MEM1.
  * - The /dev/sha resource manager, part of IOSC, runs in system mode.
  * - It's obvious basically none of the code was audited at all.
- * 
+ *
  * IOCTL 0 (SHA1_Init) writes to the context vector (1) without checking the
  * length at all. Two of the 32-bit values it initializes are zero.
- * 
+ *
  * Common approach: Point the context vector to the LR on the stack and then
  * take control after return.
  * A much more stable approach taken here: Overwrite the PC of the idle thread,
@@ -70,7 +65,7 @@ s32 IOSBoot::Entry(u32 entrypoint)
     IOS::ResourceCtrl<u32> sha("/dev/sha");
     if (sha.fd() < 0)
         return sha.fd();
-    
+
     irse::Log(LogS::Core, LogL::INFO, "Exploit: Setting up MEM1");
     u32* mem1 = reinterpret_cast<u32*>(MEM1_BASE);
     mem1[0] = 0x4903468D; // ldr r1, =0x10100000; mov sp, r1;
@@ -81,7 +76,7 @@ s32 IOSBoot::Entry(u32 entrypoint)
     mem1[4] = 0x10100000; // temporary stack
     mem1[5] = entrypoint;
     mem1[6] = 0xFFFF0014; // reserved handler
-    
+
     IOS::IOVector<1, 2> vec;
     vec.in[0].data = NULL;
     vec.in[0].len = 0;
@@ -135,8 +130,8 @@ IOSBoot::Log::Log()
         }
     }
     if (this->logRM.fd() < 0) {
-        irse::Log(LogS::Core, LogL::ERROR,
-            "/dev/stdout open error: %d", this->logRM.fd());
+        irse::Log(LogS::Core, LogL::ERROR, "/dev/stdout open error: %d",
+                  this->logRM.fd());
         return;
     }
     this->restartEvent();

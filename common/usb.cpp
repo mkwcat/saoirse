@@ -12,6 +12,7 @@ s32 USB::ctrlMsg(s32 devId, u8 requestType, u8 request, u16 value, u16 index,
     if (!length && data)
         return IOSErr::Invalid;
 
+    // clang-format off
     Input msg ATTRIBUTE_ALIGN(32) = {
         .fd = devId,
         .heapBuffers = 0,
@@ -24,6 +25,7 @@ s32 USB::ctrlMsg(s32 devId, u8 requestType, u8 request, u16 value, u16 index,
             .data = data
         }
     };
+    // clang-format on
 
     if (requestType & CtrlType::Dir_Device2Host) {
         IOS::IVector<2> vec;
@@ -40,7 +42,6 @@ s32 USB::ctrlMsg(s32 devId, u8 requestType, u8 request, u16 value, u16 index,
         vec.out[0].len = length;
         return ven.ioctlv(USBv5Ioctl::CtrlTransfer, vec);
     }
-    
 }
 
 s32 USB::intrBulkMsg(s32 devId, USBv5Ioctl ioctl, u8 endpoint, u16 length,
@@ -52,7 +53,7 @@ s32 USB::intrBulkMsg(s32 devId, USBv5Ioctl ioctl, u8 endpoint, u16 length,
         return IOSErr::Invalid;
     if (!length && data)
         return IOSErr::Invalid;
-    
+
     Input msg ATTRIBUTE_ALIGN(32) = {
         .fd = devId,
         .heapBuffers = 0,
@@ -60,17 +61,9 @@ s32 USB::intrBulkMsg(s32 devId, USBv5Ioctl ioctl, u8 endpoint, u16 length,
     };
 
     if (ioctl == USBv5Ioctl::IntrTransfer) {
-        msg.intr = {
-            data = data,
-            length = length,
-            endpoint = endpoint
-        };
+        msg.intr = {data = data, length = length, endpoint = endpoint};
     } else if (ioctl == USBv5Ioctl::BulkTransfer) {
-        msg.intr = {
-            data = data,
-            length = length,
-            endpoint = endpoint
-        };
+        msg.intr = {data = data, length = length, endpoint = endpoint};
     } else {
         return IOSErr::Invalid;
     }
@@ -94,12 +87,7 @@ s32 USB::intrBulkMsg(s32 devId, USBv5Ioctl ioctl, u8 endpoint, u16 length,
 
 s32 USB::clearHalt(s32 devId, u8 endpoint)
 {
-    s32 msg[8] ATTRIBUTE_ALIGN(32) = {
-        devId,
-        0,
-        endpoint,
-        0, 0, 0, 0, 0
-    };
+    s32 msg[8] ATTRIBUTE_ALIGN(32) = {devId, 0, endpoint, 0, 0, 0, 0, 0};
     return ven.ioctl(USBv5Ioctl::CancelEndpoint, reinterpret_cast<void*>(msg),
                      sizeof(msg), nullptr, 0);
 }

@@ -17,7 +17,8 @@ struct Partition {
     u32 type;
 };
 
-class Apploader {
+class Apploader
+{
 public:
     Apploader() = default;
     ~Apploader() = default;
@@ -31,11 +32,11 @@ private:
     static ApploaderInfo readAppInfo();
 
     static void openPartition(const Partition& boot_partition,
-        ES::TMDFixed<512>* outMeta);
+                              ES::TMDFixed<512>* outMeta);
 
     static const Partition*
-        findBootPartition(const Volume& main_volume,
-            const std::array<Partition, 4>& partitions);
+    findBootPartition(const Volume& main_volume,
+                      const std::array<Partition, 4>& partitions);
 
     static void prepareDisc();
     static std::array<Volume, 4> readVolumes();

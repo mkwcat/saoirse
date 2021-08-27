@@ -1,8 +1,8 @@
 #pragma once
 
-#include <types.h>
-#include <os.h>
 #include "irse.h"
+#include <os.h>
+#include <types.h>
 
 namespace IOSBoot
 {
@@ -14,18 +14,21 @@ class Log
 {
 public:
     Log();
-    ~Log() {
+    ~Log()
+    {
         reset = true;
         logRM.close();
         // meh
-        while (reset) { }
+        while (reset) {
+        }
     }
 
 protected:
     static s32 Callback(s32, void*);
-    void restartEvent() {
+    void restartEvent()
+    {
         logRM.ioctlAsync(0, NULL, 0, this->logBuffer, sizeof(this->logBuffer),
-            &Callback, reinterpret_cast<void*>(this));
+                         &Callback, reinterpret_cast<void*>(this));
     }
 
     bool reset = false;
@@ -39,4 +42,4 @@ void ReadPrintHook();
 void testIPCRightsPatch();
 #endif
 
-}
+} // namespace IOSBoot

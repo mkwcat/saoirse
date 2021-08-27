@@ -2,8 +2,8 @@
 
 #include "GlobalsConfig.hpp"
 #include <ogc/cache.h>
-#include <ogc/video.h>
 #include <ogc/gx_struct.h>
+#include <ogc/video.h>
 #include <stdint.h>
 #include <string.h>
 

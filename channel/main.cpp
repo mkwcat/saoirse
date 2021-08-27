@@ -4,17 +4,17 @@
 #include <sdcard.h>
 #include <util.h>
 LIBOGC_SUCKS_BEGIN
-#include <wiiuse/wpad.h>
 #include <ogc/machine/processor.h>
+#include <wiiuse/wpad.h>
 LIBOGC_SUCKS_END
 
-#include <ff.h>
 #include <disk.h>
+#include <ff.h>
 
-#include <stdio.h>
 #include <cstring>
-#include <unistd.h>
 #include <mutex>
+#include <stdio.h>
+#include <unistd.h>
 
 #include "Boot.hpp"
 #include "GlobalsConfig.hpp"
@@ -27,14 +27,14 @@ using namespace irse;
 Queue<Stage> irse::events;
 
 static struct {
-    void *xfb = NULL;
-    GXRModeObj *rmode = NULL;
+    void* xfb = NULL;
+    GXRModeObj* rmode = NULL;
 } display;
 
 static constexpr std::array<const char*, 7> logSources = {
-    "Core", "DVD", "Loader", "Payload", "IOS", "FST", "DiskIO" };
+    "Core", "DVD", "Loader", "Payload", "IOS", "FST", "DiskIO"};
 static constexpr std::array<const char*, 3> logColors = {
-    "\x1b[37;1m", "\x1b[33;1m", "\x1b[31;1m" };
+    "\x1b[37;1m", "\x1b[33;1m", "\x1b[31;1m"};
 static std::array<char, 256> logBuffer;
 static Mutex logMutex(-1);
 static u32 logMask;
@@ -66,23 +66,23 @@ void irse::VLog(LogS src, LogL level, const char* format, va_list args)
     }
     {
         std::unique_lock<Mutex> lock(logMutex);
-	    vsnprintf(&logBuffer[0], 256, format, args);
+        vsnprintf(&logBuffer[0], 256, format, args);
 
         // TODO: Skip newline at the end of format string
-        printf("%s[%s] %s\n\x1b[37;1m",
-            logColors[slvl], logSources[schan], logBuffer.data());
+        printf("%s[%s] %s\n\x1b[37;1m", logColors[slvl], logSources[schan],
+               logBuffer.data());
     }
 }
 
 void irse::Log(LogS src, LogL level, const char* format, ...)
 {
     va_list args;
-	va_start(args, format);
+    va_start(args, format);
     VLog(src, level, format, args);
     va_end(args);
 }
 
-/* 
+/*
  * Checks to see if we have any events, like shutdown commands.
  * Returns to the previous stage if none, after waiting for some amount
  * of time.
@@ -107,8 +107,8 @@ static Stage stInit([[maybe_unused]] Stage from)
     VIDEO_Init();
     display.rmode = VIDEO_GetPreferredMode(NULL);
     display.xfb = MEM_K0_TO_K1(SYS_AllocateFramebuffer(display.rmode));
-    console_init(display.xfb, 20, 20,
-                 display.rmode->fbWidth, display.rmode->xfbHeight,
+    console_init(display.xfb, 20, 20, display.rmode->fbWidth,
+                 display.rmode->xfbHeight,
                  display.rmode->fbWidth * VI_DISPLAY_PIX_SZ);
     VIDEO_Configure(display.rmode);
     VIDEO_SetNextFramebuffer(display.xfb);
@@ -168,8 +168,7 @@ static Stage stReturnToMenu([[maybe_unused]] Stage from)
     return Stage::ReturnToMenu;
 }
 
-static inline
-bool startupDrive()
+static inline bool startupDrive()
 {
     /* If ReadDiskID succeeds here, that means the drive is already started */
     DiErr ret = DVD::ReadDiskID(reinterpret_cast<DVD::DiskID*>(MEM1_BASE));
@@ -198,7 +197,7 @@ static Stage stDiscInsert([[maybe_unused]] Stage from)
     DiErr ret = DVD::ReadDiskID(reinterpret_cast<DVD::DiskID*>(MEM1_BASE));
     if (ret != DiErr::OK) {
         irse::Log(LogS::Core, LogL::ERROR, "DVD::ReadDiskID returned %s",
-            DVDLow::PrintErr(ret));
+                  DVDLow::PrintErr(ret));
         return Stage::DiscError;
     }
 
@@ -259,17 +258,16 @@ static DIP::DVDPatch fstTest()
     FRESULT fret = f_open(&fil, "0:/beginner_course.szs", FA_READ);
     printf("f_open result: %d\n", fret);
     if (fret != FR_OK) {
-        sleep(2); abort();
+        sleep(2);
+        abort();
     }
 
-    DIP::DVDPatch patch = {
-        .disc_offset = 0x80000000,
-        .disc_length = static_cast<u32>(f_size(&fil)),
-        .start_cluster = fil.obj.sclust,
-        .cur_cluster = fil.clust,
-        .file_offset = 0,
-        .drv = 0
-    };
+    DIP::DVDPatch patch = {.disc_offset = 0x80000000,
+                           .disc_length = static_cast<u32>(f_size(&fil)),
+                           .start_cluster = fil.obj.sclust,
+                           .cur_cluster = fil.clust,
+                           .file_offset = 0,
+                           .drv = 0};
 
     assert(FSServ::UnmountSDCard());
 
@@ -297,7 +295,7 @@ static DIP::DVDPatch fstTest()
         builder.build(root);
         builder.write(reinterpret_cast<void*>(fst));
     }
-    
+
     return patch;
 }
 
@@ -310,8 +308,8 @@ static void patchMkwDIPath()
 
 static Stage stReadDisc([[maybe_unused]] Stage from)
 {
-    irse::Log(LogS::Core, LogL::INFO,
-        "DiskID: %.6s", reinterpret_cast<char*>(MEM1_BASE));
+    irse::Log(LogS::Core, LogL::INFO, "DiskID: %.6s",
+              reinterpret_cast<char*>(MEM1_BASE));
 
     static Apploader loader;
     ES::TMDFixed<512> meta ATTRIBUTE_ALIGN(32);
@@ -325,8 +323,8 @@ static Stage stReadDisc([[maybe_unused]] Stage from)
     DIP::DVDPatch patch = fstTest();
 
     /* Cast as s32 removes high word the in title ID */
-    irse::Log(LogS::Core, LogL::INFO,
-        "Launching IOS%d", static_cast<s32>(meta.sysVersion));
+    irse::Log(LogS::Core, LogL::INFO, "Launching IOS%d",
+              static_cast<s32>(meta.sysVersion));
     IOS_ReloadIOS(static_cast<s32>(meta.sysVersion));
 
     irse::Log(LogS::Core, LogL::INFO, "Starting up IOS...");
@@ -342,7 +340,7 @@ static Stage stReadDisc([[maybe_unused]] Stage from)
     loader.openBootPartition(&meta);
 
     DVDProxy::ApplyPatches(&patch, 1);
-    //DVDProxy::StartGame();
+    // DVDProxy::StartGame();
 
     DVD::Deinit();
 
@@ -350,7 +348,7 @@ static Stage stReadDisc([[maybe_unused]] Stage from)
 
     SetupGlobals(0);
     patchMkwDIPath();
-    
+
     // TODO: Proper shutdown
     SYS_ResetSystem(SYS_SHUTDOWN, 0, 0);
     IRQ_Disable();
@@ -379,7 +377,10 @@ static s32 Loop([[maybe_unused]] void* arg)
 
     while (1) {
         switch (stage) {
-#define STAGE_CASE(name) case Stage::name: next =  st ## name(prev); break
+#define STAGE_CASE(name)                                                       \
+    case Stage::name:                                                          \
+        next = st##name(prev);                                                 \
+        break
             STAGE_CASE(Default);
             STAGE_CASE(Init);
             STAGE_CASE(Wait);

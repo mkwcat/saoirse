@@ -1,12 +1,12 @@
 #include "dvd.h"
-#include "irse.h"
-#include <os.h>
 #include "hollywood.h"
-#include <cstdio>
+#include "irse.h"
 #include <array>
-#include <utility>
-#include <unistd.h>
+#include <cstdio>
+#include <os.h>
 #include <stdlib.h>
+#include <unistd.h>
+#include <utility>
 
 static IOS::ResourceCtrl<DiIoctl> di(-1);
 static IOS::File cacheFile(-1);
@@ -15,19 +15,19 @@ static bool initialized = false;
 static DVDLow::DVDCommand sDvdBlocks[8];
 static Queue<DVDLow::DVDCommand*>* dataQueue;
 
-constexpr const char* DVD_CACHE_FILE = "/title/00000001/00000002/data/cache.dat";
+constexpr const char* DVD_CACHE_FILE =
+    "/title/00000001/00000002/data/cache.dat";
 constexpr std::size_t DVD_CACHE_SIZE = 0xB00000;
 constexpr std::ptrdiff_t DVD_CACHE_DISKID_OFFS = 0x20;
 
-enum EStatus {
-    STATUS_NOTINSERTED = 1,
-    STATUS_INSERTED = 2
-};
+enum EStatus { STATUS_NOTINSERTED = 1, STATUS_INSERTED = 2 };
 
 const char* DVDLow::PrintErr(DiErr err)
 {
-#define DI_ERR_STR(error) case DiErr::error: return #error
-    switch(err) {
+#define DI_ERR_STR(error)                                                      \
+    case DiErr::error:                                                         \
+        return #error
+    switch (err) {
         DI_ERR_STR(FileNotFound);
         DI_ERR_STR(LibError);
         DI_ERR_STR(NoAccess);
@@ -51,10 +51,7 @@ DVDLow::DVDCommand* DVD::GetCommand()
     return block;
 }
 
-void DVD::ReleaseCommand(DVDLow::DVDCommand* block)
-{
-    dataQueue->send(block);
-}
+void DVD::ReleaseCommand(DVDLow::DVDCommand* block) { dataQueue->send(block); }
 
 static s32 DVD_Callback(s32 result, void* usrdata)
 {
@@ -92,8 +89,8 @@ bool DVD::OpenCacheFile()
 {
     IOS::File f(DVD_CACHE_FILE, IOS::Mode::Read);
     if (f.fd() < 0) {
-        irse::Log(LogS::DVD, LogL::ERROR,
-            "Failed to open cache.dat: %d", f.fd());
+        irse::Log(LogS::DVD, LogL::ERROR, "Failed to open cache.dat: %d",
+                  f.fd());
         return false;
     }
     if (f.size() != DVD_CACHE_SIZE) {
@@ -113,7 +110,7 @@ DiErr DVD::ResetDrive(bool spinup)
     const DiErr ret = block.cmd()->syncReply();
     if (ret != DiErr::OK)
         irse::Log(LogS::DVD, LogL::WARN, "Failed to reset drive: %s\n",
-            DVDLow::PrintErr(ret));
+                  DVDLow::PrintErr(ret));
     return ret;
 }
 
@@ -138,25 +135,24 @@ DiErr DVD::ReadDiskID(DiskID* out)
 
 DiErr DVD::ReadCachedDiskID(DiskID* out)
 {
-    if (const s32 ret = cacheFile.seek(DVD_CACHE_DISKID_OFFS, SEEK_SET); 
+    if (const s32 ret = cacheFile.seek(DVD_CACHE_DISKID_OFFS, SEEK_SET);
         ret != DVD_CACHE_DISKID_OFFS)
         return DiErr::DriveError;
 
     if (const s32 ret = cacheFile.read(reinterpret_cast<void*>(out), 0x20);
         ret != 0x20)
         return DiErr::DriveError;
-    
+
     return DiErr::OK;
 }
-
 
 void DVDLow::ResetAsync(DVDCommand& block, bool spinup)
 {
     block.input.command = DiIoctl::Reset;
     block.input.args[0] = static_cast<u32>(spinup);
 
-    block.sendIoctl(DiIoctl::Reset,
-        reinterpret_cast<void*>(block.output_buf), sizeof(block.output_buf));
+    block.sendIoctl(DiIoctl::Reset, reinterpret_cast<void*>(block.output_buf),
+                    sizeof(block.output_buf));
 }
 
 void DVDLow::ReadDiskIDAsync(DVDCommand& block, void* data)
@@ -165,7 +161,8 @@ void DVDLow::ReadDiskIDAsync(DVDCommand& block, void* data)
     block.sendIoctl(DiIoctl::ReadDiskID, data, 0x20);
 }
 
-void DVDLow::OpenPartitionAsync(DVDCommand& block, u32 offset, ES::TMDFixed<512>* meta)
+void DVDLow::OpenPartitionAsync(DVDCommand& block, u32 offset,
+                                ES::TMDFixed<512>* meta)
 {
     block.input.command = DiIoctl::OpenPartition;
     block.input.args[0] = offset;
@@ -186,8 +183,8 @@ void DVDLow::OpenPartitionAsync(DVDCommand& block, u32 offset, ES::TMDFixed<512>
     block.sendIoctlv(DiIoctl::OpenPartition, 3, 2);
 }
 
-void DVDLow::UnencryptedReadAsync(
-    DVDCommand& block, void* data, u32 len, u32 offset)
+void DVDLow::UnencryptedReadAsync(DVDCommand& block, void* data, u32 len,
+                                  u32 offset)
 {
     block.input.command = DiIoctl::UnencryptedRead;
     block.input.args[0] = len;
@@ -196,8 +193,8 @@ void DVDLow::UnencryptedReadAsync(
     block.sendIoctl(DiIoctl::UnencryptedRead, data, len);
 }
 
-void DVDLow::EncryptedReadAsync(
-    DVDCommand& block, void* data, u32 len, u32 offset)
+void DVDLow::EncryptedReadAsync(DVDCommand& block, void* data, u32 len,
+                                u32 offset)
 {
     block.input.command = DiIoctl::EncryptedRead;
     block.input.args[0] = len;
@@ -214,8 +211,8 @@ void DVDLow::GetCoverStatusAsync(DVDCommand& block, u32* result)
         return;
     }
 
-    block.sendIoctl(DiIoctl::GetCoverStatus,
-        reinterpret_cast<void*>(result), sizeof(u32));
+    block.sendIoctl(DiIoctl::GetCoverStatus, reinterpret_cast<void*>(result),
+                    sizeof(u32));
 }
 
 void DVDLow::WaitForCoverCloseAsync(DVDCommand& block)
@@ -225,24 +222,22 @@ void DVDLow::WaitForCoverCloseAsync(DVDCommand& block)
     block.sendIoctl(DiIoctl::WaitForCoverClose, nullptr, 0);
 }
 
-void DVDLow::DVDCommand::sendIoctl(
-    DiIoctl cmd, void* out, u32 outLen)
+void DVDLow::DVDCommand::sendIoctl(DiIoctl cmd, void* out, u32 outLen)
 {
     if (!initialized) {
         this->reply_queue.send(DiErr::LibError);
         return;
     }
 
-    const s32 ret = di.ioctlAsync(cmd,
-        this->input_buf, sizeof(this->input_buf),
-        out, outLen, &DVD_Callback, reinterpret_cast<void*>(this));
-    
+    const s32 ret =
+        di.ioctlAsync(cmd, this->input_buf, sizeof(this->input_buf), out,
+                      outLen, &DVD_Callback, reinterpret_cast<void*>(this));
+
     if (ret != IOSErr::OK)
         this->reply_queue.send(static_cast<DiErr>(ret));
 }
 
-void DVDLow::DVDCommand::sendIoctlv(
-    DiIoctl cmd, u32 inputCnt, u32 outputCnt)
+void DVDLow::DVDCommand::sendIoctlv(DiIoctl cmd, u32 inputCnt, u32 outputCnt)
 {
     if (!initialized) {
         this->reply_queue.send(DiErr::LibError);
@@ -253,9 +248,10 @@ void DVDLow::DVDCommand::sendIoctlv(
     this->vec[0].data = this->input_buf;
     this->vec[0].len = sizeof(this->input_buf);
 
-    const s32 ret = di.ioctlvAsync(cmd, inputCnt, outputCnt, this->vec,
-        &DVD_Callback, reinterpret_cast<void*>(this));
-    
+    const s32 ret =
+        di.ioctlvAsync(cmd, inputCnt, outputCnt, this->vec, &DVD_Callback,
+                       reinterpret_cast<void*>(this));
+
     if (ret != IOSErr::OK)
         this->reply_queue.send(static_cast<DiErr>(ret));
 }
@@ -263,19 +259,19 @@ void DVDLow::DVDCommand::sendIoctlv(
 DiErr DVDLow::DVDCommand::syncReplyAssertRet(DiErr expected)
 {
     const DiErr ret = this->syncReply();
-    
+
     if (ret != expected) {
         irse::Log(LogS::DVD, LogL::ERROR,
-            "SyncReplyAssertRet: ret == %s, expected %s",
-            DVDLow::PrintErr(ret), DVDLow::PrintErr(expected));
+                  "SyncReplyAssertRet: ret == %s, expected %s",
+                  DVDLow::PrintErr(ret), DVDLow::PrintErr(expected));
         abort();
     }
-    
+
     return ret;
 }
 
 s32 DVDProxy::ApplyPatches(DIP::DVDPatch* patches, u32 patchCount)
 {
-    return di.ioctl(DiIoctl::Proxy_PatchDVD,
-        patches, patchCount * sizeof(DIP::DVDPatch), nullptr, 0);
+    return di.ioctl(DiIoctl::Proxy_PatchDVD, patches,
+                    patchCount * sizeof(DIP::DVDPatch), nullptr, 0);
 }

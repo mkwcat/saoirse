@@ -1,14 +1,11 @@
 #pragma once
 
-#include <util.h>
-#include <stdlib.h>
-#include <stdarg.h>
 #include <os.h>
+#include <stdarg.h>
+#include <stdlib.h>
+#include <util.h>
 
-enum class LogS {
-    Core, DVD, Loader, Payload, IOS,
-    FST, DiskIO
-};
+enum class LogS { Core, DVD, Loader, Payload, IOS, FST, DiskIO };
 enum class LogL { INFO, WARN, ERROR };
 
 namespace irse
@@ -20,14 +17,20 @@ void VLog(LogS src, LogL level, const char* format, va_list args);
 void Log(LogS src, LogL level, const char* format, ...);
 
 enum class Stage {
-    Default, Init, Wait, ReturnToMenu,
+    Default,
+    Init,
+    Wait,
+    ReturnToMenu,
 
-    DiscInsert, DiscEject, DiscError, ReadDisc,
+    DiscInsert,
+    DiscEject,
+    DiscError,
+    ReadDisc,
 
-    SDInsert, SDEject
+    SDInsert,
+    SDEject
 };
 
 extern Queue<Stage> events;
 
-}
-
+} // namespace irse

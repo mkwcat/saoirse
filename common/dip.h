@@ -5,8 +5,7 @@
 namespace DIP
 {
 
-struct DVDPatch
-{
+struct DVDPatch {
     u32 disc_offset;
     u32 disc_length;
 
@@ -17,4 +16,4 @@ struct DVDPatch
     u32 drv;
 };
 
-}
+} // namespace DIP

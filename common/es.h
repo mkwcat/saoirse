@@ -4,14 +4,9 @@
 namespace ES
 {
 
-enum class SigType : u32
-{
-   RSA_2048 = 0x00010001,
-   RSA_4096 = 0x00010000
-};
+enum class SigType : u32 { RSA_2048 = 0x00010001, RSA_4096 = 0x00010000 };
 
-struct TMDContent
-{
+struct TMDContent {
     u32 cid;
     u16 index;
     u16 type;
@@ -19,8 +14,7 @@ struct TMDContent
     u8 hash[0x14];
 };
 
-struct TMDHeader
-{
+struct TMDHeader {
     SigType sigType;
     u8 sigBlock[256];
     u8 fill1[60];
@@ -46,15 +40,12 @@ struct TMDHeader
     u16 fill2;
 } __attribute__((packed));
 
-struct TMD : TMDHeader
-{
+struct TMD : TMDHeader {
     TMDContent* contents() { return reinterpret_cast<TMDContent*>(this + 1); }
 };
 
-template<u16 TNumContents>
-struct TMDFixed : TMD 
-{
+template <u16 TNumContents> struct TMDFixed : TMD {
     TMDContent contents[TNumContents];
 };
 
-}
+} // namespace ES

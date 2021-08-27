@@ -1,7 +1,7 @@
 #pragma once
+#include <new>
 #include <os.h>
 #include <types.h>
-#include <new>
 
 class USB
 {
@@ -29,16 +29,14 @@ public:
 
     static constexpr u32 MaxDevices = 32;
 
-    struct DeviceEntry
-    {
+    struct DeviceEntry {
         s32 devId;
         u16 vid;
         u16 pid;
         u32 token;
     };
 
-    struct Input
-    {
+    struct Input {
         s32 fd;
         u32 heapBuffers;
         union {
@@ -80,8 +78,7 @@ public:
         };
     };
 
-    enum class USBv5Ioctl
-    {
+    enum class USBv5Ioctl {
         GetVersion = 0,
         GetDeviceChange = 1,
         Shutdown = 2,
@@ -99,36 +96,43 @@ public:
         BulkTransfer = 21
     };
 
-    USB(s32 id) {
+    USB(s32 id)
+    {
         if (id >= 0)
             new (&ven) IOS::ResourceCtrl<USBv5Ioctl>("/dev/usb/ven", id);
     }
 
     bool isOpen() const { return ven.fd() >= 0; }
 
-    s32 readIntrMsg(s32 devId, u8 endpoint, u16 length, void* data) {
-        return intrBulkMsg(devId, USBv5Ioctl::IntrTransfer,
-                           endpoint, length, data);
+    s32 readIntrMsg(s32 devId, u8 endpoint, u16 length, void* data)
+    {
+        return intrBulkMsg(devId, USBv5Ioctl::IntrTransfer, endpoint, length,
+                           data);
     }
-    s32 readBlkMsg(s32 devId, u8 endpoint, u16 length, void* data) {
-        return intrBulkMsg(devId, USBv5Ioctl::BulkTransfer,
-                           endpoint, length, data);
+    s32 readBlkMsg(s32 devId, u8 endpoint, u16 length, void* data)
+    {
+        return intrBulkMsg(devId, USBv5Ioctl::BulkTransfer, endpoint, length,
+                           data);
     }
     s32 readCtrlMsg(s32 devId, u8 requestType, u8 request, u16 value, u16 index,
-                    u16 length, void* data) {
+                    u16 length, void* data)
+    {
         return ctrlMsg(devId, requestType, request, value, index, length, data);
     }
 
-    s32 writeIntrMsg(s32 devId, u8 endpoint, u16 length, void* data) {
-        return intrBulkMsg(devId, USBv5Ioctl::IntrTransfer,
-                           endpoint, length, data);
+    s32 writeIntrMsg(s32 devId, u8 endpoint, u16 length, void* data)
+    {
+        return intrBulkMsg(devId, USBv5Ioctl::IntrTransfer, endpoint, length,
+                           data);
     }
-    s32 writeBlkMsg(s32 devId, u8 endpoint, u16 length, void* data) {
-        return intrBulkMsg(devId, USBv5Ioctl::BulkTransfer,
-                           endpoint, length, data);
+    s32 writeBlkMsg(s32 devId, u8 endpoint, u16 length, void* data)
+    {
+        return intrBulkMsg(devId, USBv5Ioctl::BulkTransfer, endpoint, length,
+                           data);
     }
     s32 writeCtrlMsg(s32 devId, u8 requestType, u8 request, u16 value,
-                     u16 index, u16 length, void* data) {
+                     u16 index, u16 length, void* data)
+    {
         return ctrlMsg(devId, requestType, request, value, index, length, data);
     }
 

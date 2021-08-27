@@ -1,12 +1,11 @@
 #pragma once
 
-#include <os.h>
-#include <es.h>
-#include <util.h>
 #include <dip.h>
+#include <es.h>
+#include <os.h>
+#include <util.h>
 
-enum class DiIoctl : u8
-{
+enum class DiIoctl : u8 {
     ReadDiskID = 0x70,
     EncryptedRead = 0x71,
 
@@ -21,8 +20,7 @@ enum class DiIoctl : u8
     Proxy_StartGame = 0x01
 };
 
-enum class DiErr : s32
-{
+enum class DiErr : s32 {
     FileNotFound = -6,
     LibError = -2,
     NoAccess = -1,
@@ -40,13 +38,12 @@ enum class DiErr : s32
 namespace DVDLow
 {
 
-struct DVDCommand
-{
+struct DVDCommand {
     s32 id;
     Queue<DiErr> reply_queue{1};
     IOS::Vector* vec = nullptr;
 
-    union {    
+    union {
         struct {
             DiIoctl command;
             u8 pad[3];
@@ -64,10 +61,15 @@ struct DVDCommand
     void sendIoctlv(DiIoctl cmd, u32 inputCnt, u32 outputCnt);
     DiErr syncReply() { return this->reply_queue.receive(); }
     DiErr syncReplyAssertRet(DiErr expected);
-    void beginIoctlv(u32 inputCnt, u32 outputCnt) {
+    void beginIoctlv(u32 inputCnt, u32 outputCnt)
+    {
         vec = new IOS::Vector[inputCnt * outputCnt];
     }
-    void endIoctlv() { delete vec; vec = nullptr; }
+    void endIoctlv()
+    {
+        delete vec;
+        vec = nullptr;
+    }
 };
 
 const char* PrintErr(DiErr err);
@@ -81,7 +83,7 @@ void EncryptedReadAsync(DVDCommand& block, void* data, u32 len, u32 offset);
 void GetCoverStatusAsync(DVDCommand& block, u32* result);
 void WaitForCoverCloseAsync(DVDCommand& block);
 
-}
+} // namespace DVDLow
 
 namespace DVD
 {
@@ -89,22 +91,18 @@ namespace DVD
 DVDLow::DVDCommand* GetCommand();
 void ReleaseCommand(DVDLow::DVDCommand*);
 
-struct UniqueCommand
-{
-    UniqueCommand() : m_cmd(GetCommand()) { }
+struct UniqueCommand {
+    UniqueCommand() : m_cmd(GetCommand()) {}
     ~UniqueCommand() { ReleaseCommand(m_cmd); }
     UniqueCommand(const UniqueCommand& from) = delete;
-    
-    DVDLow::DVDCommand* cmd() {
-        return m_cmd;
-    }
+
+    DVDLow::DVDCommand* cmd() { return m_cmd; }
 
 protected:
     DVDLow::DVDCommand* const m_cmd;
 };
 
-struct DiskID
-{
+struct DiskID {
     char gameID[4];
     u16 groupID;
     u8 discNum;
@@ -124,7 +122,7 @@ DiErr ReadDiskID(DiskID* out);
 DiErr ReadCachedDiskID(DiskID* out);
 bool IsInserted();
 
-}
+} // namespace DVD
 
 namespace DVDProxy
 {
@@ -132,4 +130,4 @@ namespace DVDProxy
 s32 ApplyPatches(DIP::DVDPatch* patches, u32 patchCount);
 void StartGame();
 
-}
+} // namespace DVDProxy

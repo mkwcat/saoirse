@@ -12,7 +12,8 @@
 #include <cstdio>
 #include <cstring>
 
-namespace EFS {
+namespace EFS
+{
 
 #define EFS_DRIVE "0:/"
 
@@ -24,7 +25,8 @@ static std::array<FIL*, NAND_MAX_FILE_DESCRIPTOR_AMOUNT> spFileDescriptorArray;
  * Arguments   : fd    The file descriptor to check.
  * Returns     : If the file descriptor is valid.
  *---------------------------------------------------------------------------*/
-static bool IsFileDescriptorValid(int fd) {
+static bool IsFileDescriptorValid(int fd)
+{
     if (fd < 0 || fd > static_cast<int>(spFileDescriptorArray.size()))
         return false;
 
@@ -40,7 +42,8 @@ static bool IsFileDescriptorValid(int fd) {
  * Returns     : An available index in the file descriptor array, or -1 if
  *               there is no index available in the file descriptor array.
  *---------------------------------------------------------------------------*/
-static int GetAvailableFileDescriptor() {
+static int GetAvailableFileDescriptor()
+{
     auto it = std::find(spFileDescriptorArray.begin(),
                         spFileDescriptorArray.end(), nullptr);
 
@@ -55,7 +58,8 @@ static int GetAvailableFileDescriptor() {
  * Arguments   : filename    The filename to check.
  * Returns     : If the filename is a valid 8.3 filename.
  *---------------------------------------------------------------------------*/
-static bool IsFilenameDOS83(const char* filename) {
+static bool IsFilenameDOS83(const char* filename)
+{
     const int MIN_83_FILENAME_LENGTH = 1;
     const int MAX_83_FILENAME_LENGTH = 8;
     const int MAX_83_FILENAME_EXTENSION_LENGTH = 3;
@@ -105,7 +109,8 @@ static bool IsFilenameDOS83(const char* filename) {
             filenameLength <= MAX_83_FILENAME_LENGTH);
 }
 
-static s32 ForwardRequest(s32 fd, IOS::Request* req) {
+static s32 ForwardRequest(s32 fd, IOS::Request* req)
+{
     switch (req->cmd) {
     case IOS::Command::Close:
         return IOS_Close(fd);
@@ -124,7 +129,8 @@ static s32 ForwardRequest(s32 fd, IOS::Request* req) {
     }
 }
 
-static s32 FResultToISFSError(FRESULT fret) {
+static s32 FResultToISFSError(FRESULT fret)
+{
     switch (fret) {
     case FR_OK:
         return ISFSError::OK;
@@ -173,7 +179,8 @@ static s32 FResultToISFSError(FRESULT fret) {
  * Handle open request from the filesystem proxy.
  * Returns: File descriptor, or ISFS error code.
  */
-static s32 ReqOpen(const char* path, u32 mode) {
+static s32 ReqOpen(const char* path, u32 mode)
+{
     int fd = GetAvailableFileDescriptor();
     if (fd < 0)
         return ISFSError::MaxOpen;
@@ -233,7 +240,8 @@ static s32 ReqOpen(const char* path, u32 mode) {
  * Close open file descriptor.
  * Returns: 0 for success, or IOS error code.
  */
-static s32 ReqClose(s32 fd) {
+static s32 ReqClose(s32 fd)
+{
     if (!IsFileDescriptorValid(fd))
         return ISFSError::Invalid;
 
@@ -256,7 +264,8 @@ static s32 ReqClose(s32 fd) {
  * Read data from open file descriptor.
  * Returns: Amount read, or ISFS error code.
  */
-static s32 ReqRead(s32 fd, void* data, u32 len) {
+static s32 ReqRead(s32 fd, void* data, u32 len)
+{
     if (!IsFileDescriptorValid(fd))
         return ISFSError::Invalid;
 
@@ -286,7 +295,8 @@ static s32 ReqRead(s32 fd, void* data, u32 len) {
  * Write data to open file descriptor.
  * Returns: Amount wrote, or ISFS error code.
  */
-static s32 ReqWrite(s32 fd, const void* data, u32 len) {
+static s32 ReqWrite(s32 fd, const void* data, u32 len)
+{
     if (!IsFileDescriptorValid(fd))
         return ISFSError::Invalid;
 
@@ -318,51 +328,53 @@ static s32 ReqWrite(s32 fd, const void* data, u32 len) {
  */
 static s32 ReqSeek(s32 fd, s32 where, s32 whence)
 {
-	if (!IsFileDescriptorValid(fd))
-		return ISFSError::Invalid;
+    if (!IsFileDescriptorValid(fd))
+        return ISFSError::Invalid;
 
-	if (whence < NAND_SEEK_SET || whence > NAND_SEEK_END)
-		return ISFSError::Invalid;
-	
-	FIL* fil = spFileDescriptorArray[fd];
-	FSIZE_t offset = f_tell(fil);
-	FSIZE_t endPosition = f_size(fil);
+    if (whence < NAND_SEEK_SET || whence > NAND_SEEK_END)
+        return ISFSError::Invalid;
 
-	switch (whence)
-	{
-		case NAND_SEEK_SET:
-		{
-			offset = 0;
-			break;
-		}
-		case NAND_SEEK_CUR:
-		{
-			break;
-		}
-		case NAND_SEEK_END:
-		{
-			offset = endPosition;
-			break;
-		}
-	}
-	
-	offset += where;
-	if (offset > endPosition)
-		return ISFSError::Invalid;
+    FIL* fil = spFileDescriptorArray[fd];
+    FSIZE_t offset = f_tell(fil);
+    FSIZE_t endPosition = f_size(fil);
 
-	const FRESULT fresult = f_lseek(fil, offset);
-	if (fresult != FR_OK)
-	{
-		peli::Log(LogL::ERROR, "[EFS::ReqSeek] Failed to seek to position 0x%08X in file descriptor %d !", offset, fd);
-		return FResultToISFSError(fresult);
-	}
-	
-	peli::Log(LogL::INFO, "[EFS::ReqSeek] Successfully seeked to position 0x%08X in file descriptor %d !", offset, fd);
-	
-	return ISFSError::OK;
+    switch (whence) {
+    case NAND_SEEK_SET: {
+        offset = 0;
+        break;
+    }
+    case NAND_SEEK_CUR: {
+        break;
+    }
+    case NAND_SEEK_END: {
+        offset = endPosition;
+        break;
+    }
+    }
+
+    offset += where;
+    if (offset > endPosition)
+        return ISFSError::Invalid;
+
+    const FRESULT fresult = f_lseek(fil, offset);
+    if (fresult != FR_OK) {
+        peli::Log(LogL::ERROR,
+                  "[EFS::ReqSeek] Failed to seek to position 0x%08X in file "
+                  "descriptor %d !",
+                  offset, fd);
+        return FResultToISFSError(fresult);
+    }
+
+    peli::Log(LogL::INFO,
+              "[EFS::ReqSeek] Successfully seeked to position 0x%08X in file "
+              "descriptor %d !",
+              offset, fd);
+
+    return ISFSError::OK;
 }
 
-static s32 IPCRequest(IOS::Request* req) {
+static s32 IPCRequest(IOS::Request* req)
+{
     s32 ret = IOSErr::Invalid;
 
     if (req->cmd != IOS::Command::Open && req->fd >= 100) {
@@ -385,10 +397,10 @@ static s32 IPCRequest(IOS::Request* req) {
     case IOS::Command::Write:
         ret = ReqWrite(req->fd, req->write.data, req->write.len);
         break;
-	
-	case IOS::Command::Seek:
-		ret = ReqSeek(req->fd, req->seek.where, req->seek.whence);
-		break;
+
+    case IOS::Command::Seek:
+        ret = ReqSeek(req->fd, req->seek.where, req->seek.whence);
+        break;
 
     default:
         peli::Log(LogL::ERROR, "EFS: Unknown command: %u",
@@ -406,14 +418,16 @@ static s32 IPCRequest(IOS::Request* req) {
     return ret;
 }
 
-static void OpenTestFile() {
+static void OpenTestFile()
+{
     /* We must attempt to open a file first for FatFS to function properly */
     FIL testFile;
     FRESULT fret = f_open(&testFile, "0:/", FA_READ);
     peli::Log(LogL::INFO, "Test open result: %d", fret);
 }
 
-extern "C" s32 FS_StartRM([[maybe_unused]] void* arg) {
+extern "C" s32 FS_StartRM([[maybe_unused]] void* arg)
+{
     peli::Log(LogL::INFO, "Starting FS...");
 
     if (!SDCard::Open()) {

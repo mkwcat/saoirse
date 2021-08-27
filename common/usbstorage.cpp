@@ -32,14 +32,14 @@ distribution.
 
 #include "usbstorage.h"
 #include "usb.h"
-#include <util.h>
 #include <cstring>
 #include <os.h>
+#include <util.h>
 
 #ifdef TARGET_IOS
-#	include <main.h>
+#include <main.h>
 #else
-#	include <unistd.h>
+#include <unistd.h>
 #endif
 
 #define ROUNDDOWN32(v) (((u32)(v)-0x1f) & ~0x1f)
@@ -241,7 +241,7 @@ static s32 __usbstorage_reset()
 
 void USBStorage_Open()
 {
-	// todo
+    // todo
 #if 0
     s_size = d->sector_size;
     s_cnt = d->sector_count;
@@ -284,7 +284,7 @@ bool USBStorage::ReadSectors(u32 sector, u32 numSectors, void* buffer)
         sector,       0,          numSectors >> 8, numSectors,   0};
 
     retval = __cycle(__lun, reinterpret_cast<u8*>(buffer), numSectors * s_size,
-	                 cmd, sizeof(cmd), 0, &status, NULL);
+                     cmd, sizeof(cmd), 0, &status, NULL);
     if (retval > 0 && status != 0)
         retval = USBStorage::Error::Status;
 

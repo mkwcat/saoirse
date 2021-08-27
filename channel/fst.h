@@ -1,13 +1,12 @@
 #pragma once
 
+#include <cassert>
+#include <string>
 #include <types.h>
 #include <util.h>
 #include <vector>
-#include <string>
-#include <cassert>
 
-struct FSTEntry
-{
+struct FSTEntry {
     bool isDir : 8;
     u32 nameOffset : 24;
     union {
@@ -31,17 +30,17 @@ public:
     struct FileEntry;
     struct DirEntry;
 
-    struct Entry
-    {
-        explicit Entry(const char* name)
-            : m_name(name), m_parent(nullptr) { }
-        virtual ~Entry() { }
+    struct Entry {
+        explicit Entry(const char* name) : m_name(name), m_parent(nullptr) {}
+        virtual ~Entry() {}
         virtual bool isDir() const = 0;
-        DirEntry* dir() {
+        DirEntry* dir()
+        {
             assert(isDir());
             return reinterpret_cast<DirEntry*>(this);
         }
-        FileEntry* file() {
+        FileEntry* file()
+        {
             assert(!isDir());
             return reinterpret_cast<FileEntry*>(this);
         }
@@ -50,41 +49,45 @@ public:
         DirEntry* m_parent;
     };
 
-    struct FileEntry : public Entry
-    {
+    struct FileEntry : public Entry {
         using Entry::Entry;
         FileEntry(const char* name, u32 wordOffset, u32 byteLength)
             : Entry::Entry(name), m_wordOffset(wordOffset),
-              m_byteLength(byteLength) { }
+              m_byteLength(byteLength)
+        {
+        }
         bool isDir() const { return false; }
 
         u32 m_wordOffset;
         u32 m_byteLength;
     };
 
-    struct DirEntry : public Entry
-    {
+    struct DirEntry : public Entry {
         using Entry::Entry;
         DirEntry(const DirEntry&) = delete;
-        ~DirEntry() {
+        ~DirEntry()
+        {
             for (auto it : m_children)
                 delete it;
         }
         bool isDir() const { return true; }
 
-        DirEntry& operator+=(DirEntry&& entry) {
+        DirEntry& operator+=(DirEntry&& entry)
+        {
             for (auto it : entry.m_children)
                 this->m_children.push_back(it);
             entry.m_children.clear();
             return *this;
         }
 
-        DirEntry& operator+=(Entry* entry) {
+        DirEntry& operator+=(Entry* entry)
+        {
             m_children.push_back(entry);
             return *this;
         }
 
-        void remove(Entry* entry) {
+        void remove(Entry* entry)
+        {
             auto it = std::find(m_children.begin(), m_children.end(), entry);
             if (it == m_children.end())
                 return;

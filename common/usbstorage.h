@@ -5,8 +5,9 @@
 namespace USBStorage
 {
 
-namespace Error {
-  enum {
+namespace Error
+{
+enum {
     OK = 0,
     NoInterface = -10000,
     Sense = -10001,
@@ -19,7 +20,7 @@ namespace Error {
     Timedout = -10008,
     Init = -10009,
     Processing = -10010
-  };
+};
 }
 
 bool Startup();
@@ -27,4 +28,4 @@ bool ReadSectors(u32 sector, u32 numSectors, void* buffer);
 bool WriteSectors(u32 sector, u32 numSectors, const void* buffer);
 void Shutdown();
 
-}
+} // namespace USBStorage
