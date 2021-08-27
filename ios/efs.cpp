@@ -312,6 +312,56 @@ static s32 ReqWrite(s32 fd, const void* data, u32 len) {
     return bytesWrote;
 }
 
+/*
+ * Moves the file read/write of an open file descriptor.
+ * Returns: 0 on success, or an ISFS error code.
+ */
+static s32 ReqSeek(s32 fd, s32 where, s32 whence)
+{
+	if (!IsFileDescriptorValid(fd))
+		return ISFSError::Invalid;
+
+	if (whence < NAND_SEEK_SET || whence > NAND_SEEK_END)
+		return ISFSError::Invalid;
+	
+	FIL* fil = spFileDescriptorArray[fd];
+	FSIZE_t offset = f_tell(fil);
+	FSIZE_t endPosition = f_size(fil);
+
+	switch (whence)
+	{
+		case NAND_SEEK_SET:
+		{
+			offset = 0;
+			break;
+		}
+		case NAND_SEEK_CUR:
+		{
+			break;
+		}
+		case NAND_SEEK_END:
+		{
+			offset = endPosition;
+			break;
+		}
+	}
+	
+	offset += where;
+	if (offset > endPosition)
+		return ISFSError::Invalid;
+
+	const FRESULT fresult = f_lseek(fil, offset);
+	if (fresult != FR_OK)
+	{
+		peli::Log(LogL::ERROR, "[EFS::ReqSeek] Failed to seek to position 0x%08X in file descriptor %d !", offset, fd);
+		return FResultToISFSError(fresult);
+	}
+	
+	peli::Log(LogL::INFO, "[EFS::ReqSeek] Successfully seeked to position 0x%08X in file descriptor %d !", offset, fd);
+	
+	return ISFSError::OK;
+}
+
 static s32 IPCRequest(IOS::Request* req) {
     s32 ret = IOSErr::Invalid;
 
@@ -335,6 +385,10 @@ static s32 IPCRequest(IOS::Request* req) {
     case IOS::Command::Write:
         ret = ReqWrite(req->fd, req->write.data, req->write.len);
         break;
+	
+	case IOS::Command::Seek:
+		ret = ReqSeek(req->fd, req->seek.where, req->seek.whence);
+		break;
 
     default:
         peli::Log(LogL::ERROR, "EFS: Unknown command: %u",
