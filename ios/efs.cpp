@@ -15,9 +15,52 @@
 namespace EFS
 {
 
+/*
+ * ISFS (Internal Storage FileSystem) is split into two parts:
+ *
+ * Files; these are opened directly using for example
+ * IOS_Open("/tmp/file.bin"). These can be interacted with using seek, read,
+ * write, and one ioctl (GetFileStats).
+ *
+ * Manager (/dev/fs); this takes ioctl commands to do general tasks like create
+ * file, read directory, etc.
+ *
+ * File descriptor: {
+ * 0 .. 99: Reserved for proxy/replaced files
+ * 100 .. 199: Reserved for real FS files
+ * 200: Proxy /dev/fs
+ * }
+ *
+ * The manager is blocked from using read, write, seek automatically from the
+ * IsFileDescriptorValid check.
+ */
+
+constexpr s32 mgrHandle = 200;
+
+enum class ISFSIoctl {
+    Format = 0x1,
+    GetStats = 0x2,
+    CreateDir = 0x3,
+    ReadDir = 0x4,
+    SetAttr = 0x5,
+    GetAttr = 0x6,
+    Delete = 0x7,
+    Rename = 0x8,
+    CreateFile = 0x9,
+    GetFileStats = 0xB,
+    Shutdown = 0xD
+};
+
 #define EFS_DRIVE "0:/"
 
+IOS::ResourceCtrl<ISFSIoctl> realFsMgr(-1);
 static std::array<FIL*, NAND_MAX_FILE_DESCRIPTOR_AMOUNT> spFileDescriptorArray;
+
+static bool IsReplacedPath(const char* path)
+{
+    /* TODO!!!! There should be like a GetReplacedPath thing */
+    return false;
+}
 
 /*---------------------------------------------------------------------------*
  * Name        : IsFileDescriptorValid
@@ -27,7 +70,7 @@ static std::array<FIL*, NAND_MAX_FILE_DESCRIPTOR_AMOUNT> spFileDescriptorArray;
  *---------------------------------------------------------------------------*/
 static bool IsFileDescriptorValid(int fd)
 {
-    if (fd < 0 || fd > static_cast<int>(spFileDescriptorArray.size()))
+    if (fd < 0 || fd >= static_cast<int>(spFileDescriptorArray.size()))
         return false;
 
     if (spFileDescriptorArray[fd] == nullptr)
@@ -109,26 +152,6 @@ static bool IsFilenameDOS83(const char* filename)
             filenameLength <= MAX_83_FILENAME_LENGTH);
 }
 
-static s32 ForwardRequest(s32 fd, IOS::Request* req)
-{
-    switch (req->cmd) {
-    case IOS::Command::Close:
-        return IOS_Close(fd);
-    case IOS::Command::Read:
-        return IOS_Read(fd, req->read.data, req->read.len);
-    case IOS::Command::Write:
-        return IOS_Write(fd, req->write.data, req->write.len);
-    case IOS::Command::Seek:
-        return IOS_Seek(fd, req->seek.where, req->seek.whence);
-    case IOS::Command::Ioctl:
-        return IOS_Ioctl(fd, req->ioctl.cmd, req->ioctl.in, req->ioctl.in_len,
-                         req->ioctl.io, req->ioctl.io_len);
-
-    default:
-        return ISFSError::Invalid;
-    }
-}
-
 static s32 FResultToISFSError(FRESULT fret)
 {
     switch (fret) {
@@ -176,10 +199,10 @@ static s32 FResultToISFSError(FRESULT fret)
 }
 
 /*
- * Handle open request from the filesystem proxy.
+ * Handle open file request from the filesystem proxy.
  * Returns: File descriptor, or ISFS error code.
  */
-static s32 ReqOpen(const char* path, u32 mode)
+static s32 ReqProxyOpen(const char* path, u32 mode)
 {
     int fd = GetAvailableFileDescriptor();
     if (fd < 0)
@@ -242,6 +265,9 @@ static s32 ReqOpen(const char* path, u32 mode)
  */
 static s32 ReqClose(s32 fd)
 {
+    if (fd == mgrHandle)
+        return ISFSError::OK;
+
     if (!IsFileDescriptorValid(fd))
         return ISFSError::Invalid;
 
@@ -324,7 +350,7 @@ static s32 ReqWrite(s32 fd, const void* data, u32 len)
 
 /*
  * Moves the file read/write of an open file descriptor.
- * Returns: 0 on success, or an ISFS error code.
+ * Returns: Current offset, or an ISFS error code.
  */
 static s32 ReqSeek(s32 fd, s32 where, s32 whence)
 {
@@ -370,51 +396,181 @@ static s32 ReqSeek(s32 fd, s32 where, s32 whence)
               "descriptor %d !",
               offset, fd);
 
-    return ISFSError::OK;
+    return offset;
+}
+
+/*
+ * Handles filesystem ioctl commands.
+ * Returns: ISFSError result.
+ */
+static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
+                    u32 io_len)
+{
+    /* File commands */
+    if (IsFileDescriptorValid(fd)) {
+        if (cmd == ISFSIoctl::GetFileStats) {
+            if (in_len < sizeof(IOS::File::Stat))
+                return ISFSError::Invalid;
+            /* Real FS doesn't seem to even check alignment before writing, but
+             * I'd rather not have the whole of IOS panic over an alignment
+             * exception */
+            if (!aligned(in, 4)) {
+                peli::Log(
+                    LogL::ERROR,
+                    "[EFS::ReqIoctl] Invalid GetFileStats input alignment");
+                return ISFSError::Invalid;
+            }
+            IOS::File::Stat* stat = reinterpret_cast<IOS::File::Stat*>(in);
+            stat->size = f_size(spFileDescriptorArray[fd]);
+            stat->pos = f_tell(spFileDescriptorArray[fd]);
+            return ISFSError::OK;
+        }
+
+        peli::Log(LogL::ERROR, "[EFS::ReqIoctl] Unknown file ioctl: %u",
+                  static_cast<s32>(cmd));
+        return ISFSError::Invalid;
+    }
+
+    /* Manager commands! */
+    if (fd != mgrHandle) {
+        /* ...oh, nevermind :( */
+        return ISFSError::Invalid;
+    }
+
+    switch (cmd) {
+    case ISFSIoctl::Format:
+        /* Hmm, a command to remove everything in the filesystem and brick the
+         * Wii. Very good. */
+        peli::Log(LogL::ERROR, "[EFS::ReqIoctl] Attempt to use ISFS_Format!");
+        return ISFSError::NoAccess;
+
+    case ISFSIoctl::GetStats:
+        /* tbh idek what this is, other than the fact that ES calls ISFS_Format
+         * if it fails */
+        return realFsMgr.ioctl(ISFSIoctl::GetStats, in, in_len, io, io_len);
+
+    case ISFSIoctl::CreateDir:
+        /* TODO */
+        return realFsMgr.ioctl(ISFSIoctl::CreateDir, in, in_len, io, io_len);
+
+    case ISFSIoctl::ReadDir:
+        /* TODO */
+        return realFsMgr.ioctl(ISFSIoctl::ReadDir, in, in_len, io, io_len);
+
+    case ISFSIoctl::SetAttr:
+        /* TODO */
+        return realFsMgr.ioctl(ISFSIoctl::SetAttr, in, in_len, io, io_len);
+
+    case ISFSIoctl::GetAttr:
+        /* TODO */
+        return realFsMgr.ioctl(ISFSIoctl::GetAttr, in, in_len, io, io_len);
+
+    case ISFSIoctl::Delete:
+        /* TODO */
+        return realFsMgr.ioctl(ISFSIoctl::Delete, in, in_len, io, io_len);
+
+    case ISFSIoctl::Rename:
+        /* TODO */
+        return realFsMgr.ioctl(ISFSIoctl::Rename, in, in_len, io, io_len);
+
+    case ISFSIoctl::CreateFile:
+        /* TODO */
+        return realFsMgr.ioctl(ISFSIoctl::CreateFile, in, in_len, io, io_len);
+
+    case ISFSIoctl::Shutdown:
+        /* TODO */
+        return realFsMgr.ioctl(ISFSIoctl::Shutdown, in, in_len, io, io_len);
+
+    default:
+        peli::Log(LogL::ERROR, "[EFS::ReqIoctl] Unknown manager ioctl: %u",
+                  cmd);
+        return ISFSError::Invalid;
+    }
+}
+
+static s32 ForwardRequest(IOS::Request* req)
+{
+    const s32 fd = req->fd - 100;
+    assert(req->cmd == IOS::Command::Open || (fd >= 0 && fd < 16));
+
+    switch (req->cmd) {
+    case IOS::Command::Open: {
+        /* [FIXME] UID and GID always 0 */
+        const s32 ret = IOS_Open(req->open.path, req->open.mode);
+        if (ret >= 0)
+            return ret + 100;
+        return ret;
+    }
+    case IOS::Command::Close:
+        return IOS_Close(fd);
+    case IOS::Command::Read:
+        return IOS_Read(fd, req->read.data, req->read.len);
+    case IOS::Command::Write:
+        return IOS_Write(fd, req->write.data, req->write.len);
+    case IOS::Command::Seek:
+        return IOS_Seek(fd, req->seek.where, req->seek.whence);
+    case IOS::Command::Ioctl:
+        return IOS_Ioctl(fd, req->ioctl.cmd, req->ioctl.in, req->ioctl.in_len,
+                         req->ioctl.io, req->ioctl.io_len);
+
+    default:
+        peli::Log(LogL::ERROR, "EFS: Unknown command: %u",
+                  static_cast<u32>(req->cmd));
+        return ISFSError::Invalid;
+    }
 }
 
 static s32 IPCRequest(IOS::Request* req)
 {
     s32 ret = IOSErr::Invalid;
 
-    if (req->cmd != IOS::Command::Open && req->fd >= 100) {
-        return ForwardRequest(req->fd - 100, req);
-    }
+    const s32 fd = req->fd;
+    if (req->cmd != IOS::Command::Open && fd >= 100 && fd < 200)
+        return ForwardRequest(req);
 
     switch (req->cmd) {
-    case IOS::Command::Open:
-        ret = ReqOpen(req->open.path, req->open.mode);
-        break;
+    case IOS::Command::Open: {
+        if (!strncmp(req->open.path, "/dev/", 5)) {
+            if (!strcmp(req->open.path, "/dev/flash")) {
+                /* No */
+                peli::Log(LogL::WARN, "Attempt to open /dev/flash from PPC");
+                return ISFSError::NoAccess;
+            }
+            if (!strcmp(req->open.path, "/dev/fs")) {
+                peli::Log(LogL::INFO, "Open /dev/fs from PPC");
+                return mgrHandle;
+            }
 
+            /* Return IOSErr::NotFound to skip the request */
+            return IOSErr::NotFound;
+        }
+
+        if (IsReplacedPath(req->open.path))
+            return ReqProxyOpen(req->open.path, req->open.mode);
+
+        peli::Log(LogL::INFO, "Forwarding open '%s' to real FS",
+                  req->open.path);
+        return ForwardRequest(req);
+    }
     case IOS::Command::Close:
-        ret = ReqClose(req->fd);
-        break;
-
+        return ReqClose(req->fd);
     case IOS::Command::Read:
-        ret = ReqRead(req->fd, req->read.data, req->read.len);
-        break;
-
+        return ReqRead(req->fd, req->read.data, req->read.len);
     case IOS::Command::Write:
-        ret = ReqWrite(req->fd, req->write.data, req->write.len);
-        break;
-
+        return ReqWrite(req->fd, req->write.data, req->write.len);
     case IOS::Command::Seek:
-        ret = ReqSeek(req->fd, req->seek.where, req->seek.whence);
-        break;
+        return ReqSeek(req->fd, req->seek.where, req->seek.whence);
+    case IOS::Command::Ioctl:
+        return ReqIoctl(req->fd, static_cast<ISFSIoctl>(req->ioctl.cmd),
+                        req->ioctl.in, req->ioctl.in_len, req->ioctl.io,
+                        req->ioctl.io_len);
 
     default:
         peli::Log(LogL::ERROR, "EFS: Unknown command: %u",
                   static_cast<u32>(req->cmd));
-        break;
+        return ISFSError::Invalid;
     }
 
-    /* Not Found (-6) forwards the message to real FS */
-    if (ret == IOSErr::NotFound && req->cmd == IOS::Command::Open) {
-        /* [FIXME] UID and GID always 0 */
-        ret = IOS_Open(req->open.path, req->open.mode);
-        if (ret >= 0)
-            return ret + 100;
-    }
     return ret;
 }
 
@@ -429,6 +585,9 @@ static void OpenTestFile()
 extern "C" s32 FS_StartRM([[maybe_unused]] void* arg)
 {
     peli::Log(LogL::INFO, "Starting FS...");
+
+    new (&realFsMgr) IOS::ResourceCtrl<ISFSIoctl>("/dev/fs");
+    assert(realFsMgr.fd() >= 0);
 
     if (!SDCard::Open()) {
         peli::Log(LogL::ERROR, "FS_StartRM: SDCard::Open returned false");
