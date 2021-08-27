@@ -214,7 +214,7 @@ s32 patchThreadProc([[maybe_unused]] void* arg)
     return 0;
 }
 
-extern "C" s32 Log_StartRM(void* arg)
+static void saoMain()
 {
     s32 ret = IOS_CreateMessageQueue(&printBufQueueData, 1);
     if (ret < 0)
@@ -284,7 +284,6 @@ extern "C" s32 Log_StartRM(void* arg)
         
         Log_IPCRequest(req);
     }
-    return 0;
 }
 
 void* operator new(std::size_t size) {
@@ -323,4 +322,19 @@ void __assert_fail(const char* expr, const char* file, s32 line)
     peli::Log(LogL::ERROR,
         "Assertion failed:\n\n%s\nfile %s, line %d", expr, file, line);
     abort();
+}
+
+
+/* Common ARM C++ init */
+typedef void (*func_ptr)(void);
+extern func_ptr _init_array_start[], _init_array_end[];
+
+extern "C" s32 Log_StartRM([[maybe_unused]] void* arg)
+{
+    for (func_ptr* ctor = _init_array_start; ctor != _init_array_end; ctor++) {
+        (*ctor)();
+    }
+
+    saoMain();
+    return 0;
 }

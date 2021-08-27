@@ -29,6 +29,10 @@ SECTIONS
 	} > ram : data = 0
 	.rodata : ALIGN(4) {
 		*(.rodata*)
+		/* C++ init */
+		_init_array_start = .;
+		KEEP(*(.init_array))
+		_init_array_end = .;
 	} > ram
 	.bss : ALIGN(4) {
 		__bss_start = .;

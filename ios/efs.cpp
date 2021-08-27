@@ -53,7 +53,7 @@ enum class ISFSIoctl {
 
 #define EFS_DRIVE "0:/"
 
-IOS::ResourceCtrl<ISFSIoctl> realFsMgr(-1);
+IOS::ResourceCtrl<ISFSIoctl> realFsMgr("/dev/fs");
 static std::array<FIL*, NAND_MAX_FILE_DESCRIPTOR_AMOUNT> spFileDescriptorArray;
 
 static bool IsReplacedPath(const char* path)
@@ -586,7 +586,6 @@ extern "C" s32 FS_StartRM([[maybe_unused]] void* arg)
 {
     peli::Log(LogL::INFO, "Starting FS...");
 
-    new (&realFsMgr) IOS::ResourceCtrl<ISFSIoctl>("/dev/fs");
     assert(realFsMgr.fd() >= 0);
 
     if (!SDCard::Open()) {
