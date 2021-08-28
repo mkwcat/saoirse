@@ -1,8 +1,8 @@
 #include <disk.h>
 #include <ff.h>
 #include <ios.h>
+#include <isfs.h>
 #include <main.h>
-#include <nand.h>
 #include <os.h>
 #include <sdcard.h>
 #include <types.h>
@@ -36,20 +36,6 @@ namespace EFS
  */
 
 constexpr s32 mgrHandle = 200;
-
-enum class ISFSIoctl {
-    Format = 0x1,
-    GetStats = 0x2,
-    CreateDir = 0x3,
-    ReadDir = 0x4,
-    SetAttr = 0x5,
-    GetAttr = 0x6,
-    Delete = 0x7,
-    Rename = 0x8,
-    CreateFile = 0x9,
-    GetFileStats = 0xB,
-    Shutdown = 0xD
-};
 
 #define EFS_DRIVE "0:/"
 
@@ -406,6 +392,11 @@ static s32 ReqSeek(s32 fd, s32 where, s32 whence)
 static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
                     u32 io_len)
 {
+    if (in_len == 0)
+        in = nullptr;
+    if (io_len == 0)
+        io = nullptr;
+
     /* File commands */
     if (IsFileDescriptorValid(fd)) {
         if (cmd == ISFSIoctl::GetFileStats) {
@@ -438,54 +429,84 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
     }
 
     switch (cmd) {
+    // [ISFS_Format]
+    // in: not used
+    // out: not used
     case ISFSIoctl::Format:
         /* Hmm, a command to remove everything in the filesystem and brick the
          * Wii. Very good. */
         peli::Log(LogL::ERROR, "[EFS::ReqIoctl] Attempt to use ISFS_Format!");
         return ISFSError::NoAccess;
 
-    case ISFSIoctl::GetStats:
-        /* tbh idek what this is, other than the fact that ES calls ISFS_Format
-         * if it fails */
-        return realFsMgr.ioctl(ISFSIoctl::GetStats, in, in_len, io, io_len);
-
+    // [ISFS_CreateDir]
+    // in: Accepts ISFSAttrBlock. Reads path, ownerPerm, groupPerm, otherPerm,
+    // and attributes.
+    // out: not used
     case ISFSIoctl::CreateDir:
         /* TODO */
         return realFsMgr.ioctl(ISFSIoctl::CreateDir, in, in_len, io, io_len);
 
-    case ISFSIoctl::ReadDir:
-        /* TODO */
-        return realFsMgr.ioctl(ISFSIoctl::ReadDir, in, in_len, io, io_len);
-
+    // [ISFS_SetAttr]
+    // in: Accepts ISFSAttrBlock. All fields are read. If the caller's UID is
+    // not zero, ownerID and groupID must be equal to the caller's. Otherwise,
+    // throw ISFSError::NoAccess.
+    // out: not used
     case ISFSIoctl::SetAttr:
         /* TODO */
         return realFsMgr.ioctl(ISFSIoctl::SetAttr, in, in_len, io, io_len);
 
+    // [ISFS_GetAttr]
+    // in: Path to a file or directory.
+    // out: File/directory's attributes (ISFSAttrBlock).
     case ISFSIoctl::GetAttr:
         /* TODO */
         return realFsMgr.ioctl(ISFSIoctl::GetAttr, in, in_len, io, io_len);
 
+    // [ISFS_Delete]
+    // in: Path to the file or directory to delete.
+    // out: not used
     case ISFSIoctl::Delete:
         /* TODO */
         return realFsMgr.ioctl(ISFSIoctl::Delete, in, in_len, io, io_len);
 
+    // [ISFS_Rename]
+    // in: ISFSRenameBlock.
+    // out: not used
     case ISFSIoctl::Rename:
         /* TODO */
         return realFsMgr.ioctl(ISFSIoctl::Rename, in, in_len, io, io_len);
 
+    // [ISFS_CreateFile]
+    // in: Accepts ISFSAttrBlock. Reads path, ownerPerm, groupPerm, otherPerm,
+    // and attributes.
+    // out: not used
     case ISFSIoctl::CreateFile:
         /* TODO */
         return realFsMgr.ioctl(ISFSIoctl::CreateFile, in, in_len, io, io_len);
-
-    case ISFSIoctl::Shutdown:
-        /* TODO */
-        return realFsMgr.ioctl(ISFSIoctl::Shutdown, in, in_len, io, io_len);
 
     default:
         peli::Log(LogL::ERROR, "[EFS::ReqIoctl] Unknown manager ioctl: %u",
                   cmd);
         return ISFSError::Invalid;
     }
+}
+
+/*
+ * Handles filesystem ioctlv commands.
+ * Returns: ISFSError result.
+ */
+static s32 ReqIoctlv(s32 fd, ISFSIoctl cmd, u32 in_count, u32 out_count,
+                     IOS::Vector* vec)
+{
+    if (fd != mgrHandle)
+        return ISFSError::Invalid;
+
+    if (cmd != ISFSIoctl::ReadDir)
+        return ISFSError::Invalid;
+
+    // TODO
+    // Also documentation todo as well
+    return realFsMgr.ioctlv(ISFSIoctl::ReadDir, in_count, out_count, vec);
 }
 
 static s32 ForwardRequest(IOS::Request* req)
@@ -512,6 +533,9 @@ static s32 ForwardRequest(IOS::Request* req)
     case IOS::Command::Ioctl:
         return IOS_Ioctl(fd, req->ioctl.cmd, req->ioctl.in, req->ioctl.in_len,
                          req->ioctl.io, req->ioctl.io_len);
+    case IOS::Command::Ioctlv:
+        return IOS_Ioctlv(fd, req->ioctlv.cmd, req->ioctlv.in_count,
+                          req->ioctlv.io_count, req->ioctlv.vec);
 
     default:
         peli::Log(LogL::ERROR, "EFS: Unknown command: %u",
@@ -564,6 +588,10 @@ static s32 IPCRequest(IOS::Request* req)
         return ReqIoctl(req->fd, static_cast<ISFSIoctl>(req->ioctl.cmd),
                         req->ioctl.in, req->ioctl.in_len, req->ioctl.io,
                         req->ioctl.io_len);
+    case IOS::Command::Ioctlv:
+        return ReqIoctlv(req->fd, static_cast<ISFSIoctl>(req->ioctlv.cmd),
+                         req->ioctlv.in_count, req->ioctlv.io_count,
+                         req->ioctlv.vec);
 
     default:
         peli::Log(LogL::ERROR, "EFS: Unknown command: %u",
