@@ -135,9 +135,23 @@ static bool IsFilenameDOS83(const char* filename)
             filenameLength <= MAX_83_FILENAME_LENGTH);
 }
 
-static bool IsReplacedPath(const char* path)
+/*---------------------------------------------------------------------------*
+ * Name        : IsReplacedFilepath
+ * Description : Checks if a filepath is allowed to be replaced.
+ * Arguments   : filepath    The filepath to check.
+ * Returns     : If the filepath is allowed to be replaced.
+ *---------------------------------------------------------------------------*/
+static bool IsReplacedFilepath(const char* filepath)
 {
-    /* TODO!!!! There should be like a GetReplacedPath thing */
+    if (!filepath)
+        return false;
+
+    //! A list of filepaths to be replaced will be provided by the channel in the future
+    if (strcmp(filepath, "/title/00010004/524d4345/data/rksys.dat" /* RMCE */) == 0) return true;
+    if (strcmp(filepath, "/title/00010004/524d4350/data/rksys.dat" /* RMCP */) == 0) return true;
+    if (strcmp(filepath, "/title/00010004/524d434a/data/rksys.dat" /* RMCJ */) == 0) return true;
+    if (strcmp(filepath, "/title/00010004/524d434b/data/rksys.dat" /* RMCK */) == 0) return true;
+
     return false;
 }
 
@@ -600,7 +614,7 @@ static s32 IPCRequest(IOS::Request* req)
             return IOSErr::NotFound;
         }
 
-        if (IsReplacedPath(req->open.path))
+        if (IsReplacedFilepath(req->open.path))
             return ReqProxyOpen(req->open.path, req->open.mode);
 
         peli::Log(LogL::INFO, "Forwarding open '%s' to real FS",
