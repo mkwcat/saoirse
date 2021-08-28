@@ -42,12 +42,6 @@ constexpr s32 mgrHandle = 200;
 IOS::ResourceCtrl<ISFSIoctl> realFsMgr("/dev/fs");
 static std::array<FIL*, NAND_MAX_FILE_DESCRIPTOR_AMOUNT> spFileDescriptorArray;
 
-static bool IsReplacedPath(const char* path)
-{
-    /* TODO!!!! There should be like a GetReplacedPath thing */
-    return false;
-}
-
 /*---------------------------------------------------------------------------*
  * Name        : IsFileDescriptorValid
  * Description : Checks if a file descriptor is valid.
@@ -99,6 +93,9 @@ static bool IsFilenameDOS83(const char* filename)
         CHARACTER_DELETE = 0x7F
     };
 
+    if (!filename)
+        return false;
+
     int filenameLength = strlen(filename);
     const char* filenameExtension = nullptr;
     for (int i = 0; i < filenameLength; i++) {
@@ -136,6 +133,55 @@ static bool IsFilenameDOS83(const char* filename)
     // The base filename must be 1-8 characters in length
     return (filenameLength >= MIN_83_FILENAME_LENGTH &&
             filenameLength <= MAX_83_FILENAME_LENGTH);
+}
+
+static bool IsReplacedPath(const char* path)
+{
+    /* TODO!!!! There should be like a GetReplacedPath thing */
+    return false;
+}
+
+/*---------------------------------------------------------------------------*
+ * Name        : GetReplacedFilepath
+ * Description : Gets the replaced filepath of a filepath.
+ * Arguments   : filepath    The filepath to get the replaced filepath of.
+ *               out_buf     A pointer to a buffer to store the replaced filepath in.
+ *               out_len     The length of the output buffer.
+ * Returns     : A pointer to the buffer containing the replaced filepath, or
+ *               nullptr on error.
+ *---------------------------------------------------------------------------*/
+static const char* GetReplacedFilepath(const char* filepath, char* out_buf, size_t out_len)
+{
+    if (!filepath)
+        return nullptr;
+
+    if (!out_buf)
+        return nullptr;
+
+    size_t maxReplacedFilepathLength = NAND_MAX_FILENAME_LENGTH + sizeof(EFS_DRIVE);
+    if (out_len < maxReplacedFilepathLength)
+        return nullptr;
+
+    // Get the name of the file
+    const char* filename = strrchr(filepath, NAND_DIRECTORY_SEPARATOR_CHAR) + 1;
+    if (!filename)
+        return nullptr;
+
+    // Ensure that the filename is valid
+    if (!IsFilenameDOS83(filename))
+    {
+        peli::Log(LogL::ERROR, "[EFS::GetReplacedFilepath] Filename '%s' is invalid !", filename);
+        return nullptr;
+    }
+
+    // Create and write the replaced filepath
+    if (snprintf(out_buf, maxReplacedFilepathLength, EFS_DRIVE "%s", filename) <= 0)
+    {
+        peli::Log(LogL::ERROR, "[EFS::GetReplacedFilepath] Failed to format the replaced filepath !");
+        return nullptr;
+    }
+
+    return out_buf;
 }
 
 static s32 FResultToISFSError(FRESULT fret)
@@ -205,27 +251,12 @@ static s32 ReqProxyOpen(const char* path, u32 mode)
 
     if (mode > IOS_OPEN_RW)
         return ISFSError::Invalid;
-
-    // The second check guarantees that there will be at least one instance of
-    // the "NAND_DIRECTORY_SEPARATOR_CHAR" character in the character string
-    const char* filename = strrchr(path, NAND_DIRECTORY_SEPARATOR_CHAR) + 1;
-    if (!IsFilenameDOS83(filename)) {
-        peli::Log(LogL::ERROR, "[EFS::ReqOpen] Filename '%s' is invalid !",
-                  filename);
-        return ISFSError::Invalid;
-    }
-
-    // Create the filepath to open
+	
+    // Get the filepath to open
     char efsFilepath[NAND_MAX_FILENAME_LENGTH + sizeof(EFS_DRIVE)];
-    const int ret =
-        snprintf(efsFilepath, sizeof(efsFilepath), EFS_DRIVE "%s", filename);
-    if (ret <= 0) {
-        // It's possible if we remove the DOS83 check, or if it breaks, we could
-        // smash the stack here.
-        peli::Log(LogL::ERROR, "[EFS::ReqOpen] Failed to format");
+    if (!GetReplacedFilepath(path, efsFilepath, sizeof(efsFilepath)))
         return ISFSError::Invalid;
-    }
-
+	
     spFileDescriptorArray[fd] = new FIL;
     ASSERT(IsFileDescriptorValid(fd));
     const FRESULT fret = f_open(spFileDescriptorArray[fd], efsFilepath, mode);
