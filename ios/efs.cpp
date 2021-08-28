@@ -511,8 +511,29 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
     // in: Path to the file or directory to delete.
     // out: not used
     case ISFSIoctl::Delete:
-        /* TODO */
-        return realFsMgr.ioctl(ISFSIoctl::Delete, in, in_len, io, io_len);
+    {
+        const char* filepath = (const char*)in;
+
+        if (!filepath)
+            return ISFSError::Invalid;
+
+        if (!IsReplacedFilepath(filepath))
+            return realFsMgr.ioctl(ISFSIoctl::Delete, in, in_len, io, io_len);
+
+        // Get the path of the file or directory to delete
+        char efsFilepath[NAND_MAX_FILENAME_LENGTH + sizeof(EFS_DRIVE)];
+        if (!GetReplacedFilepath(filepath, efsFilepath, sizeof(efsFilepath)))
+            return ISFSError::Invalid;
+
+        const FRESULT fresult = f_unlink(efsFilepath);
+        if (fresult != FR_OK)
+        {
+            peli::Log(LogL::ERROR, "[EFS::ReqIoctl] Failed to delete file or directory '%s' !", efsFilepath);
+            return FResultToISFSError(fresult);
+        }
+
+        return ISFSError::OK;
+    }
 
     // [ISFS_Rename]
     // in: ISFSRenameBlock.
