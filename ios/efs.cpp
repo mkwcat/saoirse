@@ -136,6 +136,39 @@ static bool IsFilenameDOS83(const char* filename)
 }
 
 /*---------------------------------------------------------------------------*
+ * Name        : strnlen
+ * Description : Gets the number of characters in a character string, excluding
+ *               the null terminator, up to maxLength characters.
+ * Arguments   : string       The character string to check.
+ *             : maxLength    The maximum number of characters to check.
+ * Returns     : The number of characters in the character string, excluding
+ *               the null terminator, up to maxLength characters.
+ *---------------------------------------------------------------------------*/
+static size_t strnlen(const char* string, size_t maxLength)
+{
+    size_t i;
+    for (i = 0; i < maxLength && string[i]; i++) ;
+    return i;
+}
+
+/*---------------------------------------------------------------------------*
+ * Name        : IsFilepathValid
+ * Description : Checks if a filepath valid.
+ * Arguments   : filepath    The filepath to check.
+ * Returns     : If the filepath is valid.
+ *---------------------------------------------------------------------------*/
+static bool IsFilepathValid(const char* filepath)
+{
+    if (!filepath)
+        return false;
+
+    if (filepath[0] != NAND_DIRECTORY_SEPARATOR_CHAR)
+        return false;
+
+    return (strnlen(filepath, NAND_MAX_FILEPATH_LENGTH) < NAND_MAX_FILEPATH_LENGTH);
+}
+
+/*---------------------------------------------------------------------------*
  * Name        : IsReplacedFilepath
  * Description : Checks if a filepath is allowed to be replaced.
  * Arguments   : filepath    The filepath to check.
@@ -143,7 +176,7 @@ static bool IsFilenameDOS83(const char* filename)
  *---------------------------------------------------------------------------*/
 static bool IsReplacedFilepath(const char* filepath)
 {
-    if (!filepath)
+    if (!IsFilepathValid(filepath))
         return false;
 
     //! A list of filepaths to be replaced will be provided by the channel in the future
@@ -166,7 +199,7 @@ static bool IsReplacedFilepath(const char* filepath)
  *---------------------------------------------------------------------------*/
 static const char* GetReplacedFilepath(const char* filepath, char* out_buf, size_t out_len)
 {
-    if (!filepath)
+    if (!IsFilepathValid(filepath))
         return nullptr;
 
     if (!out_buf)
@@ -248,35 +281,29 @@ static s32 FResultToISFSError(FRESULT fret)
  * Handle open file request from the filesystem proxy.
  * Returns: File descriptor, or ISFS error code.
  */
-static s32 ReqProxyOpen(const char* path, u32 mode)
+static s32 ReqProxyOpen(const char* filepath, u32 mode)
 {
     int fd = GetAvailableFileDescriptor();
     if (fd < 0)
         return ISFSError::MaxOpen;
 
-    if (!path)
-        return ISFSError::Invalid;
-
-    if (path[0] != NAND_DIRECTORY_SEPARATOR_CHAR)
-        return ISFSError::Invalid;
-
-    if (strlen(path) >= NAND_MAX_FILEPATH_LENGTH)
+    if (!IsFilepathValid(filepath))
         return ISFSError::Invalid;
 
     if (mode > IOS_OPEN_RW)
         return ISFSError::Invalid;
-	
-    // Get the filepath to open
+
+    // Get the replaced filepath
     char efsFilepath[NAND_MAX_FILENAME_LENGTH + sizeof(EFS_DRIVE)];
-    if (!GetReplacedFilepath(path, efsFilepath, sizeof(efsFilepath)))
+    if (!GetReplacedFilepath(filepath, efsFilepath, sizeof(efsFilepath)))
         return ISFSError::Invalid;
-	
+
     spFileDescriptorArray[fd] = new FIL;
     ASSERT(IsFileDescriptorValid(fd));
     const FRESULT fret = f_open(spFileDescriptorArray[fd], efsFilepath, mode);
     if (fret != FR_OK) {
         peli::Log(LogL::ERROR,
-                  "[EFS::ReqOpen] Failed to open file '%s', error: %d",
+                  "[EFS::ReqProxyOpen] Failed to open file '%s', error: %d",
                   efsFilepath, fret);
 
         delete spFileDescriptorArray[fd];
@@ -284,7 +311,7 @@ static s32 ReqProxyOpen(const char* path, u32 mode)
     }
 
     peli::Log(LogL::INFO,
-              "[EFS::ReqOpen] Successfully opened file '%s' (fd=%d, mode=%d) !",
+              "[EFS::ReqProxyOpen] Successfully opened file '%s' (fd=%d, mode=%d) !",
               efsFilepath, fd, mode);
 
     return fd;
@@ -512,15 +539,20 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
     // out: not used
     case ISFSIoctl::Delete:
     {
-        const char* filepath = (const char*)in;
-
-        if (!filepath)
+        if (in_len != ISFSMaxPath)
             return ISFSError::Invalid;
 
+        const char* filepath = (const char*)in;
+
+        // Check if the filepath is valid
+        if (!IsFilepathValid(filepath))
+            return ISFSError::Invalid;
+
+        // Check if the filepath should be replaced
         if (!IsReplacedFilepath(filepath))
             return realFsMgr.ioctl(ISFSIoctl::Delete, in, in_len, io, io_len);
 
-        // Get the path of the file or directory to delete
+        // Get the replaced filepath
         char efsFilepath[NAND_MAX_FILENAME_LENGTH + sizeof(EFS_DRIVE)];
         if (!GetReplacedFilepath(filepath, efsFilepath, sizeof(efsFilepath)))
             return ISFSError::Invalid;
@@ -532,6 +564,8 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
             return FResultToISFSError(fresult);
         }
 
+        peli::Log(LogL::INFO, "[EFS::ReqIoctl] Successfully deleted file or directory '%s' !", efsFilepath);
+
         return ISFSError::OK;
     }
 
@@ -539,8 +573,47 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
     // in: ISFSRenameBlock.
     // out: not used
     case ISFSIoctl::Rename:
-        /* TODO */
-        return realFsMgr.ioctl(ISFSIoctl::Rename, in, in_len, io, io_len);
+    {
+        if (in_len != sizeof(ISFSRenameBlock))
+            return ISFSError::Invalid;
+
+        ISFSRenameBlock* isfsRenameBlock = (ISFSRenameBlock*)in;
+
+        if (!isfsRenameBlock)
+            return ISFSError::Invalid;
+
+        const char* pathOld = isfsRenameBlock->pathOld;
+        const char* pathNew = isfsRenameBlock->pathNew;
+
+        // Check if the old and new filepaths are valid
+        if (!IsFilepathValid(pathOld) ||
+            !IsFilepathValid(pathNew) )
+            return ISFSError::Invalid;
+
+        // Check if the old and new filepaths should be replaced
+        if (!IsReplacedFilepath(pathOld) ||
+            !IsReplacedFilepath(pathNew) )
+            return realFsMgr.ioctl(ISFSIoctl::Rename, in, in_len, io, io_len);
+
+        // Get the replaced filepaths
+        char efsOldFilepath[NAND_MAX_FILENAME_LENGTH + sizeof(EFS_DRIVE)];
+        char efsNewFilepath[NAND_MAX_FILENAME_LENGTH + sizeof(EFS_DRIVE)];
+
+        if (!GetReplacedFilepath(pathOld, efsOldFilepath, sizeof(efsOldFilepath)) ||
+            !GetReplacedFilepath(pathNew, efsNewFilepath, sizeof(efsNewFilepath)) )
+            return ISFSError::Invalid;
+
+        const FRESULT fresult = f_rename(efsOldFilepath, efsNewFilepath);
+        if (fresult != FR_OK)
+        {
+            peli::Log(LogL::ERROR, "[EFS::ReqIoctl] Failed to rename file or directory '%s' to '%s' !", efsOldFilepath, efsNewFilepath);
+            return FResultToISFSError(fresult);
+        }
+
+        peli::Log(LogL::INFO, "[EFS::ReqIoctl] Successfully renamed file or directory '%s' to '%s' !", efsOldFilepath, efsNewFilepath);
+
+        return ISFSError::OK;
+    }
 
     // [ISFS_CreateFile]
     // in: Accepts ISFSAttrBlock. Reads path, ownerPerm, groupPerm, otherPerm,
