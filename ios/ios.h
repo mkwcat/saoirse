@@ -167,5 +167,9 @@ void* IOS_VirtualToPhysical(void* virt);
  * ----------> */
 s32 IOS_SetPPCACRPerms(u8 enable);
 s32 IOS_SetIpcAccessRights(u8* rights);
+s32 IOS_SetUid(u32 pid, u32 uid);
+u32 IOS_GetUid();
+s32 IOS_SetGid(u32 pid, u16 gid);
+u16 IOS_GetGid();
 
 EXTERN_C_END
