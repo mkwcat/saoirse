@@ -472,18 +472,18 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
     /* File commands */
     if (IsFileDescriptorValid(fd)) {
         if (cmd == ISFSIoctl::GetFileStats) {
-            if (in_len < sizeof(IOS::File::Stat))
+            if (io_len < sizeof(IOS::File::Stat))
                 return ISFSError::Invalid;
             /* Real FS doesn't seem to even check alignment before writing, but
              * I'd rather not have the whole of IOS panic over an alignment
              * exception */
-            if (!aligned(in, 4)) {
+            if (!aligned(io, 4)) {
                 peli::Log(
                     LogL::ERROR,
                     "[EFS::ReqIoctl] Invalid GetFileStats input alignment");
                 return ISFSError::Invalid;
             }
-            IOS::File::Stat* stat = reinterpret_cast<IOS::File::Stat*>(in);
+            IOS::File::Stat* stat = reinterpret_cast<IOS::File::Stat*>(io);
             stat->size = f_size(spFileDescriptorArray[fd]);
             stat->pos = f_tell(spFileDescriptorArray[fd]);
             return ISFSError::OK;
