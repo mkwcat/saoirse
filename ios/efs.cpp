@@ -561,8 +561,50 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
     // in: Path to a file or directory.
     // out: File/directory's attributes (ISFSAttrBlock).
     case ISFSIoctl::GetAttr:
-        /* TODO */
-        return realFsMgr.ioctl(ISFSIoctl::GetAttr, in, in_len, io, io_len);
+    {
+        const int OWNER_PERM = 3;
+        const int GROUP_PERM = 3;
+        const int OTHER_PERM = 1;
+        const int ATTRIBUTES = 0;
+
+        if (in_len != ISFSMaxPath || io_len != sizeof(ISFSAttrBlock))
+            return ISFSError::Invalid;
+
+        const char* filepath = (const char*)in;
+
+        // Check if the filepath is valid
+        if (!IsFilepathValid(filepath))
+            return ISFSError::Invalid;
+
+        // Check if the filepath should be replaced
+        if (!IsReplacedFilepath(filepath))
+            return realFsMgr.ioctl(ISFSIoctl::GetAttr, in, in_len, io, io_len);
+
+        // Get the replaced filepath
+        char efsFilepath[NAND_MAX_FILENAME_LENGTH + sizeof(EFS_DRIVE)];
+        if (!GetReplacedFilepath(filepath, efsFilepath, sizeof(efsFilepath)))
+            return ISFSError::Invalid;
+
+        const FRESULT fresult = f_stat(efsFilepath, nullptr);
+        if (fresult != FR_OK)
+        {
+            peli::Log(LogL::ERROR, "[EFS::ReqIoctl] Failed to get attributes for file or directory '%s' !", efsFilepath);
+            return FResultToISFSError(fresult);
+        }
+
+        ISFSAttrBlock* isfsAttrBlock = (ISFSAttrBlock*)io;
+        isfsAttrBlock->ownerId       = IOS_GetUid();
+        isfsAttrBlock->groupId       = IOS_GetGid();
+        strcpy(isfsAttrBlock->path, filepath);
+        isfsAttrBlock->ownerPerm     = OWNER_PERM;
+        isfsAttrBlock->groupPerm     = GROUP_PERM;
+        isfsAttrBlock->otherPerm     = OTHER_PERM;
+        isfsAttrBlock->attributes    = ATTRIBUTES;
+
+        peli::Log(LogL::INFO, "[EFS::ReqIoctl] Successfully got attributes for file or directory '%s' !", efsFilepath);
+
+        return ISFSError::OK;
+    }
 
     // [ISFS_Delete]
     // in: Path to the file or directory to delete.
