@@ -554,8 +554,38 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
     // throw ISFSError::NoAccess.
     // out: not used
     case ISFSIoctl::SetAttr:
-        /* TODO */
-        return realFsMgr.ioctl(ISFSIoctl::SetAttr, in, in_len, io, io_len);
+    {
+        if (in_len != sizeof(ISFSAttrBlock))
+            return ISFSError::Invalid;
+
+        ISFSAttrBlock* isfsAttrBlock = (ISFSAttrBlock*)in;
+
+        const char* path = isfsAttrBlock->path;
+
+        // Check if the filepath is valid
+        if (!IsFilepathValid(path))
+            return ISFSError::Invalid;
+
+        // Check if the filepath should be replaced
+        if (!IsReplacedFilepath(path))
+            return realFsMgr.ioctl(ISFSIoctl::SetAttr, in, in_len, io, io_len);
+
+        // Get the replaced filepath
+        char efsFilepath[NAND_MAX_FILENAME_LENGTH + sizeof(EFS_DRIVE)];
+        if (!GetReplacedFilepath(path, efsFilepath, sizeof(efsFilepath)))
+            return ISFSError::Invalid;
+
+        const FRESULT fresult = f_stat(efsFilepath, nullptr);
+        if (fresult != FR_OK)
+        {
+            peli::Log(LogL::ERROR, "[EFS::ReqIoctl] Failed to set attributes for file or directory '%s' !", efsFilepath);
+            return FResultToISFSError(fresult);
+        }
+
+        peli::Log(LogL::INFO, "[EFS::ReqIoctl] Successfully set attributes for file or directory '%s' !", efsFilepath);
+
+        return ISFSError::OK;
+    }
 
     // [ISFS_GetAttr]
     // in: Path to a file or directory.
