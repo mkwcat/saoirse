@@ -516,6 +516,9 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
     // out: not used
     case ISFSIoctl::CreateDir:
     {
+        if (!aligned(in, 4))
+            return ISFSError::Invalid;
+
         if (in_len != sizeof(ISFSAttrBlock))
             return ISFSError::Invalid;
 
@@ -555,6 +558,9 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
     // out: not used
     case ISFSIoctl::SetAttr:
     {
+        if (!aligned(in, 4))
+            return ISFSError::Invalid;
+
         if (in_len != sizeof(ISFSAttrBlock))
             return ISFSError::Invalid;
 
@@ -596,6 +602,9 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
         const int GROUP_PERM = 3;
         const int OTHER_PERM = 1;
         const int ATTRIBUTES = 0;
+
+        if (!aligned(in, 4) || !aligned(io, 4))
+            return ISFSError::Invalid;
 
         if (in_len != ISFSMaxPath || io_len != sizeof(ISFSAttrBlock))
             return ISFSError::Invalid;
@@ -641,6 +650,9 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
     // out: not used
     case ISFSIoctl::Delete:
     {
+        if (!aligned(in, 4))
+            return ISFSError::Invalid;
+
         if (in_len != ISFSMaxPath)
             return ISFSError::Invalid;
 
@@ -676,6 +688,9 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
     // out: not used
     case ISFSIoctl::Rename:
     {
+        if (!aligned(in, 4))
+            return ISFSError::Invalid;
+
         if (in_len != sizeof(ISFSRenameBlock))
             return ISFSError::Invalid;
 
@@ -720,6 +735,9 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
     // out: not used
     case ISFSIoctl::CreateFile:
     {
+        if (!aligned(in, 4))
+            return ISFSError::Invalid;
+
         if (in_len != sizeof(ISFSAttrBlock))
             return ISFSError::Invalid;
 
