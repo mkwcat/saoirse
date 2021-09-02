@@ -719,8 +719,39 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
     // and attributes.
     // out: not used
     case ISFSIoctl::CreateFile:
-        /* TODO */
-        return realFsMgr.ioctl(ISFSIoctl::CreateFile, in, in_len, io, io_len);
+    {
+        if (in_len != sizeof(ISFSAttrBlock))
+            return ISFSError::Invalid;
+
+        ISFSAttrBlock* isfsAttrBlock = (ISFSAttrBlock*)in;
+
+        const char* path = isfsAttrBlock->path;
+
+        // Check if the filepath is valid
+        if (!IsFilepathValid(path))
+            return ISFSError::Invalid;
+
+        // Check if the filepath should be replaced
+        if (!IsReplacedFilepath(path))
+            return realFsMgr.ioctl(ISFSIoctl::CreateFile, in, in_len, io, io_len);
+
+        // Get the replaced filepath
+        char efsFilepath[NAND_MAX_FILENAME_LENGTH + sizeof(EFS_DRIVE)];
+        if (!GetReplacedFilepath(path, efsFilepath, sizeof(efsFilepath)))
+            return ISFSError::Invalid;
+
+        FIL fil;
+        const FRESULT fresult = f_open(&fil, efsFilepath, FA_CREATE_NEW);
+        if (fresult != FR_OK)
+        {
+            peli::Log(LogL::ERROR, "[EFS::ReqIoctl] Failed to create file '%s' !", efsFilepath);
+            return FResultToISFSError(fresult);
+        }
+
+        peli::Log(LogL::INFO, "[EFS::ReqIoctl] Successfully created file '%s' !", efsFilepath);
+
+        return ISFSError::OK;
+    }
 
     default:
         peli::Log(LogL::ERROR, "[EFS::ReqIoctl] Unknown manager ioctl: %u",
