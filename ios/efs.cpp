@@ -519,7 +519,7 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
         if (!aligned(in, 4))
             return ISFSError::Invalid;
 
-        if (in_len != sizeof(ISFSAttrBlock))
+        if (in_len < sizeof(ISFSAttrBlock))
             return ISFSError::Invalid;
 
         ISFSAttrBlock* isfsAttrBlock = (ISFSAttrBlock*)in;
@@ -561,7 +561,7 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
         if (!aligned(in, 4))
             return ISFSError::Invalid;
 
-        if (in_len != sizeof(ISFSAttrBlock))
+        if (in_len < sizeof(ISFSAttrBlock))
             return ISFSError::Invalid;
 
         ISFSAttrBlock* isfsAttrBlock = (ISFSAttrBlock*)in;
@@ -606,7 +606,7 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
         if (!aligned(in, 4) || !aligned(io, 4))
             return ISFSError::Invalid;
 
-        if (in_len != ISFSMaxPath || io_len != sizeof(ISFSAttrBlock))
+        if (in_len < ISFSMaxPath || io_len < sizeof(ISFSAttrBlock))
             return ISFSError::Invalid;
 
         const char* filepath = (const char*)in;
@@ -653,7 +653,7 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
         if (!aligned(in, 4))
             return ISFSError::Invalid;
 
-        if (in_len != ISFSMaxPath)
+        if (in_len < ISFSMaxPath)
             return ISFSError::Invalid;
 
         const char* filepath = (const char*)in;
@@ -691,7 +691,7 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
         if (!aligned(in, 4))
             return ISFSError::Invalid;
 
-        if (in_len != sizeof(ISFSRenameBlock))
+        if (in_len < sizeof(ISFSRenameBlock))
             return ISFSError::Invalid;
 
         ISFSRenameBlock* isfsRenameBlock = (ISFSRenameBlock*)in;
@@ -738,7 +738,7 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
         if (!aligned(in, 4))
             return ISFSError::Invalid;
 
-        if (in_len != sizeof(ISFSAttrBlock))
+        if (in_len < sizeof(ISFSAttrBlock))
             return ISFSError::Invalid;
 
         ISFSAttrBlock* isfsAttrBlock = (ISFSAttrBlock*)in;
