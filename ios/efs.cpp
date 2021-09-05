@@ -704,10 +704,20 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
             !IsFilepathValid(pathNew) )
             return ISFSError::Invalid;
 
-        // Check if the old and new filepaths should be replaced
-        if (!IsReplacedFilepath(pathOld) ||
-            !IsReplacedFilepath(pathNew) )
+        const bool isOldFilepathReplaced = IsReplacedFilepath(pathOld);
+        const bool isNewFilepathReplaced = IsReplacedFilepath(pathNew);
+
+        // Neither of the filepaths are replaced
+        if (!isOldFilepathReplaced &&
+            !isNewFilepathReplaced )
             return realFsMgr.ioctl(ISFSIoctl::Rename, in, in_len, io, io_len);
+
+        // One of the filepaths is replaced
+        if (isOldFilepathReplaced ^
+            isNewFilepathReplaced )
+            return ISFSError::Invalid;
+
+        // Both of the filepaths are replaced
 
         // Get the replaced filepaths
         char efsOldFilepath[NAND_MAX_FILENAME_LENGTH + sizeof(EFS_DRIVE)];
