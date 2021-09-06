@@ -311,7 +311,7 @@ static s32 ReqProxyOpen(const char* filepath, u32 mode)
     }
 
     peli::Log(LogL::INFO,
-              "[EFS::ReqProxyOpen] Successfully opened file '%s' (fd=%d, mode=%d) !",
+              "[EFS::ReqProxyOpen] Successfully opened file '%s' (fd=%d, mode=%u) !",
               efsFilepath, fd, mode);
 
     return fd;
@@ -361,15 +361,15 @@ static s32 ReqRead(s32 fd, void* data, u32 len)
         f_read(spFileDescriptorArray[fd], data, len, &bytesRead);
     if (fret != FR_OK) {
         peli::Log(LogL::ERROR,
-                  "[EFS::ReqRead] Failed to read %d bytes from file descriptor "
+                  "[EFS::ReqRead] Failed to read %u bytes from file descriptor "
                   "%d, error: %d",
-                  bytesRead, fd, fret);
+                  len, fd, fret);
         return FResultToISFSError(fret);
     }
 
     peli::Log(
         LogL::INFO,
-        "[EFS::ReqRead] Successfully read %d bytes from file descriptor %d !",
+        "[EFS::ReqRead] Successfully read %u bytes from file descriptor %d !",
         bytesRead, fd);
 
     return bytesRead;
@@ -392,15 +392,15 @@ static s32 ReqWrite(s32 fd, const void* data, u32 len)
         f_write(spFileDescriptorArray[fd], data, len, &bytesWrote);
     if (fret != FR_OK) {
         peli::Log(LogL::ERROR,
-                  "[EFS::ReqWrite] Failed to write %d bytes to file descriptor "
+                  "[EFS::ReqWrite] Failed to write %u bytes to file descriptor "
                   "%d, error: %d",
-                  bytesWrote, fd, fret);
+                  len, fd, fret);
         return FResultToISFSError(fret);
     }
 
     peli::Log(
         LogL::INFO,
-        "[EFS::ReqWrite] Successfully wrote %d bytes to file descriptor %d !",
+        "[EFS::ReqWrite] Successfully wrote %u bytes to file descriptor %d !",
         bytesWrote, fd);
 
     return bytesWrote;
