@@ -37,7 +37,8 @@ namespace EFS
 
 constexpr s32 mgrHandle = 200;
 
-#define EFS_DRIVE "0:/"
+#define EFS_DRIVE "0:"
+#define EFS_MAX_REPLACED_FILEPATH_LENGTH (sizeof(EFS_DRIVE) - 1) + NAND_MAX_FILEPATH_LENGTH
 
 IOS::ResourceCtrl<ISFSIoctl> realFsMgr("/dev/fs");
 static std::array<FIL*, NAND_MAX_FILE_DESCRIPTOR_AMOUNT> spFileDescriptorArray;
@@ -73,66 +74,6 @@ static int GetAvailableFileDescriptor()
     return it == spFileDescriptorArray.end()
                ? -1
                : it - spFileDescriptorArray.begin();
-}
-
-/*---------------------------------------------------------------------------*
- * Name        : IsFilenameDOS83
- * Description : Checks if a filename is a valid 8.3 filename.
- * Arguments   : filename    The filename to check.
- * Returns     : If the filename is a valid 8.3 filename.
- *---------------------------------------------------------------------------*/
-static bool IsFilenameDOS83(const char* filename)
-{
-    const int MIN_83_FILENAME_LENGTH = 1;
-    const int MAX_83_FILENAME_LENGTH = 8;
-    const int MAX_83_FILENAME_EXTENSION_LENGTH = 3;
-
-    enum {
-        CHARACTER_SPACE = 0x20,
-        CHARACTER_PERIOD = 0x2E,
-        CHARACTER_DELETE = 0x7F
-    };
-
-    if (!filename)
-        return false;
-
-    int filenameLength = strlen(filename);
-    const char* filenameExtension = nullptr;
-    for (int i = 0; i < filenameLength; i++) {
-        const char c = filename[i];
-
-        // A 8.3 filename must only contain characters that can be represented
-        // in ASCII, in the range below 0x80
-        if ((unsigned char)c > CHARACTER_DELETE)
-            return false;
-
-        // A 8.3 filename must not contain the space character
-        if (c == CHARACTER_SPACE)
-            return false;
-
-        // A 8.3 filename must not contain more than one period character
-        if (c == CHARACTER_PERIOD) {
-            if (filenameExtension)
-                return false;
-
-            filenameExtension = &filename[i + 1];
-        }
-    }
-
-    if (filenameExtension) {
-        const size_t filenameExtensionLength = strlen(filenameExtension);
-
-        // Don't include the length of the extension in the filename length
-        filenameLength = ((filenameExtension - 1) - filename);
-
-        // The filename extension, if present, must be 1-3 characters in length
-        if (filenameExtensionLength > MAX_83_FILENAME_EXTENSION_LENGTH)
-            return false;
-    }
-
-    // The base filename must be 1-8 characters in length
-    return (filenameLength >= MIN_83_FILENAME_LENGTH &&
-            filenameLength <= MAX_83_FILENAME_LENGTH);
 }
 
 /*---------------------------------------------------------------------------*
@@ -205,24 +146,12 @@ static const char* GetReplacedFilepath(const char* filepath, char* out_buf, size
     if (!out_buf)
         return nullptr;
 
-    size_t maxReplacedFilepathLength = NAND_MAX_FILENAME_LENGTH + sizeof(EFS_DRIVE);
-    if (out_len < maxReplacedFilepathLength)
+    if (out_len < EFS_MAX_REPLACED_FILEPATH_LENGTH)
         return nullptr;
-
-    // Get the name of the file
-    const char* filename = strrchr(filepath, NAND_DIRECTORY_SEPARATOR_CHAR) + 1;
-    if (!filename)
-        return nullptr;
-
-    // Ensure that the filename is valid
-    if (!IsFilenameDOS83(filename))
-    {
-        peli::Log(LogL::ERROR, "[EFS::GetReplacedFilepath] Filename '%s' is invalid !", filename);
-        return nullptr;
-    }
 
     // Create and write the replaced filepath
-    if (snprintf(out_buf, maxReplacedFilepathLength, EFS_DRIVE "%s", filename) <= 0)
+    filepath = strchr(filepath, NAND_DIRECTORY_SEPARATOR_CHAR);
+    if (snprintf(out_buf, EFS_MAX_REPLACED_FILEPATH_LENGTH, EFS_DRIVE "%s", filepath) <= 0)
     {
         peli::Log(LogL::ERROR, "[EFS::GetReplacedFilepath] Failed to format the replaced filepath !");
         return nullptr;
@@ -287,14 +216,11 @@ static s32 ReqProxyOpen(const char* filepath, u32 mode)
     if (fd < 0)
         return ISFSError::MaxOpen;
 
-    if (!IsFilepathValid(filepath))
-        return ISFSError::Invalid;
-
     if (mode > IOS_OPEN_RW)
         return ISFSError::Invalid;
 
     // Get the replaced filepath
-    char efsFilepath[NAND_MAX_FILENAME_LENGTH + sizeof(EFS_DRIVE)];
+    char efsFilepath[EFS_MAX_REPLACED_FILEPATH_LENGTH];
     if (!GetReplacedFilepath(filepath, efsFilepath, sizeof(efsFilepath)))
         return ISFSError::Invalid;
 
@@ -535,7 +461,7 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
             return realFsMgr.ioctl(ISFSIoctl::CreateDir, in, in_len, io, io_len);
 
         // Get the replaced filepath
-        char efsFilepath[NAND_MAX_FILENAME_LENGTH + sizeof(EFS_DRIVE)];
+        char efsFilepath[EFS_MAX_REPLACED_FILEPATH_LENGTH];
         if (!GetReplacedFilepath(path, efsFilepath, sizeof(efsFilepath)))
             return ISFSError::Invalid;
 
@@ -577,7 +503,7 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
             return realFsMgr.ioctl(ISFSIoctl::SetAttr, in, in_len, io, io_len);
 
         // Get the replaced filepath
-        char efsFilepath[NAND_MAX_FILENAME_LENGTH + sizeof(EFS_DRIVE)];
+        char efsFilepath[EFS_MAX_REPLACED_FILEPATH_LENGTH];
         if (!GetReplacedFilepath(path, efsFilepath, sizeof(efsFilepath)))
             return ISFSError::Invalid;
 
@@ -620,7 +546,7 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
             return realFsMgr.ioctl(ISFSIoctl::GetAttr, in, in_len, io, io_len);
 
         // Get the replaced filepath
-        char efsFilepath[NAND_MAX_FILENAME_LENGTH + sizeof(EFS_DRIVE)];
+        char efsFilepath[EFS_MAX_REPLACED_FILEPATH_LENGTH];
         if (!GetReplacedFilepath(filepath, efsFilepath, sizeof(efsFilepath)))
             return ISFSError::Invalid;
 
@@ -667,7 +593,7 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
             return realFsMgr.ioctl(ISFSIoctl::Delete, in, in_len, io, io_len);
 
         // Get the replaced filepath
-        char efsFilepath[NAND_MAX_FILENAME_LENGTH + sizeof(EFS_DRIVE)];
+        char efsFilepath[EFS_MAX_REPLACED_FILEPATH_LENGTH];
         if (!GetReplacedFilepath(filepath, efsFilepath, sizeof(efsFilepath)))
             return ISFSError::Invalid;
 
@@ -720,8 +646,8 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
         // Both of the filepaths are replaced
 
         // Get the replaced filepaths
-        char efsOldFilepath[NAND_MAX_FILENAME_LENGTH + sizeof(EFS_DRIVE)];
-        char efsNewFilepath[NAND_MAX_FILENAME_LENGTH + sizeof(EFS_DRIVE)];
+        char efsOldFilepath[EFS_MAX_REPLACED_FILEPATH_LENGTH];
+        char efsNewFilepath[EFS_MAX_REPLACED_FILEPATH_LENGTH];
 
         if (!GetReplacedFilepath(pathOld, efsOldFilepath, sizeof(efsOldFilepath)) ||
             !GetReplacedFilepath(pathNew, efsNewFilepath, sizeof(efsNewFilepath)) )
@@ -764,7 +690,7 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
             return realFsMgr.ioctl(ISFSIoctl::CreateFile, in, in_len, io, io_len);
 
         // Get the replaced filepath
-        char efsFilepath[NAND_MAX_FILENAME_LENGTH + sizeof(EFS_DRIVE)];
+        char efsFilepath[EFS_MAX_REPLACED_FILEPATH_LENGTH];
         if (!GetReplacedFilepath(path, efsFilepath, sizeof(efsFilepath)))
             return ISFSError::Invalid;
 

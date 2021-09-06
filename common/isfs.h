@@ -1,8 +1,8 @@
 /*---------------------------------------------------------------------------*
  * Author  : Star (and don't forget Palapeli)
- * Date    : 26 Aug 2021
- * File    : nand.h
- * Version : 1.1.0.0
+ * Date    : 06 Sep 2021
+ * File    : isfs.h
+ * Version : 1.3.0.0
  *---------------------------------------------------------------------------*/
 
 #pragma once
@@ -10,7 +10,6 @@
 //! Definitions
 #define NAND_DIRECTORY_SEPARATOR_CHAR '/'
 
-#define NAND_MAX_FILENAME_LENGTH 12 // Not including the NULL terminator
 #define NAND_MAX_FILEPATH_LENGTH 64 // Including the NULL terminator
 #define NAND_MAX_FILE_DESCRIPTOR_AMOUNT 15
 
