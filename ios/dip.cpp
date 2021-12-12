@@ -217,7 +217,6 @@ static bool DI_DoNewIOCTL(IOSRequest* req)
 
 static inline void ReqOpen(IOSRequest* req)
 {
-    peli::Log(LogL::INFO, "receive open");
     s32 ret = IOS_ENOENT;
     if (!strcmp(req->open.path, "~dev/di")) {
         ret = IOS_Open("/dev/di", req->open.mode);
@@ -237,27 +236,19 @@ static inline void ReqIoctl(IOSRequest* req)
         return;
 
     /* If DoNewIOCTL returns false, forward to real DI */
-    const s32 ret = IOS_IoctlAsync(req->handle, req->ioctl.cmd, req->ioctl.in,
-                                   req->ioctl.in_len, req->ioctl.io,
-                                   req->ioctl.io_len, DiMsgQueue, req);
-    if (ret != IOS_SUCCESS) {
-        peli::Log(LogL::ERROR, "IOS_Ioctl(0x%02X) forward failed: %d",
-                  req->ioctl.cmd, ret);
-        abort();
-    }
+    const s32 ret =
+        IOS_Ioctl(req->handle, req->ioctl.cmd, req->ioctl.in, req->ioctl.in_len,
+                  req->ioctl.io, req->ioctl.io_len);
+    IOS_ResourceReply(req, ret);
 }
 
 static inline void ReqIoctlv(IOSRequest* req)
 {
     /* Probably won't be replacing any IOCTLVs */
     const s32 ret =
-        IOS_IoctlvAsync(req->handle, req->ioctlv.cmd, req->ioctlv.in_count,
-                        req->ioctlv.io_count, req->ioctlv.vec, DiMsgQueue, req);
-    if (ret != IOS_SUCCESS) {
-        peli::Log(LogL::ERROR, "IOS_Ioctlv(0x%02X) forward failed: %d",
-                  req->ioctlv.cmd, ret);
-        abort();
-    }
+        IOS_Ioctlv(req->handle, req->ioctlv.cmd, req->ioctlv.in_count,
+                   req->ioctlv.io_count, req->ioctlv.vec);
+    IOS_ResourceReply(req, ret);
 }
 
 void HandleRequest(IOSRequest* req)
