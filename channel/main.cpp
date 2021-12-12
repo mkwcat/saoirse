@@ -299,13 +299,6 @@ static DIP::DVDPatch fstTest()
     return patch;
 }
 
-/* temporary lol */
-static void patchMkwDIPath()
-{
-    strcpy(reinterpret_cast<char*>(0x80381570), "/dev/do");
-    DCFlushRange(reinterpret_cast<void*>(0x80381560), 32);
-}
-
 static Stage stReadDisc([[maybe_unused]] Stage from)
 {
     irse::Log(LogS::Core, LogL::INFO, "DiskID: %.6s",
@@ -322,6 +315,8 @@ static Stage stReadDisc([[maybe_unused]] Stage from)
 
     DIP::DVDPatch patch = fstTest();
 
+    sleep(1);
+
     /* Cast as s32 removes high word the in title ID */
     irse::Log(LogS::Core, LogL::INFO, "Launching IOS%d",
               static_cast<s32>(meta.sysVersion));
@@ -334,6 +329,7 @@ static Stage stReadDisc([[maybe_unused]] Stage from)
     IOSBoot::Log* log = new IOSBoot::Log();
     usleep(64000);
 
+    sleep(1);
     DVD::Init();
     startupDrive();
 
@@ -343,11 +339,12 @@ static Stage stReadDisc([[maybe_unused]] Stage from)
     // DVDProxy::StartGame();
 
     DVD::Deinit();
+    sleep(1);
 
     delete log;
 
     SetupGlobals(0);
-    patchMkwDIPath();
+    //patchMkwDIPath();
 
     // TODO: Proper shutdown
     SYS_ResetSystem(SYS_SHUTDOWN, 0, 0);

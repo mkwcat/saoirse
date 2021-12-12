@@ -9,7 +9,10 @@
 #define ATTRIBUTE_PACKED __attribute__((packed))
 #endif
 #ifndef ATTRIBUTE_TARGET
-#define ATTRIBUTE_TARGET(t) __attribute((target(#t)))
+#define ATTRIBUTE_TARGET(t) __attribute__((target(#t)))
+#endif
+#ifndef ATTRIBUTE_SECTION
+#define ATTRIBUTE_SECTION(t) __attribute__((section(#t)))
 #endif
 
 #ifdef __cplusplus

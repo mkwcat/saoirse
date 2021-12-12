@@ -38,7 +38,8 @@ namespace EFS
 constexpr s32 mgrHandle = 200;
 
 #define EFS_DRIVE "0:"
-#define EFS_MAX_REPLACED_FILEPATH_LENGTH (sizeof(EFS_DRIVE) - 1) + NAND_MAX_FILEPATH_LENGTH
+#define EFS_MAX_REPLACED_FILEPATH_LENGTH                                       \
+    (sizeof(EFS_DRIVE) - 1) + NAND_MAX_FILEPATH_LENGTH
 
 IOS::ResourceCtrl<ISFSIoctl> realFsMgr("/dev/fs");
 static std::array<FIL*, NAND_MAX_FILE_DESCRIPTOR_AMOUNT> spFileDescriptorArray;
@@ -88,7 +89,8 @@ static int GetAvailableFileDescriptor()
 static size_t strnlen(const char* string, size_t maxLength)
 {
     size_t i;
-    for (i = 0; i < maxLength && string[i]; i++) ;
+    for (i = 0; i < maxLength && string[i]; i++)
+        ;
     return i;
 }
 
@@ -106,7 +108,8 @@ static bool IsFilepathValid(const char* filepath)
     if (filepath[0] != NAND_DIRECTORY_SEPARATOR_CHAR)
         return false;
 
-    return (strnlen(filepath, NAND_MAX_FILEPATH_LENGTH) < NAND_MAX_FILEPATH_LENGTH);
+    return (strnlen(filepath, NAND_MAX_FILEPATH_LENGTH) <
+            NAND_MAX_FILEPATH_LENGTH);
 }
 
 /*---------------------------------------------------------------------------*
@@ -120,11 +123,20 @@ static bool IsReplacedFilepath(const char* filepath)
     if (!IsFilepathValid(filepath))
         return false;
 
-    //! A list of filepaths to be replaced will be provided by the channel in the future
-    if (strcmp(filepath, "/title/00010004/524d4345/data/rksys.dat" /* RMCE */) == 0) return true;
-    if (strcmp(filepath, "/title/00010004/524d4350/data/rksys.dat" /* RMCP */) == 0) return true;
-    if (strcmp(filepath, "/title/00010004/524d434a/data/rksys.dat" /* RMCJ */) == 0) return true;
-    if (strcmp(filepath, "/title/00010004/524d434b/data/rksys.dat" /* RMCK */) == 0) return true;
+    //! A list of filepaths to be replaced will be provided by the channel in
+    //! the future
+    if (strcmp(filepath,
+               "/title/00010004/524d4345/data/rksys.dat" /* RMCE */) == 0)
+        return true;
+    if (strcmp(filepath,
+               "/title/00010004/524d4350/data/rksys.dat" /* RMCP */) == 0)
+        return true;
+    if (strcmp(filepath,
+               "/title/00010004/524d434a/data/rksys.dat" /* RMCJ */) == 0)
+        return true;
+    if (strcmp(filepath,
+               "/title/00010004/524d434b/data/rksys.dat" /* RMCK */) == 0)
+        return true;
 
     return false;
 }
@@ -133,12 +145,12 @@ static bool IsReplacedFilepath(const char* filepath)
  * Name        : GetReplacedFilepath
  * Description : Gets the replaced filepath of a filepath.
  * Arguments   : filepath    The filepath to get the replaced filepath of.
- *               out_buf     A pointer to a buffer to store the replaced filepath in.
- *               out_len     The length of the output buffer.
- * Returns     : A pointer to the buffer containing the replaced filepath, or
- *               nullptr on error.
+ *               out_buf     A pointer to a buffer to store the replaced
+ *filepath in. out_len     The length of the output buffer. Returns     : A
+ *pointer to the buffer containing the replaced filepath, or nullptr on error.
  *---------------------------------------------------------------------------*/
-static const char* GetReplacedFilepath(const char* filepath, char* out_buf, size_t out_len)
+static const char* GetReplacedFilepath(const char* filepath, char* out_buf,
+                                       size_t out_len)
 {
     if (!IsFilepathValid(filepath))
         return nullptr;
@@ -151,9 +163,10 @@ static const char* GetReplacedFilepath(const char* filepath, char* out_buf, size
 
     // Create and write the replaced filepath
     filepath = strchr(filepath, NAND_DIRECTORY_SEPARATOR_CHAR);
-    if (snprintf(out_buf, EFS_MAX_REPLACED_FILEPATH_LENGTH, EFS_DRIVE "%s", filepath) <= 0)
-    {
-        peli::Log(LogL::ERROR, "[EFS::GetReplacedFilepath] Failed to format the replaced filepath !");
+    if (snprintf(out_buf, EFS_MAX_REPLACED_FILEPATH_LENGTH, EFS_DRIVE "%s",
+                 filepath) <= 0) {
+        peli::Log(LogL::ERROR, "[EFS::GetReplacedFilepath] Failed to format "
+                               "the replaced filepath !");
         return nullptr;
     }
 
@@ -236,9 +249,10 @@ static s32 ReqProxyOpen(const char* filepath, u32 mode)
         return FResultToISFSError(fret);
     }
 
-    peli::Log(LogL::INFO,
-              "[EFS::ReqProxyOpen] Successfully opened file '%s' (fd=%d, mode=%u) !",
-              efsFilepath, fd, mode);
+    peli::Log(
+        LogL::INFO,
+        "[EFS::ReqProxyOpen] Successfully opened file '%s' (fd=%d, mode=%u) !",
+        efsFilepath, fd, mode);
 
     return fd;
 }
@@ -440,8 +454,7 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
     // in: Accepts ISFSAttrBlock. Reads path, ownerPerm, groupPerm, otherPerm,
     // and attributes.
     // out: not used
-    case ISFSIoctl::CreateDir:
-    {
+    case ISFSIoctl::CreateDir: {
         if (!aligned(in, 4))
             return ISFSError::Invalid;
 
@@ -458,7 +471,8 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
 
         // Check if the filepath should be replaced
         if (!IsReplacedFilepath(path))
-            return realFsMgr.ioctl(ISFSIoctl::CreateDir, in, in_len, io, io_len);
+            return realFsMgr.ioctl(ISFSIoctl::CreateDir, in, in_len, io,
+                                   io_len);
 
         // Get the replaced filepath
         char efsFilepath[EFS_MAX_REPLACED_FILEPATH_LENGTH];
@@ -466,13 +480,16 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
             return ISFSError::Invalid;
 
         const FRESULT fresult = f_mkdir(path);
-        if (fresult != FR_OK)
-        {
-            peli::Log(LogL::ERROR, "[EFS::ReqIoctl] Failed to create directory '%s' !", efsFilepath);
+        if (fresult != FR_OK) {
+            peli::Log(LogL::ERROR,
+                      "[EFS::ReqIoctl] Failed to create directory '%s' !",
+                      efsFilepath);
             return FResultToISFSError(fresult);
         }
 
-        peli::Log(LogL::INFO, "[EFS::ReqIoctl] Successfully created directory '%s' !", efsFilepath);
+        peli::Log(LogL::INFO,
+                  "[EFS::ReqIoctl] Successfully created directory '%s' !",
+                  efsFilepath);
 
         return ISFSError::OK;
     }
@@ -482,8 +499,7 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
     // not zero, ownerID and groupID must be equal to the caller's. Otherwise,
     // throw ISFSError::NoAccess.
     // out: not used
-    case ISFSIoctl::SetAttr:
-    {
+    case ISFSIoctl::SetAttr: {
         if (!aligned(in, 4))
             return ISFSError::Invalid;
 
@@ -508,13 +524,18 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
             return ISFSError::Invalid;
 
         const FRESULT fresult = f_stat(efsFilepath, nullptr);
-        if (fresult != FR_OK)
-        {
-            peli::Log(LogL::ERROR, "[EFS::ReqIoctl] Failed to set attributes for file or directory '%s' !", efsFilepath);
+        if (fresult != FR_OK) {
+            peli::Log(LogL::ERROR,
+                      "[EFS::ReqIoctl] Failed to set attributes for file or "
+                      "directory '%s' !",
+                      efsFilepath);
             return FResultToISFSError(fresult);
         }
 
-        peli::Log(LogL::INFO, "[EFS::ReqIoctl] Successfully set attributes for file or directory '%s' !", efsFilepath);
+        peli::Log(LogL::INFO,
+                  "[EFS::ReqIoctl] Successfully set attributes for file or "
+                  "directory '%s' !",
+                  efsFilepath);
 
         return ISFSError::OK;
     }
@@ -522,8 +543,7 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
     // [ISFS_GetAttr]
     // in: Path to a file or directory.
     // out: File/directory's attributes (ISFSAttrBlock).
-    case ISFSIoctl::GetAttr:
-    {
+    case ISFSIoctl::GetAttr: {
         const int OWNER_PERM = 3;
         const int GROUP_PERM = 3;
         const int OTHER_PERM = 1;
@@ -551,22 +571,27 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
             return ISFSError::Invalid;
 
         const FRESULT fresult = f_stat(efsFilepath, nullptr);
-        if (fresult != FR_OK)
-        {
-            peli::Log(LogL::ERROR, "[EFS::ReqIoctl] Failed to get attributes for file or directory '%s' !", efsFilepath);
+        if (fresult != FR_OK) {
+            peli::Log(LogL::ERROR,
+                      "[EFS::ReqIoctl] Failed to get attributes for file or "
+                      "directory '%s' !",
+                      efsFilepath);
             return FResultToISFSError(fresult);
         }
 
         ISFSAttrBlock* isfsAttrBlock = (ISFSAttrBlock*)io;
-        isfsAttrBlock->ownerId       = IOS_GetUid();
-        isfsAttrBlock->groupId       = IOS_GetGid();
+        isfsAttrBlock->ownerId = IOS_GetUid();
+        isfsAttrBlock->groupId = IOS_GetGid();
         strcpy(isfsAttrBlock->path, filepath);
-        isfsAttrBlock->ownerPerm     = OWNER_PERM;
-        isfsAttrBlock->groupPerm     = GROUP_PERM;
-        isfsAttrBlock->otherPerm     = OTHER_PERM;
-        isfsAttrBlock->attributes    = ATTRIBUTES;
+        isfsAttrBlock->ownerPerm = OWNER_PERM;
+        isfsAttrBlock->groupPerm = GROUP_PERM;
+        isfsAttrBlock->otherPerm = OTHER_PERM;
+        isfsAttrBlock->attributes = ATTRIBUTES;
 
-        peli::Log(LogL::INFO, "[EFS::ReqIoctl] Successfully got attributes for file or directory '%s' !", efsFilepath);
+        peli::Log(LogL::INFO,
+                  "[EFS::ReqIoctl] Successfully got attributes for file or "
+                  "directory '%s' !",
+                  efsFilepath);
 
         return ISFSError::OK;
     }
@@ -574,8 +599,7 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
     // [ISFS_Delete]
     // in: Path to the file or directory to delete.
     // out: not used
-    case ISFSIoctl::Delete:
-    {
+    case ISFSIoctl::Delete: {
         if (!aligned(in, 4))
             return ISFSError::Invalid;
 
@@ -598,13 +622,18 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
             return ISFSError::Invalid;
 
         const FRESULT fresult = f_unlink(efsFilepath);
-        if (fresult != FR_OK)
-        {
-            peli::Log(LogL::ERROR, "[EFS::ReqIoctl] Failed to delete file or directory '%s' !", efsFilepath);
+        if (fresult != FR_OK) {
+            peli::Log(
+                LogL::ERROR,
+                "[EFS::ReqIoctl] Failed to delete file or directory '%s' !",
+                efsFilepath);
             return FResultToISFSError(fresult);
         }
 
-        peli::Log(LogL::INFO, "[EFS::ReqIoctl] Successfully deleted file or directory '%s' !", efsFilepath);
+        peli::Log(
+            LogL::INFO,
+            "[EFS::ReqIoctl] Successfully deleted file or directory '%s' !",
+            efsFilepath);
 
         return ISFSError::OK;
     }
@@ -612,8 +641,7 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
     // [ISFS_Rename]
     // in: ISFSRenameBlock.
     // out: not used
-    case ISFSIoctl::Rename:
-    {
+    case ISFSIoctl::Rename: {
         if (!aligned(in, 4))
             return ISFSError::Invalid;
 
@@ -626,21 +654,18 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
         const char* pathNew = isfsRenameBlock->pathNew;
 
         // Check if the old and new filepaths are valid
-        if (!IsFilepathValid(pathOld) ||
-            !IsFilepathValid(pathNew) )
+        if (!IsFilepathValid(pathOld) || !IsFilepathValid(pathNew))
             return ISFSError::Invalid;
 
         const bool isOldFilepathReplaced = IsReplacedFilepath(pathOld);
         const bool isNewFilepathReplaced = IsReplacedFilepath(pathNew);
 
         // Neither of the filepaths are replaced
-        if (!isOldFilepathReplaced &&
-            !isNewFilepathReplaced )
+        if (!isOldFilepathReplaced && !isNewFilepathReplaced)
             return realFsMgr.ioctl(ISFSIoctl::Rename, in, in_len, io, io_len);
 
         // One of the filepaths is replaced
-        if (isOldFilepathReplaced ^
-            isNewFilepathReplaced )
+        if (isOldFilepathReplaced ^ isNewFilepathReplaced)
             return ISFSError::Invalid;
 
         // Both of the filepaths are replaced
@@ -649,18 +674,25 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
         char efsOldFilepath[EFS_MAX_REPLACED_FILEPATH_LENGTH];
         char efsNewFilepath[EFS_MAX_REPLACED_FILEPATH_LENGTH];
 
-        if (!GetReplacedFilepath(pathOld, efsOldFilepath, sizeof(efsOldFilepath)) ||
-            !GetReplacedFilepath(pathNew, efsNewFilepath, sizeof(efsNewFilepath)) )
+        if (!GetReplacedFilepath(pathOld, efsOldFilepath,
+                                 sizeof(efsOldFilepath)) ||
+            !GetReplacedFilepath(pathNew, efsNewFilepath,
+                                 sizeof(efsNewFilepath)))
             return ISFSError::Invalid;
 
         const FRESULT fresult = f_rename(efsOldFilepath, efsNewFilepath);
-        if (fresult != FR_OK)
-        {
-            peli::Log(LogL::ERROR, "[EFS::ReqIoctl] Failed to rename file or directory '%s' to '%s' !", efsOldFilepath, efsNewFilepath);
+        if (fresult != FR_OK) {
+            peli::Log(LogL::ERROR,
+                      "[EFS::ReqIoctl] Failed to rename file or directory '%s' "
+                      "to '%s' !",
+                      efsOldFilepath, efsNewFilepath);
             return FResultToISFSError(fresult);
         }
 
-        peli::Log(LogL::INFO, "[EFS::ReqIoctl] Successfully renamed file or directory '%s' to '%s' !", efsOldFilepath, efsNewFilepath);
+        peli::Log(LogL::INFO,
+                  "[EFS::ReqIoctl] Successfully renamed file or directory '%s' "
+                  "to '%s' !",
+                  efsOldFilepath, efsNewFilepath);
 
         return ISFSError::OK;
     }
@@ -669,8 +701,7 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
     // in: Accepts ISFSAttrBlock. Reads path, ownerPerm, groupPerm, otherPerm,
     // and attributes.
     // out: not used
-    case ISFSIoctl::CreateFile:
-    {
+    case ISFSIoctl::CreateFile: {
         if (!aligned(in, 4))
             return ISFSError::Invalid;
 
@@ -687,7 +718,8 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
 
         // Check if the filepath should be replaced
         if (!IsReplacedFilepath(path))
-            return realFsMgr.ioctl(ISFSIoctl::CreateFile, in, in_len, io, io_len);
+            return realFsMgr.ioctl(ISFSIoctl::CreateFile, in, in_len, io,
+                                   io_len);
 
         // Get the replaced filepath
         char efsFilepath[EFS_MAX_REPLACED_FILEPATH_LENGTH];
@@ -696,13 +728,16 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
 
         FIL fil;
         const FRESULT fresult = f_open(&fil, efsFilepath, FA_CREATE_NEW);
-        if (fresult != FR_OK)
-        {
-            peli::Log(LogL::ERROR, "[EFS::ReqIoctl] Failed to create file '%s' !", efsFilepath);
+        if (fresult != FR_OK) {
+            peli::Log(LogL::ERROR,
+                      "[EFS::ReqIoctl] Failed to create file '%s' !",
+                      efsFilepath);
             return FResultToISFSError(fresult);
         }
 
-        peli::Log(LogL::INFO, "[EFS::ReqIoctl] Successfully created file '%s' !", efsFilepath);
+        peli::Log(LogL::INFO,
+                  "[EFS::ReqIoctl] Successfully created file '%s' !",
+                  efsFilepath);
 
         return ISFSError::OK;
     }
@@ -740,7 +775,10 @@ static s32 ForwardRequest(IOS::Request* req)
     switch (req->cmd) {
     case IOS::Command::Open: {
         /* [FIXME] UID and GID always 0 */
-        const s32 ret = IOS_Open(req->open.path, req->open.mode);
+        char path[64];
+        strncpy(path, req->open.path, 64);
+        path[0] = '/';
+        const s32 ret = IOS_Open(path, req->open.mode);
         if (ret >= 0)
             return ret + 100;
         return ret;
@@ -777,13 +815,19 @@ static s32 IPCRequest(IOS::Request* req)
 
     switch (req->cmd) {
     case IOS::Command::Open: {
-        if (!strncmp(req->open.path, "/dev/", 5)) {
-            if (!strcmp(req->open.path, "/dev/flash")) {
+        if (req->open.path[0] != '$')
+            return IOSErr::NotFound;
+        char path[64];
+        strncpy(path, req->open.path, 64);
+        path[0] = '/';
+
+        if (!strncmp(path, "/dev/", 5)) {
+            if (!strcmp(path, "/dev/flash")) {
                 /* No */
                 peli::Log(LogL::WARN, "Attempt to open /dev/flash from PPC");
                 return ISFSError::NoAccess;
             }
-            if (!strcmp(req->open.path, "/dev/fs")) {
+            if (!strcmp(path, "/dev/fs")) {
                 peli::Log(LogL::INFO, "Open /dev/fs from PPC");
                 return mgrHandle;
             }
@@ -792,11 +836,10 @@ static s32 IPCRequest(IOS::Request* req)
             return IOSErr::NotFound;
         }
 
-        if (IsReplacedFilepath(req->open.path))
-            return ReqProxyOpen(req->open.path, req->open.mode);
+        if (IsReplacedFilepath(path))
+            return ReqProxyOpen(path, req->open.mode);
 
-        peli::Log(LogL::INFO, "Forwarding open '%s' to real FS",
-                  req->open.path);
+        peli::Log(LogL::INFO, "Forwarding open '%s' to real FS", path);
         return ForwardRequest(req);
     }
     case IOS::Command::Close:
@@ -849,8 +892,7 @@ extern "C" s32 FS_StartRM([[maybe_unused]] void* arg)
     }
 
     Queue<IOS::Request*> queue(8);
-    /* [TODO] ? is temporary until we can actually mount over / */
-    const s32 ret = IOS_RegisterResourceManager("", queue.id());
+    const s32 ret = IOS_RegisterResourceManager("$", queue.id());
     if (ret != IOSErr::OK) {
         peli::Log(LogL::ERROR,
                   "FS_StartRM: IOS_RegisterResourceManager failed: %d", ret);
