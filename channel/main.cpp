@@ -317,6 +317,9 @@ static Stage stReadDisc([[maybe_unused]] Stage from)
 
     sleep(1);
 
+    SDCard::Shutdown();
+    
+
     /* Cast as s32 removes high word the in title ID */
     irse::Log(LogS::Core, LogL::INFO, "Launching IOS%d",
               static_cast<s32>(meta.sysVersion));
@@ -333,13 +336,14 @@ static Stage stReadDisc([[maybe_unused]] Stage from)
     DVD::Init();
     startupDrive();
 
+    sleep(8);
+
     loader.openBootPartition(&meta);
 
     DVDProxy::ApplyPatches(&patch, 1);
     // DVDProxy::StartGame();
 
     DVD::Deinit();
-    sleep(1);
 
     delete log;
 

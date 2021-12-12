@@ -114,7 +114,7 @@
 #define WRITE_BL_LEN                                                           \
     ((u8)(((__sd0_csd[12] & 0x03) << 2) | ((__sd0_csd[13] >> 6) & 0x03)))
 
-static u8 rw_buffer[SDIO_HEAPSIZE];
+static u8 rw_buffer[SDIO_HEAPSIZE] ATTRIBUTE_ALIGN(32);
 
 struct _sdiorequest {
     u32 cmd;
@@ -138,11 +138,11 @@ static u16 __sd0_rca = 0;
 static s32 __sd0_initialized = 0;
 static s32 __sd0_sdhc = 0;
 // static u8 __sd0_csd[16];
-static u8 __sd0_cid[16];
+static u8 __sd0_cid[16] ATTRIBUTE_ALIGN(32);
 
 static s32 __sdio_initialized = 0;
 
-static char _sd0_fs[] ATTRIBUTE_ALIGN(32) = "/dev/sdio/slot0";
+static char _sd0_fs[] = "/dev/sdio/slot0";
 
 static inline void SyncBeforeRead([[maybe_unused]] const void* address,
                                   [[maybe_unused]] u32 len)
