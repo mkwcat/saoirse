@@ -249,9 +249,15 @@ static void saoMain()
     }
 }
 
-void* operator new(std::size_t size) { return IOS_Alloc(mainHeap, size); }
+void* operator new(std::size_t size)
+{
+    return IOS_Alloc(mainHeap, size);
+}
 
-void* operator new[](std::size_t size) { return IOS_Alloc(mainHeap, size); }
+void* operator new[](std::size_t size)
+{
+    return IOS_Alloc(mainHeap, size);
+}
 
 void* operator new(std::size_t size, std::align_val_t align)
 {
@@ -261,6 +267,26 @@ void* operator new(std::size_t size, std::align_val_t align)
 void* operator new[](std::size_t size, std::align_val_t align)
 {
     return IOS_AllocAligned(mainHeap, size, static_cast<u32>(align));
+}
+
+void operator delete(void* ptr)
+{
+    IOS_Free(mainHeap, ptr);
+}
+
+void operator delete[](void* ptr)
+{
+    IOS_Free(mainHeap, ptr);
+}
+
+void operator delete(void* ptr, std::size_t size)
+{
+    IOS_Free(mainHeap, ptr);
+}
+
+void operator delete[](void* ptr, std::size_t size)
+{
+    IOS_Free(mainHeap, ptr);
 }
 
 void exitClr(u32 color)
