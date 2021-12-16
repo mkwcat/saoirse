@@ -222,7 +222,8 @@ static void saoMain()
     if (ret < 0)
         exitClr(YUV_YELLOW);
     /* Patch for system mode */
-    kwrite32(0xFFFE0000 + ret * 0xB0, 0x1F | 0x20);
+    u32 cpsr = 0x1F | ((u32)(mainThreadProc) & 1 ? 0x20 : 0);
+    kwrite32(0xFFFE0000 + ret * 0xB0, cpsr);
     ret = IOS_StartThread(ret);
     if (ret < 0)
         exitClr(YUV_YELLOW);
