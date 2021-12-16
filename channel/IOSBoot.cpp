@@ -108,11 +108,21 @@ s32 IOSBoot::Log::Callback(s32 result, [[maybe_unused]] void* usrdata)
         irse::Log(LogS::Core, LogL::ERROR, "/dev/stdout error: %d", result);
         return 0;
     }
-    puts(obj->logBuffer);
-    if (!obj->reset)
-        obj->restartEvent();
-    else
-        obj->reset = false;
+    if (result == 0) {
+        puts(obj->logBuffer);
+    } else if (result == 1) {
+        irse::Log(LogS::Core, LogL::INFO, "Received resource notify event");
+        obj->m_eventCount++;
+
+        if (obj->m_eventCount == obj->m_triggerEventCount) {
+            obj->m_triggerEventCount = -1;
+            obj->m_eventQueue->send(0);
+        }
+    } else if (result == 2) {
+        return 0;
+    }
+
+    obj->restartEvent();
     return 0;
 }
 
@@ -122,7 +132,7 @@ IOSBoot::Log::Log()
         /* Unfortunately there isn't really a way to detect the moment the log
          * resource manager is created, so we just have to keep trying until it
          * succeeds. */
-        for (s32 i = 0; i < 50; i++) {
+        for (s32 i = 0; i < 1000; i++) {
             usleep(1000);
             new (&this->logRM) IOS::ResourceCtrl<s32>("/dev/stdout");
             if (this->logRM.fd() != static_cast<s32>(IOSErr::NotFound))
@@ -134,7 +144,6 @@ IOSBoot::Log::Log()
                   this->logRM.fd());
         return;
     }
-    this->restartEvent();
 }
 
 #if 0

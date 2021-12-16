@@ -1,14 +1,17 @@
 #include "main.h"
+#include "patch.h"
 #include <cstdio>
 #include <cstring>
+#include <disk.h>
+#include <ff.h>
 #include <hollywood.h>
 #include <ios.h>
+#include <sdcard.h>
 #include <stdarg.h>
 #include <types.h>
 #include <util.h>
-#include "patch.h"
 
-u8 patchThreadStack[0x400] ATTRIBUTE_ALIGN(32);
+u8 mainThreadStack[0x400] ATTRIBUTE_ALIGN(32);
 u8 DI_RMStack[0x400] ATTRIBUTE_ALIGN(32);
 u8 FS_RMStack[0x800] ATTRIBUTE_ALIGN(32);
 
@@ -24,7 +27,7 @@ u32 stdoutQueueData[8];
 static s32 printBufQueue = -1;
 static u32 printBufQueueData;
 char logBuffer[PRINT_BUFFER_SIZE];
-static bool logEnabled = true;
+static bool logEnabled = false;
 
 static const char* logColors[3] = {"\x1b[37;1m", "\x1b[33;1m", "\x1b[31;1m"};
 
@@ -52,7 +55,20 @@ void peli::Log(LogL level, const char* format, ...)
 
     memcpy(req->ioctl.io, logBuffer, PRINT_BUFFER_SIZE);
     IOS_FlushDCache(req->ioctl.io, PRINT_BUFFER_SIZE);
-    IOS_ResourceReply(req, IOS_SUCCESS);
+    IOS_ResourceReply(req, 0);
+}
+
+void peli::NotifyResourceStarted()
+{
+    if (!logEnabled)
+        return;
+
+    IOSRequest* req;
+    const s32 ret = IOS_ReceiveMessage(printBufQueue, (u32*)&req, 0);
+    if (ret < 0)
+        exitClr(YUV_CYAN);
+
+    IOS_ResourceReply(req, 1);
 }
 
 void usleep(u32 usec)
@@ -89,11 +105,17 @@ static void Log_IPCRequest(IOSRequest* req)
         IOS_ResourceReply(req, 0);
         break;
 
-    case IOS_CLOSE:
+    case IOS_CLOSE: {
         logEnabled = false;
-        peli::Log(LogL::INFO, "Closing log...");
+        usleep(10000);
+        IOSRequest* req2;
+        const s32 ret = IOS_ReceiveMessage(printBufQueue, (u32*)&req2, 0);
+        if (ret < 0)
+            exitClr(YUV_CYAN);
+        IOS_ResourceReply(req2, 2);
         IOS_ResourceReply(req, 0);
         break;
+    }
 
     case IOS_IOCTL:
         if (req->ioctl.cmd == 0) {
@@ -127,37 +149,44 @@ void kwrite32(u32 address, u32 value)
     IOS_DestroyMessageQueue(queue);
 }
 
-static void saoMain()
-{
-    s32 ret = IOS_CreateMessageQueue(&printBufQueueData, 1);
-    if (ret < 0)
-        exitClr(YUV_DARK_RED);
-    printBufQueue = ret;
+/* Common ARM C++ init */
+typedef void (*func_ptr)(void);
+extern func_ptr _init_array_start[], _init_array_end[];
 
-    ret = IOS_CreateHeap(mainHeapData, sizeof(mainHeapData));
+void cppInit()
+{
+    for (func_ptr* ctor = _init_array_start; ctor != _init_array_end; ctor++) {
+        (*ctor)();
+    }
+}
+
+static void OpenTestFile()
+{
+    /* We must attempt to open a file first for FatFS to function properly */
+    FIL testFile;
+    FRESULT fret = f_open(&testFile, "0:/", FA_READ);
+    peli::Log(LogL::INFO, "Test open result: %d", fret);
+}
+
+s32 mainThreadProc(void* arg)
+{
+    patchIOSOpen();
+
+    s32 ret = IOS_CreateHeap(mainHeapData, sizeof(mainHeapData));
     if (ret < 0)
         exitClr(YUV_YELLOW);
     mainHeap = ret;
 
-    s32 queue = IOS_CreateMessageQueue(stdoutQueueData, 8);
-    if (queue < 0)
-        exitClr(YUV_WHITE);
+    cppInit();
 
-    ret = IOS_RegisterResourceManager("/dev/stdout", queue);
-    if (ret < 0)
-        exitClr(YUV_WHITE);
-
-    ret = IOS_CreateThread(
-        patchThreadProc, nullptr,
-        reinterpret_cast<u32*>(patchThreadStack + sizeof(patchThreadStack)),
-        sizeof(patchThreadStack), 40, false);
-    if (ret < 0)
-        exitClr(YUV_YELLOW);
-    /* Patch for system mode */
-    kwrite32(0xFFFE0000 + ret * 0xB0, 0x1F | 0x20);
-    ret = IOS_StartThread(ret);
-    if (ret < 0)
-        exitClr(YUV_YELLOW);
+    if (!SDCard::Open()) {
+        peli::Log(LogL::ERROR, "FS_StartRM: SDCard::Open returned false");
+        abort();
+    }
+    if (FSServ::MountSDCard()) {
+        OpenTestFile();
+        peli::Log(LogL::INFO, "SD card mounted");
+    }
 
     ret = IOS_CreateThread(
         FS_StartRM, nullptr,
@@ -179,7 +208,37 @@ static void saoMain()
     if (ret < 0)
         exitClr(YUV_DARK_RED);
 
-    IOS_SetThreadPriority(0, 40);
+    return 0;
+}
+
+static void saoMain()
+{
+    logEnabled = true;
+
+    s32 ret = IOS_CreateThread(
+        mainThreadProc, nullptr,
+        reinterpret_cast<u32*>(mainThreadStack + sizeof(mainThreadStack)),
+        sizeof(mainThreadStack), 127, false);
+    if (ret < 0)
+        exitClr(YUV_YELLOW);
+    /* Patch for system mode */
+    kwrite32(0xFFFE0000 + ret * 0xB0, 0x1F | 0x20);
+    ret = IOS_StartThread(ret);
+    if (ret < 0)
+        exitClr(YUV_YELLOW);
+
+    ret = IOS_CreateMessageQueue(&printBufQueueData, 1);
+    if (ret < 0)
+        exitClr(YUV_DARK_RED);
+    printBufQueue = ret;
+
+    s32 queue = IOS_CreateMessageQueue(stdoutQueueData, 8);
+    if (queue < 0)
+        exitClr(YUV_WHITE);
+
+    ret = IOS_RegisterResourceManager("/dev/stdout", queue);
+    if (ret < 0)
+        exitClr(YUV_WHITE);
 
     while (1) {
         IOSRequest* req;
@@ -228,16 +287,8 @@ void __assert_fail(const char* expr, const char* file, s32 line)
     abort();
 }
 
-/* Common ARM C++ init */
-typedef void (*func_ptr)(void);
-extern func_ptr _init_array_start[], _init_array_end[];
-
 extern "C" s32 Log_StartRM([[maybe_unused]] void* arg)
 {
-    for (func_ptr* ctor = _init_array_start; ctor != _init_array_end; ctor++) {
-        (*ctor)();
-    }
-
     saoMain();
     return 0;
 }

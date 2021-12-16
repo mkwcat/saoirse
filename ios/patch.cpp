@@ -1,6 +1,8 @@
 #include "patch.h"
 #include "main.h"
+#include <ios.h>
 #include <string.h>
+#include <util.h>
 
 char* iosOpenStrncpy(char* dest, const char* src, u32 num, int pid)
 {
@@ -60,9 +62,15 @@ static u32 findSyscallTable()
     return 0;
 }
 
+ATTRIBUTE_TARGET(arm) __attribute__((noinline))
+void invalidateICacheLine(u32 addr)
+{
+    asm volatile("\tmcr p15, 0, %0, c7, c5, 1\n" :: "r"(addr));
+}
+
 /* [TODO] Perhaps hardcode patches for specific IOS versions and use the search
  * as a fallback? */
-s32 patchThreadProc([[maybe_unused]] void* arg)
+void patchIOSOpen()
 {
     peli::Log(LogL::WARN, "The search for IOS_Open syscall");
 
@@ -87,13 +95,17 @@ s32 patchThreadProc([[maybe_unused]] void* arg)
             write16(
                 addr - i + 4,
                 thumbBLLo(addr - i + 2, (u32)toUncached(&iosOpenStrncpyHook)));
+
             peli::Log(LogL::WARN, "Patched %08X = %04X%04X", addr - i + 2,
                       read16(addr - i + 2), read16(addr - i + 4));
-            return 0;
+
+            // IOS automatically aligns flush
+            IOS_FlushDCache((void*)(addr - i + 2), 4);
+            invalidateICacheLine(round_down(addr - i + 2, 32));
+            invalidateICacheLine(round_down(addr - i + 2, 32) + 32);
+            return;
         }
     }
 
     peli::Log(LogL::ERROR, "Could not find IOS_Open instruction to patch");
-    abort();
-    return 0;
 }

@@ -868,28 +868,11 @@ static s32 IPCRequest(IOS::Request* req)
     return ret;
 }
 
-static void OpenTestFile()
-{
-    /* We must attempt to open a file first for FatFS to function properly */
-    FIL testFile;
-    FRESULT fret = f_open(&testFile, "0:/", FA_READ);
-    peli::Log(LogL::INFO, "Test open result: %d", fret);
-}
-
 extern "C" s32 FS_StartRM([[maybe_unused]] void* arg)
 {
     peli::Log(LogL::INFO, "Starting FS...");
 
     assert(realFsMgr.fd() >= 0);
-
-    if (!SDCard::Open()) {
-        peli::Log(LogL::ERROR, "FS_StartRM: SDCard::Open returned false");
-        abort();
-    }
-    if (FSServ::MountSDCard()) {
-        OpenTestFile();
-        peli::Log(LogL::INFO, "SD card mounted");
-    }
 
     Queue<IOS::Request*> queue(8);
     const s32 ret = IOS_RegisterResourceManager("$", queue.id());
@@ -899,6 +882,7 @@ extern "C" s32 FS_StartRM([[maybe_unused]] void* arg)
         abort();
     }
 
+    peli::NotifyResourceStarted();
     while (true) {
         IOS::Request* req = queue.receive();
         IOS_ResourceReply(reinterpret_cast<IOSRequest*>(req), IPCRequest(req));

@@ -38,6 +38,7 @@ enum class LogL { INFO, WARN, ERROR };
 namespace peli
 {
 void Log(LogL level, const char* format, ...);
+void NotifyResourceStarted();
 }
 
 void exitClr(u32 color);

@@ -40,7 +40,7 @@ IOS_NOTE_START();
 IOS_NOTE(
 	1,
 	Log_StartRM,
-	100,
+	127,
 	0x400,
 	Log_RMStack + 0x400
 );

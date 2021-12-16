@@ -32,12 +32,14 @@
 #ifdef __cplusplus
 template <typename T> static inline T round_up(T num, unsigned int align)
 {
-    return (num + align - 1) & -align;
+    u32 raw = (u32)num;
+    return (T)((raw + align - 1) & -align);
 }
 
 template <typename T> static inline T round_down(T num, unsigned int align)
 {
-    return num & -align;
+    u32 raw = (u32)num;
+    return (T)(raw & -align);
 }
 
 template <class T> static inline bool aligned(T addr, unsigned int align)

@@ -315,36 +315,35 @@ static Stage stReadDisc([[maybe_unused]] Stage from)
 
     DIP::DVDPatch patch = fstTest();
 
-    sleep(1);
-
     SDCard::Shutdown();
     
-
     /* Cast as s32 removes high word the in title ID */
     irse::Log(LogS::Core, LogL::INFO, "Launching IOS%d",
               static_cast<s32>(meta.sysVersion));
     IOS_ReloadIOS(static_cast<s32>(meta.sysVersion));
 
     irse::Log(LogS::Core, LogL::INFO, "Starting up IOS...");
-    const s32 ret = IOSBoot::Launch(saoirse_ios_elf, saoirse_ios_elf_size);
+    s32 ret = IOSBoot::Launch(saoirse_ios_elf, saoirse_ios_elf_size);
     irse::Log(LogS::Core, LogL::INFO, "IOS Launch result: %d", ret);
 
     IOSBoot::Log* log = new IOSBoot::Log();
-    usleep(64000);
+    Queue<u32> eventWaitQueue(1);
+    log->setEventWaitingQueue(&eventWaitQueue, 2);
+    log->restartEvent();
+    eventWaitQueue.receive();
 
-    sleep(1);
     DVD::Init();
     startupDrive();
 
-    sleep(8);
-
     loader.openBootPartition(&meta);
 
-    DVDProxy::ApplyPatches(&patch, 1);
+    if ((ret = DVDProxy::ApplyPatches(&patch, 1)) != 0) {
+        irse::Log(LogS::Core, LogL::ERROR, "DVD proxy error code: %d", ret);
+        sleep(4);
+    }
     // DVDProxy::StartGame();
 
     DVD::Deinit();
-
     delete log;
 
     SetupGlobals(0);

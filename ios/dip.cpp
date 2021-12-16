@@ -302,6 +302,7 @@ extern "C" s32 DI_StartRM(void* arg)
     peli::Log(LogL::INFO, "DI started");
 
     DiStarted = true;
+    peli::NotifyResourceStarted();
     while (1) {
         IOSRequest* req;
         ret = IOS_ReceiveMessage(DiMsgQueue, (u32*)&req, 0);

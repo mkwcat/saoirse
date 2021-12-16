@@ -27,6 +27,6 @@ constexpr u16 thumbBLLo(u32 src, u32 dest)
     return ((diff >> 1) & 0x7FF) | 0xF800;
 }
 
-s32 patchThreadProc(void* arg);
+void patchIOSOpen();
 extern "C" void iosOpenStrncpyHook();
 extern "C" char* iosOpenStrncpy(char* dest, const char* src, u32 num, int pid);
