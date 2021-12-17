@@ -26,7 +26,7 @@ INCLUDES	:=  $(SOURCES) $(BUILD)
 # options for code generation
 #---------------------------------------------------------------------------------
 
-CFLAGS	= -g -O2 -Wall -Wextra -Wpedantic -Wnull-dereference -Wshadow -Werror -fno-exceptions -fno-asynchronous-unwind-tables -fno-unwind-tables $(MACHDEP) $(INCLUDE)
+CFLAGS	= -g -O2 -Wall -Wextra -Wpedantic -Wnull-dereference -Wshadow -Werror -fno-exceptions -fno-asynchronous-unwind-tables -fno-unwind-tables -fno-builtin-memcpy -fno-builtin-memset $(MACHDEP) $(INCLUDE)
 CXXFLAGS	=	$(CFLAGS) -std=c++20 -fno-rtti -Wno-register -Wno-narrowing
 
 LDFLAGS	=	-g $(MACHDEP) -Wl,-Map,$(OUTPUT).map -Wl,--section-start,.init=0x80900000
