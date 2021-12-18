@@ -320,7 +320,7 @@ static Stage stReadDisc([[maybe_unused]] Stage from)
     /* Cast as s32 removes high word the in title ID */
     irse::Log(LogS::Core, LogL::INFO, "Launching IOS%d",
               static_cast<s32>(meta.sysVersion));
-    IOS_ReloadIOS(static_cast<s32>(meta.sysVersion));
+    IOS_ReloadIOS(58);
 
     irse::Log(LogS::Core, LogL::INFO, "Starting up IOS...");
     s32 ret = IOSBoot::Launch(saoirse_ios_elf, saoirse_ios_elf_size);

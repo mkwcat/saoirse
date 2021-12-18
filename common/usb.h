@@ -6,6 +6,8 @@
 class USB
 {
 public:
+    static USB* sInstance;
+
     static constexpr s32 USB_OK = 0;
     static constexpr s32 USB_FAILED = 1;
 

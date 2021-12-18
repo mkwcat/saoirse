@@ -34,6 +34,7 @@ distribution.
 #include "usb.h"
 #include <cstring>
 #include <os.h>
+#include <types.h>
 #include <util.h>
 
 #ifdef TARGET_IOS
@@ -90,29 +91,12 @@ distribution.
 
 #define DEVLIST_MAXSIZE 8
 
-extern u32 s_size, s_cnt;
-
-static bool __inited = false;
-static bool __mounted = false;
-
-static u8 __lun = 0;
-static u8 __ep_in = 0;
-static u8 __ep_out = 0;
-static u16 __vid = 0;
-static u16 __pid = 0;
-static u32 __tag = 0;
-static u32 __interface = 0;
-static s32 __usb_fd = -1;
-static USB usb(-1);
-
 static u8 cbw_buffer[32] ATTRIBUTE_ALIGN(32);
 static u8 transferbuffer[MAX_TRANSFER_SIZE_V5] ATTRIBUTE_ALIGN(32);
 
-static s32 __usbstorage_reset();
-
-static s32 __send_cbw(u8 lun, u32 len, u8 flags, const u8* cb, u8 cbLen)
+s32 USBStorage::__send_cbw(u8 lun, u32 len, u8 flags, const u8* cb, u8 cbLen)
 {
-    s32 retval = USBStorage::Error::OK;
+    s32 retval = USBStorage::Error_OK;
 
     if (cbLen == 0 || cbLen > 16)
         return IOSErr::Invalid;
@@ -126,24 +110,26 @@ static s32 __send_cbw(u8 lun, u32 len, u8 flags, const u8* cb, u8 cbLen)
 
     memcpy(cbw_buffer + 15, cb, cbLen);
 
-    retval = usb.writeBlkMsg(__usb_fd, __ep_out, CBW_SIZE, (void*)cbw_buffer);
+    retval = USB::sInstance->writeBlkMsg(__usb_fd, __ep_out, CBW_SIZE,
+                                         (void*)cbw_buffer);
 
     if (retval == CBW_SIZE)
-        return USBStorage::Error::OK;
+        return USBStorage::Error_OK;
     else if (retval > 0)
-        return USBStorage::Error::ShortWrite;
+        return USBStorage::Error_ShortWrite;
 
     return retval;
 }
 
-static s32 __read_csw(u8* status, u32* dataResidue)
+s32 USBStorage::__read_csw(u8* status, u32* dataResidue)
 {
-    s32 retval = USBStorage::Error::OK;
+    s32 retval = USBStorage::Error_OK;
     u32 signature, tag, _dataResidue, _status;
 
-    retval = usb.writeBlkMsg(__usb_fd, __ep_in, CSW_SIZE, cbw_buffer);
+    retval =
+        USB::sInstance->writeBlkMsg(__usb_fd, __ep_in, CSW_SIZE, cbw_buffer);
     if (retval > 0 && retval != CSW_SIZE)
-        return USBStorage::Error::ShortRead;
+        return USBStorage::Error_ShortRead;
     else if (retval < 0)
         return retval;
 
@@ -153,7 +139,7 @@ static s32 __read_csw(u8* status, u32* dataResidue)
     _status = cbw_buffer[12];
 
     if (signature != CSW_SIGNATURE)
-        return USBStorage::Error::Signature;
+        return USBStorage::Error_Signature;
 
     if (dataResidue != NULL)
         *dataResidue = _dataResidue;
@@ -161,15 +147,15 @@ static s32 __read_csw(u8* status, u32* dataResidue)
         *status = _status;
 
     if (tag != __tag)
-        return USBStorage::Error::Tag;
+        return USBStorage::Error_Tag;
 
-    return USBStorage::Error::OK;
+    return USBStorage::Error_OK;
 }
 
-static s32 __cycle(u8 lun, u8* buffer, u32 len, u8* cb, u8 cbLen, u8 write,
-                   u8* _status, u32* _dataResidue)
+s32 USBStorage::__cycle(u8 lun, u8* buffer, u32 len, u8* cb, u8 cbLen, u8 write,
+                        u8* _status, u32* _dataResidue)
 {
-    s32 retval = USBStorage::Error::OK;
+    s32 retval = USBStorage::Error_OK;
 
     u8 status = 0;
     u32 dataResidue = 0;
@@ -182,7 +168,7 @@ static s32 __cycle(u8 lun, u8* buffer, u32 len, u8* cb, u8 cbLen, u8 write,
         u32 _len = len;
         retries--;
 
-        if (retval == USBStorage::Error::Timedout)
+        if (retval == USBStorage::Error_Timedout)
             break;
 
         retval = __send_cbw(lun, len, (write ? CBW_OUT : CBW_IN), cb, cbLen);
@@ -193,24 +179,29 @@ static s32 __cycle(u8 lun, u8* buffer, u32 len, u8* cb, u8 cbLen, u8 write,
             if ((u32)_buffer & 0x1F || !((u32)_buffer & 0x10000000)) {
                 if (write)
                     memcpy(transferbuffer, _buffer, thisLen);
-                retval = usb.writeBlkMsg(__usb_fd, ep, thisLen, transferbuffer);
+                retval = USB::sInstance->writeBlkMsg(__usb_fd, ep, thisLen,
+                                                     transferbuffer);
                 if (!write && retval > 0)
                     memcpy(_buffer, transferbuffer, retval);
-            } else
-                retval = usb.writeBlkMsg(__usb_fd, ep, thisLen, _buffer);
+            } else {
+                retval =
+                    USB::sInstance->writeBlkMsg(__usb_fd, ep, thisLen, _buffer);
+            }
             if (static_cast<u32>(retval) == thisLen) {
                 _len -= retval;
                 _buffer += retval;
-            } else if (retval != USBStorage::Error::Timedout)
-                retval = USBStorage::Error::DataResidue;
+            } else if (retval != USBStorage::Error_Timedout) {
+                retval = USBStorage::Error_DataResidue;
+            }
         }
 
-        if (retval >= 0)
+        if (retval >= 0) {
             retval = __read_csw(&status, &dataResidue);
+        }
 
         if (retval < 0) {
-            if (__usbstorage_reset() == USBStorage::Error::Timedout)
-                retval = USBStorage::Error::Timedout;
+            if (__usbstorage_reset() == USBStorage::Error_Timedout)
+                retval = USBStorage::Error_Timedout;
         }
     } while (retval < 0 && retries > 0);
 
@@ -222,54 +213,21 @@ static s32 __cycle(u8 lun, u8* buffer, u32 len, u8* cb, u8 cbLen, u8 write,
     return retval;
 }
 
-static s32 __usbstorage_reset()
+s32 USBStorage::__usbstorage_reset()
 {
-    s32 retval = usb.writeCtrlMsg(__usb_fd,
-                                  (USB::CtrlType::Dir_Host2Device |
-                                   USB::CtrlType::Type_Class |
-                                   USB::CtrlType::Rec_Interface),
-                                  USBSTORAGE_RESET, 0, __interface, 0, NULL);
+    s32 retval = USB::sInstance->writeCtrlMsg(
+        __usb_fd,
+        (USB::CtrlType::Dir_Host2Device | USB::CtrlType::Type_Class |
+         USB::CtrlType::Rec_Interface),
+        USBSTORAGE_RESET, 0, __interface, 0, NULL);
 
     usleep(60 * 1000);
     // from http://www.usb.org/developers/devclass_docs/usbmassbulk_10.pdf
-    usb.clearHalt(__usb_fd, __ep_in);
+    USB::sInstance->clearHalt(__usb_fd, __ep_in);
     usleep(10000);
-    usb.clearHalt(__usb_fd, __ep_out);
+    USB::sInstance->clearHalt(__usb_fd, __ep_out);
     usleep(10000);
     return retval;
-}
-
-void USBStorage_Open()
-{
-    // todo
-#if 0
-    s_size = d->sector_size;
-    s_cnt = d->sector_count;
-
-    __lun = d->lun;
-    __vid = d->vid;
-    __pid = d->pid;
-    __tag = d->tag;
-    __interface = d->interface;
-    __usb_fd = d->usb_fd;
-    __ep_in = d->ep_in;
-    __ep_out = d->ep_out;
-
-    __mounted = true;
-#endif
-}
-
-bool USBStorage::Startup()
-{
-    if (__inited)
-        return true;
-
-    new (&usb) USB(15);
-
-    USBStorage_Open();
-
-    __inited = true;
-    return __inited;
 }
 
 bool USBStorage::ReadSectors(u32 sector, u32 numSectors, void* buffer)
@@ -286,7 +244,7 @@ bool USBStorage::ReadSectors(u32 sector, u32 numSectors, void* buffer)
     retval = __cycle(__lun, reinterpret_cast<u8*>(buffer), numSectors * s_size,
                      cmd, sizeof(cmd), 0, &status, NULL);
     if (retval > 0 && status != 0)
-        retval = USBStorage::Error::Status;
+        retval = USBStorage::Error_Status;
 
     return retval >= 0;
 }
@@ -305,29 +263,27 @@ bool USBStorage::WriteSectors(u32 sector, u32 numSectors, const void* buffer)
     retval = __cycle(__lun, (u8*)buffer, numSectors * s_size, cmd, sizeof(cmd),
                      1, &status, NULL);
     if (retval > 0 && status != 0)
-        retval = USBStorage::Error::Status;
+        retval = USBStorage::Error_Status;
 
     return retval >= 0;
 }
 
-void USBStorage_Close()
+USBStorage::USBStorage(u32 sector_size, u32 sector_count, u8 lun, u8 ep_in,
+                       u8 ep_out, u16 vid, u16 pid, u32 tag, u32 interface,
+                       s32 usb_fd)
 {
-    __mounted = false;
-    __lun = 0;
-    __vid = 0;
-    __pid = 0;
+    s_size = sector_size;
+    s_cnt = sector_count;
 
-    __usb_fd = -1;
-}
+    __lun = lun;
+    __vid = vid;
+    __pid = pid;
+    __tag = tag;
+    __interface = interface;
+    __usb_fd = usb_fd;
+    __ep_in = ep_in;
+    __ep_out = ep_out;
 
-void USBStorage::Shutdown()
-{
-    if (__inited == false)
-        return;
-
-    if (__vid != 0 || __pid != 0)
-        USBStorage_Close();
-
-    usb.~USB();
-    __inited = false;
+    __inited = true;
+    __mounted = true;
 }
