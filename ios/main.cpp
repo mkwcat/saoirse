@@ -6,6 +6,7 @@
 #include <ff.h>
 #include <hollywood.h>
 #include <ios.h>
+#include <os.h>
 #include <sdcard.h>
 #include <stdarg.h>
 #include <types.h>
@@ -215,6 +216,8 @@ static void saoMain()
 {
     logEnabled = true;
 
+    IOS::Resource::makeIpcToCallbackThread();
+
     s32 ret = IOS_CreateThread(
         mainThreadProc, nullptr,
         reinterpret_cast<u32*>(mainThreadStack + sizeof(mainThreadStack)),
@@ -222,7 +225,7 @@ static void saoMain()
     if (ret < 0)
         exitClr(YUV_YELLOW);
     /* Patch for system mode */
-    u32 cpsr = 0x1F | ((u32)(mainThreadProc) & 1 ? 0x20 : 0);
+    u32 cpsr = 0x1F | ((u32)(mainThreadProc)&1 ? 0x20 : 0);
     kwrite32(0xFFFE0000 + ret * 0xB0, cpsr);
     ret = IOS_StartThread(ret);
     if (ret < 0)
