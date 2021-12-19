@@ -179,6 +179,7 @@ s32 mainThreadProc(void* arg)
     mainHeap = ret;
 
     cppInit();
+    IOS::Resource::makeIpcToCallbackThread();
 
     if (!SDCard::Open()) {
         peli::Log(LogL::ERROR, "FS_StartRM: SDCard::Open returned false");
@@ -215,8 +216,6 @@ s32 mainThreadProc(void* arg)
 static void saoMain()
 {
     logEnabled = true;
-
-    IOS::Resource::makeIpcToCallbackThread();
 
     s32 ret = IOS_CreateThread(
         mainThreadProc, nullptr,

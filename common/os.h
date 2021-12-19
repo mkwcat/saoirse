@@ -291,7 +291,7 @@ public:
     {
         Thread* thr = reinterpret_cast<Thread*>(arg);
         if (thr->f_proc != nullptr)
-            thr->f_proc(arg);
+            thr->f_proc(thr->m_arg);
         return 0;
     }
 
@@ -359,7 +359,7 @@ public:
     {
         Thread* thr = reinterpret_cast<Thread*>(arg);
         if (thr->f_proc != nullptr)
-            thr->f_proc(arg);
+            thr->f_proc(thr->m_arg);
         return NULL;
     }
 
