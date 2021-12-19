@@ -9,6 +9,7 @@ namespace IOSBoot
 
 s32 Entry(u32 entrypoint);
 s32 Launch(const void* data, u32 len);
+s32 PatchNewCommonKey();
 
 class Log
 {

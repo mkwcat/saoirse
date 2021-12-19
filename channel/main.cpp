@@ -10,6 +10,7 @@ LIBOGC_SUCKS_END
 
 #include <disk.h>
 #include <ff.h>
+#include "IODeviceManager.hpp"
 
 #include <cstring>
 #include <mutex>
@@ -31,8 +32,8 @@ static struct {
     GXRModeObj* rmode = NULL;
 } display;
 
-static constexpr std::array<const char*, 7> logSources = {
-    "Core", "DVD", "Loader", "Payload", "IOS", "FST", "DiskIO"};
+static constexpr std::array<const char*, 8> logSources = {
+    "Core", "DVD", "Loader", "Payload", "IOS", "FST", "DiskIO", "IOMgr"};
 static constexpr std::array<const char*, 3> logColors = {
     "\x1b[37;1m", "\x1b[33;1m", "\x1b[31;1m"};
 static std::array<char, 256> logBuffer;
@@ -123,6 +124,23 @@ static Stage stInit([[maybe_unused]] Stage from)
     irse::Log(LogS::Core, LogL::WARN, "Debug console initialized");
     VIDEO_WaitVSync();
 
+    irse::Log(LogS::Core, LogL::INFO, "Patching korean key into IOS...");
+    s32 ret = IOSBoot::PatchNewCommonKey();
+    irse::Log(LogS::Core, LogL::INFO, "PatchNewCommonKey result: %d", ret);
+
+    sleep(1);
+
+    irse::Log(LogS::Core, LogL::INFO, "Idle thread PC: 0x%08X", read32(0x0D4E0040));
+
+#if 0
+    IODeviceManager* devmgr = new IODeviceManager();
+    devmgr->init();
+    devmgr->checkUSBStatus();
+
+    sleep(4);
+    exit(0);
+#endif
+
     DVD::Init();
     SDCard::Open();
     return Stage::Wait;
@@ -182,10 +200,12 @@ static inline bool startupDrive()
     /* Drive is not spinning */
     irse::Log(LogS::Core, LogL::INFO, "Spinning up drive...");
     ret = DVD::ResetDrive(true);
+    irse::Log(LogS::Core, LogL::INFO, "ResetDrive returned: 0x%X", ret);
     if (ret != DiErr::OK)
         return false;
 
     ret = DVD::ReadDiskID(reinterpret_cast<DVD::DiskID*>(MEM1_BASE));
+    irse::Log(LogS::Core, LogL::INFO, "ReadDiskID returned: 0x%X", ret);
     return ret == DiErr::OK;
 }
 
@@ -249,7 +269,6 @@ static void fstTest()
     irse::Log(LogS::Core, LogL::WARN,
         "Overwrote castle_course with rainbow_course");
 }
-#endif
 
 static DIP::DVDPatch fstTest()
 {
@@ -298,6 +317,7 @@ static DIP::DVDPatch fstTest()
 
     return patch;
 }
+#endif
 
 static Stage stReadDisc([[maybe_unused]] Stage from)
 {
@@ -313,7 +333,7 @@ static Stage stReadDisc([[maybe_unused]] Stage from)
     DVD::Deinit();
     WPAD_Shutdown();
 
-    DIP::DVDPatch patch = fstTest();
+    //DIP::DVDPatch patch = fstTest();
 
     SDCard::Shutdown();
     
@@ -337,10 +357,12 @@ static Stage stReadDisc([[maybe_unused]] Stage from)
 
     loader.openBootPartition(&meta);
 
+#if 0
     if ((ret = DVDProxy::ApplyPatches(&patch, 1)) != 0) {
         irse::Log(LogS::Core, LogL::ERROR, "DVD proxy error code: %d", ret);
         sleep(4);
     }
+#endif
     // DVDProxy::StartGame();
 
     DVD::Deinit();
@@ -400,7 +422,6 @@ static s32 Loop([[maybe_unused]] void* arg)
 
 s32 main([[maybe_unused]] s32 argc, [[maybe_unused]] char** argv)
 {
-    if (IOS_GetVersion() != 58)
-        IOS_ReloadIOS(58);
+    //IOS_ReloadIOS(58);
     return Loop(0);
 }

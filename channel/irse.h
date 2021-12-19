@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include <util.h>
 
-enum class LogS { Core, DVD, Loader, Payload, IOS, FST, DiskIO };
+enum class LogS { Core, DVD, Loader, Payload, IOS, FST, DiskIO, IOMgr };
 enum class LogL { INFO, WARN, ERROR };
 
 namespace irse

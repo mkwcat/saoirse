@@ -80,7 +80,8 @@ public:
         };
     };
 
-    enum class USBv5Ioctl {
+    enum class USBv5Ioctl
+    {
         GetVersion = 0,
         GetDeviceChange = 1,
         Shutdown = 2,
@@ -98,13 +99,12 @@ public:
         BulkTransfer = 21
     };
 
-    USB(s32 id)
-    {
-        if (id >= 0)
-            new (&ven) IOS::ResourceCtrl<USBv5Ioctl>("/dev/usb/ven", id);
-    }
+    USB(s32 id);
 
-    bool isOpen() const { return ven.fd() >= 0; }
+    bool isOpen() const
+    {
+        return ven.fd() >= 0;
+    }
 
     s32 readIntrMsg(s32 devId, u8 endpoint, u16 length, void* data)
     {

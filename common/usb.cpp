@@ -2,6 +2,12 @@
 #include <types.h>
 #include <util.h>
 
+USB::USB(s32 id)
+{
+    if (id >= 0)
+        new (&ven) IOS::ResourceCtrl<USBv5Ioctl>("/dev/usb/ven", id);
+}
+
 s32 USB::ctrlMsg(s32 devId, u8 requestType, u8 request, u16 value, u16 index,
                  u16 length, void* data)
 {
@@ -12,20 +18,19 @@ s32 USB::ctrlMsg(s32 devId, u8 requestType, u8 request, u16 value, u16 index,
     if (!length && data)
         return IOSErr::Invalid;
 
-    // clang-format off
     Input msg ATTRIBUTE_ALIGN(32) = {
         .fd = devId,
         .heapBuffers = 0,
-        .ctrl = {
-            .requestType = requestType,
-            .request = request,
-            .value = value,
-            .index = index,
-            .length = length,
-            .data = data
-        }
+        .ctrl =
+            {
+                .requestType = requestType,
+                .request = request,
+                .value = value,
+                .index = index,
+                .length = length,
+                .data = data,
+            },
     };
-    // clang-format on
 
     if (requestType & CtrlType::Dir_Device2Host) {
         IOS::IVector<2> vec;
