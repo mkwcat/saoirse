@@ -108,7 +108,7 @@ s32 IOSBoot::Launch(const void* data, u32 len)
 u16 patchNewCommonKeyCode[] = {
     0x200B, // mov  r0, #11         @ new common key handle
     0xA103, // adr  r1, korean_key
-    0x2214, // mov  r2, #0x14       @ sizeof(korean_key)
+    0x2210, // mov  r2, #16         @ sizeof(korean_key)
     0x4B01, // ldr  r3, =jump_addr
     0x4718, // bx   r3
     // clang-format off
