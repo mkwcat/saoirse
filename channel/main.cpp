@@ -8,9 +8,10 @@ LIBOGC_SUCKS_BEGIN
 #include <wiiuse/wpad.h>
 LIBOGC_SUCKS_END
 
+#include "IODeviceManager.hpp"
 #include <disk.h>
 #include <ff.h>
-#include "IODeviceManager.hpp"
+#include "arch.h"
 
 #include <cstring>
 #include <mutex>
@@ -102,6 +103,20 @@ static Stage stDefault(Stage from)
     }
 }
 
+extern const char dataArch[];
+extern u32 dataArchSize;
+asm("    .section .rodata.dataArch, \"a\"\n"
+    "    .balign 32\n"
+    "    .global dataArch\n"
+    "dataArch:\n"
+    "    .incbin \"../bin/data.ar\"\n"
+    "    .size   dataArch, . - dataArch\n"
+    "dataArchEnd:\n"
+    "    .balign 4\n"
+    "    .global dataArchSize\n"
+    "dataArchSize:\n"
+    "    .long   dataArchEnd - dataArch\n");
+
 static Stage stInit([[maybe_unused]] Stage from)
 {
     /* Initialize video and the debug console */
@@ -124,13 +139,16 @@ static Stage stInit([[maybe_unused]] Stage from)
     irse::Log(LogS::Core, LogL::WARN, "Debug console initialized");
     VIDEO_WaitVSync();
 
+    Arch::sInstance = new Arch(dataArch, dataArchSize);
+
     irse::Log(LogS::Core, LogL::INFO, "Patching korean key into IOS...");
     s32 ret = IOSBoot::PatchNewCommonKey();
     irse::Log(LogS::Core, LogL::INFO, "PatchNewCommonKey result: %d", ret);
 
     sleep(1);
 
-    irse::Log(LogS::Core, LogL::INFO, "Idle thread PC: 0x%08X", read32(0x0D4E0040));
+    irse::Log(LogS::Core, LogL::INFO, "Idle thread PC: 0x%08X",
+              read32(0x0D4E0040));
 
 #if 0
     IODeviceManager* devmgr = new IODeviceManager();
@@ -333,17 +351,21 @@ static Stage stReadDisc([[maybe_unused]] Stage from)
     DVD::Deinit();
     WPAD_Shutdown();
 
-    //DIP::DVDPatch patch = fstTest();
+    // DIP::DVDPatch patch = fstTest();
 
     SDCard::Shutdown();
-    
+
     /* Cast as s32 removes high word the in title ID */
     irse::Log(LogS::Core, LogL::INFO, "Launching IOS%d",
               static_cast<s32>(meta.sysVersion));
     IOS_ReloadIOS(58);
 
+    u32 elfSize = 0;
+    const void* elf = Arch::getFileStatic("saoirse_ios.elf", &elfSize);
+    assert(elf != nullptr);
+
     irse::Log(LogS::Core, LogL::INFO, "Starting up IOS...");
-    s32 ret = IOSBoot::Launch(saoirse_ios_elf, saoirse_ios_elf_size);
+    s32 ret = IOSBoot::Launch(elf, elfSize);
     irse::Log(LogS::Core, LogL::INFO, "IOS Launch result: %d", ret);
 
     IOSBoot::Log* log = new IOSBoot::Log();
@@ -369,7 +391,7 @@ static Stage stReadDisc([[maybe_unused]] Stage from)
     delete log;
 
     SetupGlobals(0);
-    //patchMkwDIPath();
+    // patchMkwDIPath();
 
     // TODO: Proper shutdown
     SYS_ResetSystem(SYS_SHUTDOWN, 0, 0);
@@ -422,6 +444,6 @@ static s32 Loop([[maybe_unused]] void* arg)
 
 s32 main([[maybe_unused]] s32 argc, [[maybe_unused]] char** argv)
 {
-    //IOS_ReloadIOS(58);
+    // IOS_ReloadIOS(58);
     return Loop(0);
 }

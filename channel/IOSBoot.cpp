@@ -1,5 +1,5 @@
 #include "IOSBoot.hpp"
-
+#include "arch.h"
 #include <new>
 #include <ogc/cache.h>
 #include <stdio.h>
@@ -95,14 +95,14 @@ s32 IOSBoot::Entry(u32 entrypoint)
     return sha.ioctlv(0, vec);
 }
 
-extern u8 es_bin[];
-
 /* Async ELF launch */
 s32 IOSBoot::Launch(const void* data, u32 len)
 {
     new (reinterpret_cast<void*>(VFILE_ADDR)) VFile<VFILE_SIZE>(data, len);
 
-    return Entry(reinterpret_cast<u32>(es_bin) & ~0xC0000000);
+    // FIXME: This might not guarantee proper 4 byte alignment.
+    return Entry(reinterpret_cast<u32>(Arch::getFileStatic("ios_loader.bin")) &
+                 ~0xC0000000);
 }
 
 u16 patchNewCommonKeyCode[] = {
