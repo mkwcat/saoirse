@@ -22,7 +22,6 @@ LIBOGC_SUCKS_END
 #include "GlobalsConfig.hpp"
 
 #include "IOSBoot.hpp"
-#include <saoirse_ios_elf.h>
 
 using namespace irse;
 
@@ -103,19 +102,8 @@ static Stage stDefault(Stage from)
     }
 }
 
-extern const char dataArch[];
-extern u32 dataArchSize;
-asm("    .section .rodata.dataArch, \"a\"\n"
-    "    .balign 32\n"
-    "    .global dataArch\n"
-    "dataArch:\n"
-    "    .incbin \"../bin/data.ar\"\n"
-    "    .size   dataArch, . - dataArch\n"
-    "dataArchEnd:\n"
-    "    .balign 4\n"
-    "    .global dataArchSize\n"
-    "dataArchSize:\n"
-    "    .long   dataArchEnd - dataArch\n");
+extern const char data_ar[];
+extern const char data_ar_end[];
 
 static Stage stInit([[maybe_unused]] Stage from)
 {
@@ -139,7 +127,7 @@ static Stage stInit([[maybe_unused]] Stage from)
     irse::Log(LogS::Core, LogL::WARN, "Debug console initialized");
     VIDEO_WaitVSync();
 
-    Arch::sInstance = new Arch(dataArch, dataArchSize);
+    Arch::sInstance = new Arch(data_ar, data_ar_end - data_ar);
 
     irse::Log(LogS::Core, LogL::INFO, "Patching korean key into IOS...");
     s32 ret = IOSBoot::PatchNewCommonKey();

@@ -7,7 +7,6 @@
 # TARGET is the name of the output
 # BUILD is the directory where object files & intermediate files will be placed
 #---------------------------------------------------------------------------------
-BUILD		:=	build_channel
 BIN			:=  bin
 TARGET      :=  data.ar
 DATA		:=  data
@@ -21,8 +20,7 @@ AR			:= $(PREFIX)ar
 #---------------------------------------------------------------------------------
 # automatically build a list of object files for our project
 #---------------------------------------------------------------------------------
-DUMMY != mkdir -p $(BIN) $(BUILD)
-DUMMY != rm -rf $(BIN)/$(TARGET)
+DUMMY != mkdir -p $(BIN)
 
 OUTPUT		:=  $(BIN)/$(TARGET)
 DATAFILES := $(foreach dir,$(DATA),$(wildcard $(dir)/*))
@@ -30,7 +28,8 @@ DATAFILES := $(foreach dir,$(DATA),$(wildcard $(dir)/*))
 default: $(OUTPUT)
 
 $(OUTPUT): $(DATAFILES) $(BIN)/saoirse_ios.elf
+	@rm -rf $@
 	@echo packing ... $(notdir $@)
-	@$(AR) -rc $@ $(DATAFILES) $(BIN)/saoirse_ios.elf
+	@$(AR) -r $@ $(DATAFILES) $(BIN)/saoirse_ios.elf
 
 
