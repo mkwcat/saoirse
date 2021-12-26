@@ -28,7 +28,7 @@ char* iosOpenStrncpy(char* dest, const char* src, u32 num, int pid)
             return dest;
         }
         if (!strcmp(src, "/dev/fs")) {
-            dest[0] = '/';
+            dest[0] = '$';
             return dest;
         }
         if (!strncmp(src, "/dev/di", 7)) {
@@ -38,7 +38,7 @@ char* iosOpenStrncpy(char* dest, const char* src, u32 num, int pid)
     }
 
     // ISFS path
-    dest[0] = '/';
+    dest[0] = '$';
     return dest;
 }
 

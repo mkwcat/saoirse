@@ -738,6 +738,7 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
         peli::Log(LogL::INFO,
                   "[EFS::ReqIoctl] Successfully created file '%s' !",
                   efsFilepath);
+        f_close(&fil);
 
         return ISFSError::OK;
     }

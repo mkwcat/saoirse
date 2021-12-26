@@ -139,6 +139,34 @@ static Stage stInit([[maybe_unused]] Stage from)
               read32(0x0D4E0040));
 
 #if 0
+    /* Cast as s32 removes high word the in title ID */
+    irse::Log(LogS::Core, LogL::INFO, "Launching IOS%d",
+              58);
+    IOS_ReloadIOS(58);
+
+    u32 elfSize = 0;
+    const void* elf = Arch::getFileStatic("saoirse_ios.elf", &elfSize);
+    assert(elf != nullptr);
+
+    irse::Log(LogS::Core, LogL::INFO, "Starting up IOS...");
+    ret = IOSBoot::Launch(elf, elfSize);
+    irse::Log(LogS::Core, LogL::INFO, "IOS Launch result: %d", ret);
+
+    IOSBoot::Log* log = new IOSBoot::Log();
+    Queue<u32> eventWaitQueue(1);
+    log->setEventWaitingQueue(&eventWaitQueue, 2);
+    log->restartEvent();
+    eventWaitQueue.receive();
+
+    printf("test file create\n");
+    ISFS_Initialize();
+    ret = ISFS_CreateFile("/title/00010004/524d4350/data/rksys.dat", 0, 3, 3, 1);
+    printf("IOS_CreateFile ret: %d\n", ret);
+    sleep(2);
+    exit(0);
+#endif
+
+#if 0
     IODeviceManager* devmgr = new IODeviceManager();
     devmgr->init();
     devmgr->checkUSBStatus();
