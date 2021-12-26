@@ -4,12 +4,19 @@
 #include <string.h>
 #include <util.h>
 
-char* iosOpenStrncpy(char* dest, const char* src, u32 num, int pid)
+char* iosOpenStrncpy(char* dest, const char* src, u32 num, s32* pid)
 {
     strncpy(dest, src, num);
 
-    if (pid != 15) {
+    if (*pid != 15) {
         // Not PPCBOOT pid
+
+        if (dest[0] == '@') {
+            // Set to PPCBOOT pid
+            *pid = 15;
+            dest[0] = '/';
+        }
+
         return dest;
     }
 
@@ -62,10 +69,10 @@ static u32 findSyscallTable()
     return 0;
 }
 
-ATTRIBUTE_TARGET(arm) __attribute__((noinline))
-void invalidateICacheLine(u32 addr)
+ATTRIBUTE_TARGET(arm)
+__attribute__((noinline)) void invalidateICacheLine(u32 addr)
 {
-    asm volatile("\tmcr p15, 0, %0, c7, c5, 1\n" :: "r"(addr));
+    asm volatile("\tmcr p15, 0, %0, c7, c5, 1\n" ::"r"(addr));
 }
 
 /* [TODO] Perhaps hardcode patches for specific IOS versions and use the search

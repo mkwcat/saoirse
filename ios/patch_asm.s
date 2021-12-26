@@ -4,13 +4,25 @@
         .type   iosOpenStrncpyHook, function
         .align  2
 iosOpenStrncpyHook:
+        push    {lr}
+
         // Overwrite first parameter
         str     r0, [sp, #0x14]
         .global iosOpenStrncpy
         ldr     r3, =iosOpenStrncpy
         mov     r12, r3
-        mov     r3, r10 // pid
-        bx      r12
+
+        mov     r3, r10
+        push    {r3} // pid
+        add     r3, sp, #0
+
+        blx     r12
+
+        pop     {r3}
+        mov     r10, r3
+
+        pop     {r1}
+        bx      r1
         .pool
         .size   iosOpenStrncpyHook, . - iosOpenStrncpyHook
 

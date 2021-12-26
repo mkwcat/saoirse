@@ -6,6 +6,7 @@
 #include <os.h>
 #include <sdcard.h>
 #include <types.h>
+#include <patch.h>
 
 #include <algorithm>
 #include <array>
@@ -41,7 +42,7 @@ constexpr s32 mgrHandle = 200;
 #define EFS_MAX_REPLACED_FILEPATH_LENGTH                                       \
     (sizeof(EFS_DRIVE) - 1) + NAND_MAX_FILEPATH_LENGTH
 
-IOS::ResourceCtrl<ISFSIoctl> realFsMgr("/dev/fs");
+IOS::ResourceCtrl<ISFSIoctl> realFsMgr(-1);
 static std::array<FIL*, NAND_MAX_FILE_DESCRIPTOR_AMOUNT> spFileDescriptorArray;
 
 /*---------------------------------------------------------------------------*
@@ -325,8 +326,10 @@ static s32 ReqProxyOpen(const char* filepath, u32 mode)
  */
 static s32 ReqClose(s32 fd)
 {
-    if (fd == mgrHandle)
+    if (fd == mgrHandle) {
+        realFsMgr.~Resource();
         return ISFSError::OK;
+    }
 
     if (!IsFileDescriptorValid(fd))
         return ISFSError::Invalid;
@@ -928,6 +931,8 @@ static s32 IPCRequest(IOS::Request* req)
             }
             if (!strcmp(path, "/dev/fs")) {
                 peli::Log(LogL::INFO, "Open /dev/fs from PPC");
+                // Open as PPCBOOT
+                new (&realFsMgr) IOS::ResourceCtrl<ISFSIoctl>("@dev/fs");
                 return mgrHandle;
             }
 
@@ -970,8 +975,6 @@ static s32 IPCRequest(IOS::Request* req)
 extern "C" s32 FS_StartRM([[maybe_unused]] void* arg)
 {
     peli::Log(LogL::INFO, "Starting FS...");
-
-    assert(realFsMgr.fd() >= 0);
 
     Queue<IOS::Request*> queue(8);
     const s32 ret = IOS_RegisterResourceManager("$", queue.id());
