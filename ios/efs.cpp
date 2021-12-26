@@ -219,6 +219,68 @@ static s32 FResultToISFSError(FRESULT fret)
     }
 }
 
+static u8 efsCopyBuffer[0x2000] ATTRIBUTE_ALIGN(32); // 8 KB
+
+static s32 CopyFromNandToEFS(const char* nandPath, const char* efsPath)
+{
+    IOS::File isfsFile(nandPath, IOS::Mode::Read);
+
+    if (isfsFile.fd() < 0) {
+        peli::Log(LogL::ERROR,
+                  "[EFS::CopyFromNandToEFS] Failed to open ISFS file: %d",
+                  isfsFile.fd());
+        return isfsFile.fd();
+    }
+
+    s32 size = isfsFile.size();
+    peli::Log(LogL::INFO, "[EFS::CopyFromNandToEFS] File size: 0x%X", size);
+
+    FIL fil;
+    FRESULT fret = f_open(&fil, efsPath, FA_WRITE | FA_OPEN_EXISTING);
+
+    if (fret != FR_OK) {
+        peli::Log(LogL::ERROR,
+                  "[EFS::CopyFromNandToEFS] Failed to open EFS file: %d", fret);
+        return FResultToISFSError(fret);
+    }
+
+    for (s32 pos = 0; pos < size; pos += sizeof(efsCopyBuffer)) {
+        u32 readlen = size - pos;
+        if (readlen > sizeof(efsCopyBuffer))
+            readlen = sizeof(efsCopyBuffer);
+
+        s32 ret = isfsFile.read(efsCopyBuffer, readlen);
+
+        if ((u32)ret != readlen) {
+            f_close(&fil);
+            peli::Log(LogL::ERROR,
+                      "[EFS::CopyFromNandToEFS] Failed to read from ISFS file: "
+                      "%d != %d",
+                      ret, readlen);
+            if (ret < 0)
+                return ret;
+            return ISFSError::Unknown;
+        }
+
+        UINT bw;
+        fret = f_write(&fil, efsCopyBuffer, readlen, &bw);
+
+        if (fret != FR_OK || (u32)bw != readlen) {
+            f_close(&fil);
+            peli::Log(LogL::ERROR,
+                      "[EFS::CopyFromNandToEFS] Failed to write to EFS file: "
+                      "%d != 0 OR %d != %d",
+                      fret, readlen, bw);
+            if (fret != FR_OK)
+                return FResultToISFSError(fret);
+            return ISFSError::Unknown;
+        }
+    }
+
+    f_close(&fil);
+    return ISFSError::OK;
+}
+
 /*
  * Handle open file request from the filesystem proxy.
  * Returns: File descriptor, or ISFS error code.
@@ -664,16 +726,31 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
         if (!isOldFilepathReplaced && !isNewFilepathReplaced)
             return realFsMgr.ioctl(ISFSIoctl::Rename, in, in_len, io, io_len);
 
-        // One of the filepaths is replaced
-        if (isOldFilepathReplaced ^ isNewFilepathReplaced)
+        char efsOldFilepath[EFS_MAX_REPLACED_FILEPATH_LENGTH];
+        char efsNewFilepath[EFS_MAX_REPLACED_FILEPATH_LENGTH];
+
+        // Rename from NAND to EFS file
+        if (!isOldFilepathReplaced && isNewFilepathReplaced) {
+            if (!GetReplacedFilepath(pathNew, efsNewFilepath,
+                                     sizeof(efsNewFilepath)))
+                return ISFSError::Invalid;
+            s32 ret = CopyFromNandToEFS(pathOld, efsNewFilepath);
+            if (ret != ISFSError::OK)
+                return ret;
+
+            ret = realFsMgr.ioctl(ISFSIoctl::Delete, const_cast<char*>(pathNew), ISFSMaxPath,
+                                  nullptr, 0);
+            return ret;
+        }
+
+        // Other way not supported (yet?)
+        if (isOldFilepathReplaced ^ isNewFilepathReplaced) {
             return ISFSError::Invalid;
+        }
 
         // Both of the filepaths are replaced
 
         // Get the replaced filepaths
-        char efsOldFilepath[EFS_MAX_REPLACED_FILEPATH_LENGTH];
-        char efsNewFilepath[EFS_MAX_REPLACED_FILEPATH_LENGTH];
-
         if (!GetReplacedFilepath(pathOld, efsOldFilepath,
                                  sizeof(efsOldFilepath)) ||
             !GetReplacedFilepath(pathNew, efsNewFilepath,
@@ -763,9 +840,30 @@ static s32 ReqIoctlv(s32 fd, ISFSIoctl cmd, u32 in_count, u32 out_count,
     if (cmd != ISFSIoctl::ReadDir)
         return ISFSError::Invalid;
 
-    // TODO
-    // Also documentation todo as well
-    return realFsMgr.ioctlv(ISFSIoctl::ReadDir, in_count, out_count, vec);
+    // [ISFS_ReadDir]
+    // vec[0]: path
+    // todo
+
+    const char* path = (const char*)vec[0].data;
+
+    // XXX actually implement this properly
+
+    // Check if the filepath should be replaced
+    if (!IsReplacedFilepath(path))
+        return realFsMgr.ioctlv(ISFSIoctl::ReadDir, in_count, out_count, vec);
+
+    // Get the replaced filepath
+    char efsFilepath[EFS_MAX_REPLACED_FILEPATH_LENGTH];
+    if (!GetReplacedFilepath(path, efsFilepath, sizeof(efsFilepath)))
+        return ISFSError::Invalid;
+
+    FIL fil;
+    if (f_open(&fil, efsFilepath, FA_READ | FA_OPEN_EXISTING) != FR_NO_FILE) {
+        f_close(&fil);
+        return ISFSError::Invalid;
+    }
+
+    return ISFSError::NotFound;
 }
 
 static s32 ForwardRequest(IOS::Request* req)
