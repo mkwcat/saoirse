@@ -30,6 +30,7 @@ enum class ISFSIoctl {
     Rename = 0x8,
     CreateFile = 0x9,
     GetFileStats = 0xB,
+    GetUsage = 0xC,
     Shutdown = 0xD
 };
 

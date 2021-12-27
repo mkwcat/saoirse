@@ -138,6 +138,7 @@ static Stage stInit([[maybe_unused]] Stage from)
     irse::Log(LogS::Core, LogL::INFO, "Idle thread PC: 0x%08X",
               read32(0x0D4E0040));
 
+#if 0
     /* Cast as s32 removes high word the in title ID */
     irse::Log(LogS::Core, LogL::INFO, "Launching IOS%d",
               58);
@@ -170,7 +171,7 @@ static Stage stInit([[maybe_unused]] Stage from)
     sleep(2);
     exit(0);
 
-#if 0
+
     IODeviceManager* devmgr = new IODeviceManager();
     devmgr->init();
     devmgr->checkUSBStatus();
