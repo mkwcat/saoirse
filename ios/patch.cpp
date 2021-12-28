@@ -4,19 +4,12 @@
 #include <string.h>
 #include <util.h>
 
-char* iosOpenStrncpy(char* dest, const char* src, u32 num, s32* pid)
+char* iosOpenStrncpy(char* dest, const char* src, u32 num, s32 pid)
 {
     strncpy(dest, src, num);
 
-    if (*pid != 15) {
+    if (pid != 15) {
         // Not PPCBOOT pid
-
-        if (dest[0] == '@') {
-            // Set to PPCBOOT pid
-            *pid = 15;
-            dest[0] = '/';
-        }
-
         return dest;
     }
 

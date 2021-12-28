@@ -955,7 +955,7 @@ static s32 IPCRequest(IOS::Request* req)
             if (!strcmp(path, "/dev/fs")) {
                 peli::Log(LogL::INFO, "Open /dev/fs from PPC");
                 // Open as PPCBOOT
-                new (&realFsMgr) IOS::ResourceCtrl<ISFSIoctl>("@dev/fs");
+                new (&realFsMgr) IOS::ResourceCtrl<ISFSIoctl>("/dev/fs");
                 return mgrHandle;
             }
 

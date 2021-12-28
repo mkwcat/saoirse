@@ -30,4 +30,4 @@ constexpr u16 thumbBLLo(u32 src, u32 dest)
 void patchIOSOpen();
 void importKoreanCommonKey();
 extern "C" void iosOpenStrncpyHook();
-extern "C" char* iosOpenStrncpy(char* dest, const char* src, u32 num, s32* pid);
+extern "C" char* iosOpenStrncpy(char* dest, const char* src, u32 num, s32 pid);
