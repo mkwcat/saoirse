@@ -1,10 +1,10 @@
 #include "AppInfo.hpp"
 #include "AppPayload.hpp"
+#include "TaskThread.hpp"
 #include <es.h>
 #include <gctypes.h>
 
 #include <array>
-#include <future>
 #include <optional>
 #include <span>
 #include <stdint.h>
@@ -20,27 +20,23 @@ struct Partition {
     u32 type;
 };
 
-class Apploader
+class Apploader : public TaskThread
 {
 public:
-    Apploader() = default;
+    Apploader(EntryPoint* result)
+    {
+        m_resultOut = result;
+    }
     ~Apploader() = default;
 
-    static s32 threadEntry(void* arg);
+protected:
+    void taskEntry();
 
+private:
     EntryPoint load(int fst_expand = 0);
-
-    enum class TickResult
-    {
-        Continue,
-        Error,
-        Done
-    };
-    TickResult tick();
 
     void openBootPartition(ES::TMDFixed<512>* outMeta);
 
-private:
     void dumpAppInfo(const ApploaderInfo& app_info);
 
     ApploaderInfo readAppInfo();
@@ -57,22 +53,6 @@ private:
 
     std::array<Partition, 4> readPartitions(const Volume& volumes);
 
-    enum class TickStage
-    {
-        ReadVolumes,
-        ReadPartitions,
-        OpenPartition,
-        LoadApploader,
-        LoadSegment,
-        GetEntryPoint
-    };
-    TickStage m_stage;
-
-    Volume m_mainVolume;
-    std::array<Partition, 4> m_partitions;
-    const Partition* m_bootPartition;
     ES::TMDFixed<512> m_meta ATTRIBUTE_ALIGN(32);
-
-    AppPayload m_payload;
-    EntryPoint m_entryPoint;
+    EntryPoint* m_resultOut;
 };

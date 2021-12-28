@@ -1,0 +1,76 @@
+#pragma once
+#include <os.h>
+#include <types.h>
+
+class TaskThread
+{
+public:
+    static s32 __threadProc([[maybe_unused]] void* arg)
+    {
+        TaskThread* that = reinterpret_cast<TaskThread*>(arg);
+        that->taskEntry();
+        that->taskSuccess();
+        return 0;
+    }
+
+    void start(Queue<int>* onDestroyQueue)
+    {
+        if (m_running)
+            return;
+
+        m_running = true;
+        m_cancelTask = false;
+        m_onDestroyQueue = onDestroyQueue;
+        m_thread.create(&__threadProc, reinterpret_cast<void*>(this), nullptr,
+                        0x1000, 80);
+    }
+
+    void start()
+    {
+        start(nullptr);
+    }
+
+    void stop()
+    {
+        m_cancelTask = true;
+    }
+
+    bool isRunning() const
+    {
+        return m_running;
+    }
+
+    void taskBreak()
+    {
+        if (m_cancelTask) {
+            destroyThread(0);
+        }
+    }
+
+    void taskAbort()
+    {
+        destroyThread(-1);
+    }
+
+    void taskSuccess()
+    {
+        destroyThread(0);
+    }
+
+    virtual void taskEntry() = 0;
+
+private:
+    void destroyThread(int result)
+    {
+        m_running = false;
+        m_thread.~Thread();
+        if (m_onDestroyQueue != nullptr) {
+            m_onDestroyQueue->send(result);
+        }
+    }
+
+    Thread m_thread;
+    bool m_cancelTask;
+    bool m_running;
+    Queue<int>* m_onDestroyQueue;
+};

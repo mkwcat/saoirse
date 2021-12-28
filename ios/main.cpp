@@ -241,6 +241,13 @@ static void saoMain()
         exitClr(YUV_DARK_RED);
     startGameWaitQueue = ret;
 
+    ret = IOS_CreateMessageQueue(&printBufQueueData, 1);
+    if (ret < 0)
+        exitClr(YUV_DARK_RED);
+    printBufQueue = ret;
+
+    IOS_SetThreadPriority(0, 40);
+
     ret = IOS_CreateThread(
         mainThreadProc, nullptr,
         reinterpret_cast<u32*>(mainThreadStack + sizeof(mainThreadStack)),
@@ -253,11 +260,6 @@ static void saoMain()
     ret = IOS_StartThread(ret);
     if (ret < 0)
         exitClr(YUV_YELLOW);
-
-    ret = IOS_CreateMessageQueue(&printBufQueueData, 1);
-    if (ret < 0)
-        exitClr(YUV_DARK_RED);
-    printBufQueue = ret;
 
     s32 queue = IOS_CreateMessageQueue(stdoutQueueData, 8);
     if (queue < 0)

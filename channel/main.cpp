@@ -81,6 +81,27 @@ void irse::Log(LogS src, LogL level, const char* format, ...)
     va_end(args);
 }
 
+static inline bool startupDrive()
+{
+    // If ReadDiskID succeeds here, that means the drive is already started
+    DiErr ret = DVD::ReadDiskID(reinterpret_cast<DVD::DiskID*>(MEM1_BASE));
+    if (ret == DiErr::OK) {
+        irse::Log(LogS::Core, LogL::INFO, "Drive is already spinning");
+        return true;
+    }
+    if (ret != DiErr::DriveError)
+        return false;
+
+    // Drive is not spinning
+    irse::Log(LogS::Core, LogL::INFO, "Spinning up drive...");
+    ret = DVD::ResetDrive(true);
+    if (ret != DiErr::OK)
+        return false;
+
+    ret = DVD::ReadDiskID(reinterpret_cast<DVD::DiskID*>(MEM1_BASE));
+    return ret == DiErr::OK;
+}
+
 s32 main([[maybe_unused]] s32 argc, [[maybe_unused]] char** argv)
 {
     /* Initialize video and the debug console */
@@ -112,10 +133,46 @@ s32 main([[maybe_unused]] s32 argc, [[maybe_unused]] char** argv)
 
     // Start "UI" thread
     new Thread(UIManager::threadEntry, nullptr, nullptr, 0x8000, 80);
-    // Start Apploader thread
-    new Thread(Apploader::threadEntry, nullptr, nullptr, 0x8000, 80);
     // Start IODeviceManager thread
     new Thread(IODeviceManager::threadEntry, nullptr, nullptr, 0x8000, 80);
 
-    LWP_SuspendThread(LWP_GetSelf());
+    // TODO move this to like a page based UI system or something
+    DVD::Init();
+    if (!startupDrive()) {
+        abort();
+    }
+
+    Queue<int> waitDestroy(1);
+
+    EntryPoint entry;
+    Apploader* apploader = new Apploader(&entry);
+    apploader->start(&waitDestroy);
+
+    bool result = waitDestroy.receive();
+    if (result != 0) {
+        irse::Log(LogS::Core, LogL::ERROR, "Apploader aborted");
+        abort();
+    }
+
+    SDCard::Shutdown();
+    DVD::Deinit();
+
+    IOSBoot::Log::sInstance->startGameIOS();
+
+    delete IOSBoot::Log::sInstance;
+
+    VIDEO_SetBlack(true);
+    VIDEO_Flush();
+    VIDEO_WaitVSync();
+
+    SetupGlobals(0);
+
+    // TODO: Proper shutdown
+    SYS_ResetSystem(SYS_SHUTDOWN, 0, 0);
+    IRQ_Disable();
+
+    entry();
+    /* Unreachable! */
+    abort();
+    //LWP_SuspendThread(LWP_GetSelf());
 }

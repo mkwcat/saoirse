@@ -7,7 +7,7 @@
 class AppPayload {
 public:
     // The partition must be open
-    void init(const ApploaderInfo& info);
+    AppPayload(const ApploaderInfo& info);
 
 private:
     ApploaderInfo::InitFunction init_func;

@@ -1,10 +1,9 @@
 #include "Apploader.hpp"
 #include "AppPayload.hpp"
+#include "GlobalsConfig.hpp"
 #include "dvd.h"
 #include "irse.h"
 #include <util.h>
-#include <sdcard.h>
-#include "GlobalsConfig.hpp"
 
 #include <algorithm>
 #include <array>
@@ -16,9 +15,8 @@ LIBOGC_SUCKS_BEGIN
 #include <ogc/cache.h>
 #include <ogc/lwp_watchdog.h>
 #include <ogc/system.h>
-#include <ogc/video.h>
-#include <ogc/irq.h>
 LIBOGC_SUCKS_END
+#include "IOSBoot.hpp"
 #include <optional>
 #include <span>
 #include <stdint.h>
@@ -26,76 +24,10 @@ LIBOGC_SUCKS_END
 #include <thread>
 #include <time.h>
 #include <unistd.h>
-#include "IOSBoot.hpp"
 
-static inline bool startupDrive()
+void Apploader::taskEntry()
 {
-    // If ReadDiskID succeeds here, that means the drive is already started
-    DiErr ret = DVD::ReadDiskID(reinterpret_cast<DVD::DiskID*>(MEM1_BASE));
-    if (ret == DiErr::OK) {
-        irse::Log(LogS::Core, LogL::INFO, "Drive is already spinning");
-        return true;
-    }
-    if (ret != DiErr::DriveError)
-        return false;
-
-    // Drive is not spinning
-    irse::Log(LogS::Core, LogL::INFO, "Spinning up drive...");
-    ret = DVD::ResetDrive(true);
-    if (ret != DiErr::OK)
-        return false;
-
-    ret = DVD::ReadDiskID(reinterpret_cast<DVD::DiskID*>(MEM1_BASE));
-    return ret == DiErr::OK;
-}
-
-s32 Apploader::threadEntry([[maybe_unused]] void* arg)
-{
-    // TODO use abstract DVD interface for different types of discs (like
-    // backups etc)
-    DVD::Init();
-    if (!startupDrive()) {
-        irse::Log(LogS::Loader, LogL::ERROR, "Drive spinup failed");
-        abort();
-    }
-
-    Apploader apploader;
-
-    while (1) {
-        Apploader::TickResult result = apploader.tick();
-
-        if (result == Apploader::TickResult::Continue)
-            continue;
-        if (result == Apploader::TickResult::Done)
-            break;
-
-        irse::Log(LogS::Loader, LogL::ERROR, "Apploader tick returned error");
-        abort();
-    }
-    SDCard::Shutdown();
-    DVD::Deinit();
-
-    IOSBoot::Log::sInstance->startGameIOS();
-    auto entry = apploader.m_entryPoint;
-
-    delete IOSBoot::Log::sInstance;
-
-    VIDEO_SetBlack(true);
-    VIDEO_Flush();
-    VIDEO_WaitVSync();
-
-    SetupGlobals(0);
-    // patchMkwDIPath();
-
-    // TODO: Proper shutdown
-    SYS_ResetSystem(SYS_SHUTDOWN, 0, 0);
-    IRQ_Disable();
-
-    entry();
-    /* Unreachable! */
-    abort();
-
-    return 0;
+    *m_resultOut = load();
 }
 
 #if 0
@@ -158,109 +90,88 @@ static void EncryptedRead(void* dst, u32 len, u32 ofs, CachePolicy invalidate)
     EnforceCachePolicy(dst, len, invalidate);
 }
 
-void OpenPartition(s32 ofs, ES::TMDFixed<512>* meta)
+class PayloadManager
 {
-    DVD::UniqueCommand cmd;
-    assert(cmd.cmd() != nullptr);
-    DVDLow::OpenPartitionAsync(*cmd.cmd(), ofs, meta);
-    const auto result = cmd.cmd()->syncReply();
-
-    if (result != DiErr::OK) {
-        irse::Log(LogS::Loader, LogL::ERROR, "Failed to open partition: %s",
-                  DVDLow::PrintErr(result));
-        abort();
+public:
+    PayloadManager(const ApploaderInfo& info) : mPayload(info)
+    {
     }
-}
 
-#if 0
+    void loadSegments(TaskThread* breakThread)
+    {
+        while (true) {
+            if (breakThread != nullptr)
+                breakThread->taskBreak();
+
+            const std::optional<AppPayload::CopyCommand> copy_cmd =
+                mPayload.popCopyCommand();
+            if (!copy_cmd.has_value())
+                break;
+
+            if (breakThread != nullptr)
+                breakThread->taskBreak();
+
+            EncryptedRead(copy_cmd->dest, copy_cmd->length,
+                          round_down(copy_cmd->offset, 4), CachePolicy::None);
+        }
+    }
+
+    EntryPoint getEntrypoint() const
+    {
+        return mPayload.get_entrypoint();
+    }
+
+private:
+    AppPayload mPayload;
+};
+
 EntryPoint Apploader::load(
     // TODO: If we want to shrink the FST to fit some code a-la CTGP.
     [[maybe_unused]] int fst_expand)
 {
+    openBootPartition(&m_meta);
+
+    taskBreak();
+
     const ApploaderInfo app_info = readAppInfo();
     dumpAppInfo(app_info);
     DebugPause();
+
+    taskBreak();
 
     // XXX Partition must be open
     PayloadManager payload(app_info);
     DebugPause();
     settime(secs_to_ticks(time(NULL) - 946684800));
     DebugPause();
-    payload.loadAllSegments();
+    payload.loadSegments(this);
+
+    taskBreak();
 
     DebugPause();
     return payload.getEntrypoint();
-}
-#endif
-
-Apploader::TickResult Apploader::tick()
-{
-    switch (m_stage) {
-    case TickStage::ReadVolumes:
-        m_mainVolume = readVolumes()[0];
-        m_stage = TickStage::ReadPartitions;
-        break;
-
-    case TickStage::ReadPartitions:
-        m_partitions = readPartitions(m_mainVolume);
-        m_stage = TickStage::OpenPartition;
-        break;
-
-    case TickStage::OpenPartition:
-        m_bootPartition = findBootPartition(m_mainVolume, m_partitions);
-        if (m_bootPartition == nullptr) {
-            irse::Log(LogS::Loader, LogL::ERROR,
-                      "Failed to find boot partition");
-            return TickResult::Error;
-        }
-        openPartition(*m_bootPartition, &m_meta);
-        m_stage = TickStage::LoadApploader;
-        break;
-
-    case TickStage::LoadApploader: {
-        const ApploaderInfo appInfo = readAppInfo();
-        dumpAppInfo(appInfo);
-        m_payload.init(appInfo);
-        m_stage = TickStage::LoadSegment;
-        break;
-    }
-
-    case TickStage::LoadSegment: {
-        const std::optional<AppPayload::CopyCommand> copy_cmd =
-            m_payload.popCopyCommand();
-        if (!copy_cmd.has_value()) {
-            m_stage = TickStage::GetEntryPoint;
-            break;
-        }
-
-        EncryptedRead(copy_cmd->dest, copy_cmd->length,
-                      round_down(copy_cmd->offset, 4), CachePolicy::None);
-        break;
-    }
-
-    case TickStage::GetEntryPoint:
-        m_entryPoint = m_payload.get_entrypoint();
-        return TickResult::Done;
-    }
-
-    return TickResult::Continue;
 }
 
 void Apploader::openBootPartition(ES::TMDFixed<512>* outMeta)
 {
     const Volume main_volume = readVolumes()[0];
 
+    taskBreak();
+
     const auto partitions = readPartitions(main_volume);
-    DebugPause();
+
+    taskBreak();
+
     const Partition* boot_partition =
         findBootPartition(main_volume, partitions);
-    DebugPause();
     if (boot_partition == nullptr) {
         irse::Log(LogS::Loader, LogL::ERROR, "Failed to find boot partition");
-        abort();
+        taskAbort();
     }
     irse::Log(LogS::Loader, LogL::INFO, "Boot partition: %p",
               reinterpret_cast<const void*>(boot_partition));
+
+    taskBreak();
 
     openPartition(*boot_partition, outMeta);
 }
@@ -288,11 +199,19 @@ ApploaderInfo Apploader::readAppInfo()
     return app_info;
 }
 
-void Apploader::openPartition(const Partition& boot_partition,
+void Apploader::openPartition(const Partition& partition,
                               ES::TMDFixed<512>* outMeta)
 {
-    irse::Log(LogS::Loader, LogL::INFO, "Reading boot partition..");
-    OpenPartition(boot_partition.offset, outMeta);
+    DVD::UniqueCommand cmd;
+    assert(cmd.cmd() != nullptr);
+    DVDLow::OpenPartitionAsync(*cmd.cmd(), partition.offset, outMeta);
+    const auto result = cmd.cmd()->syncReply();
+
+    if (result != DiErr::OK) {
+        irse::Log(LogS::Loader, LogL::ERROR, "Failed to open partition: %s",
+                  DVDLow::PrintErr(result));
+        taskAbort();
+    }
 }
 
 const Partition*
