@@ -9,9 +9,9 @@ LIBOGC_SUCKS_BEGIN
 LIBOGC_SUCKS_END
 
 #include "IODeviceManager.hpp"
+#include "arch.h"
 #include <disk.h>
 #include <ff.h>
-#include "arch.h"
 
 #include <cstring>
 #include <mutex>
@@ -133,7 +133,7 @@ static Stage stInit([[maybe_unused]] Stage from)
     s32 ret = IOSBoot::PatchNewCommonKey();
     irse::Log(LogS::Core, LogL::INFO, "PatchNewCommonKey result: %d", ret);
 
-    sleep(1);
+    // sleep(1);
 
     irse::Log(LogS::Core, LogL::INFO, "Idle thread PC: 0x%08X",
               read32(0x0D4E0040));
@@ -411,12 +411,17 @@ static Stage stReadDisc([[maybe_unused]] Stage from)
     DVD::Deinit();
     delete log;
 
+    VIDEO_SetBlack(true);
+    VIDEO_Flush();
+    VIDEO_WaitVSync();
+
     SetupGlobals(0);
     // patchMkwDIPath();
 
     // TODO: Proper shutdown
     SYS_ResetSystem(SYS_SHUTDOWN, 0, 0);
     IRQ_Disable();
+
     main();
     /* Unreachable! */
     abort();
