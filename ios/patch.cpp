@@ -116,3 +116,62 @@ void patchIOSOpen()
 
     peli::Log(LogL::ERROR, "Could not find IOS_Open instruction to patch");
 }
+
+static bool checkImportKeyFunction(u32 addr)
+{
+    peli::Log(LogL::INFO, "checkImportKeyFunction(0x%08X)", addr);
+
+    if (read16(addr) == 0xB5F0 && read16(addr + 0x12) == 0x2600 &&
+        read16(addr + 0x14) == 0x281F && read16(addr + 0x16) == 0xD806) {
+            peli::Log(LogL::INFO, "return true!");
+        return true;
+    }
+
+    peli::Log(LogL::INFO, "return false!");
+    return false;
+}
+
+static u32 findImportKeyFunction()
+{
+    // Check known addresses
+
+    if (checkImportKeyFunction(0x13A79C58)) {
+        return 0x13A79C58 + 1;
+    }
+
+    if (checkImportKeyFunction(0x13A79918)) {
+        return 0x13A79918 + 1;
+    }
+
+    peli::Log(LogL::INFO, "search for key function now");
+
+    for (int i = 0; i < 0x1000; i += 2) {
+        u32 addr = 0x13A79500 + i;
+        if (checkImportKeyFunction(addr)) {
+            return addr + 1;
+        }
+    }
+
+    return 0;
+}
+
+const u8 koreanCommonKey[] = {
+    0x63, 0xb8, 0x2b, 0xb4, 0xf4, 0x61, 0x4e, 0x2e,
+    0x13, 0xf2, 0xfe, 0xfb, 0xba, 0x4c, 0x9b, 0x7e,
+};
+
+void importKoreanCommonKey()
+{
+    u32 func = findImportKeyFunction();
+
+    if (func == 0) {
+        peli::Log(LogL::ERROR, "Could not find import key function");
+        return;
+    }
+
+    peli::Log(LogL::WARN, "Found import key function at 0x%08X", func);
+
+    // Call function by address
+    (*(void (*)(int keyIndex, const u8* key, u32 keySize))func)(
+        11, koreanCommonKey, sizeof(koreanCommonKey));
+}

@@ -172,7 +172,7 @@ static void OpenTestFile()
 s32 mainThreadProc(void* arg)
 {
     patchIOSOpen();
-    patchNewCommonKey();
+    importKoreanCommonKey();
 
     s32 ret = IOS_CreateHeap(mainHeapData, sizeof(mainHeapData));
     if (ret < 0)

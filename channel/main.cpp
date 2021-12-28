@@ -411,6 +411,8 @@ static Stage stReadDisc([[maybe_unused]] Stage from)
     DVD::Deinit();
     delete log;
 
+    sleep(8);
+
     VIDEO_SetBlack(true);
     VIDEO_Flush();
     VIDEO_WaitVSync();
