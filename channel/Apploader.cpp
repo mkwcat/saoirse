@@ -1,8 +1,10 @@
-#include "Boot.hpp"
+#include "Apploader.hpp"
 #include "AppPayload.hpp"
 #include "dvd.h"
 #include "irse.h"
 #include <util.h>
+#include <sdcard.h>
+#include "GlobalsConfig.hpp"
 
 #include <algorithm>
 #include <array>
@@ -14,6 +16,8 @@ LIBOGC_SUCKS_BEGIN
 #include <ogc/cache.h>
 #include <ogc/lwp_watchdog.h>
 #include <ogc/system.h>
+#include <ogc/video.h>
+#include <ogc/irq.h>
 LIBOGC_SUCKS_END
 #include <optional>
 #include <span>
@@ -21,6 +25,78 @@ LIBOGC_SUCKS_END
 #include <string.h>
 #include <thread>
 #include <time.h>
+#include <unistd.h>
+#include "IOSBoot.hpp"
+
+static inline bool startupDrive()
+{
+    // If ReadDiskID succeeds here, that means the drive is already started
+    DiErr ret = DVD::ReadDiskID(reinterpret_cast<DVD::DiskID*>(MEM1_BASE));
+    if (ret == DiErr::OK) {
+        irse::Log(LogS::Core, LogL::INFO, "Drive is already spinning");
+        return true;
+    }
+    if (ret != DiErr::DriveError)
+        return false;
+
+    // Drive is not spinning
+    irse::Log(LogS::Core, LogL::INFO, "Spinning up drive...");
+    ret = DVD::ResetDrive(true);
+    if (ret != DiErr::OK)
+        return false;
+
+    ret = DVD::ReadDiskID(reinterpret_cast<DVD::DiskID*>(MEM1_BASE));
+    return ret == DiErr::OK;
+}
+
+s32 Apploader::threadEntry([[maybe_unused]] void* arg)
+{
+    // TODO use abstract DVD interface for different types of discs (like
+    // backups etc)
+    DVD::Init();
+    if (!startupDrive()) {
+        irse::Log(LogS::Loader, LogL::ERROR, "Drive spinup failed");
+        abort();
+    }
+
+    Apploader apploader;
+
+    while (1) {
+        Apploader::TickResult result = apploader.tick();
+
+        if (result == Apploader::TickResult::Continue)
+            continue;
+        if (result == Apploader::TickResult::Done)
+            break;
+
+        irse::Log(LogS::Loader, LogL::ERROR, "Apploader tick returned error");
+        abort();
+    }
+    SDCard::Shutdown();
+    DVD::Deinit();
+
+    IOSBoot::Log::sInstance->startGameIOS();
+    auto entry = apploader.m_entryPoint;
+
+    delete IOSBoot::Log::sInstance;
+
+    VIDEO_SetBlack(true);
+    VIDEO_Flush();
+    VIDEO_WaitVSync();
+
+    SetupGlobals(0);
+    // patchMkwDIPath();
+
+    // TODO: Proper shutdown
+    SYS_ResetSystem(SYS_SHUTDOWN, 0, 0);
+    IRQ_Disable();
+
+    entry();
+    /* Unreachable! */
+    abort();
+
+    return 0;
+}
 
 #if 0
 static void DebugPause() {
@@ -28,10 +104,17 @@ static void DebugPause() {
     std::this_thread::sleep_for(2s);
 }
 #else
-static void DebugPause() {}
+static void DebugPause()
+{
+}
 #endif
 
-enum class CachePolicy { None, InvalidateDC, FlushDC };
+enum class CachePolicy
+{
+    None,
+    InvalidateDC,
+    FlushDC
+};
 
 static void EnforceCachePolicy(void* dst, u32 len, CachePolicy policy)
 {
@@ -89,31 +172,7 @@ void OpenPartition(s32 ofs, ES::TMDFixed<512>* meta)
     }
 }
 
-class PayloadManager
-{
-public:
-    PayloadManager(const ApploaderInfo& info) : mPayload(info) {}
-
-    void loadSegmnts()
-    {
-        while (true) {
-            const std::optional<AppPayload::CopyCommand> copy_cmd =
-                mPayload.popCopyCommand();
-            if (!copy_cmd.has_value())
-                break;
-
-            EncryptedRead(copy_cmd->dest, copy_cmd->length,
-                          round_down(copy_cmd->offset, 4),
-                          CachePolicy::FlushDC);
-        }
-    }
-
-    EntryPoint getEntrypoint() const { return mPayload.get_entrypoint(); }
-
-private:
-    AppPayload mPayload;
-};
-
+#if 0
 EntryPoint Apploader::load(
     // TODO: If we want to shrink the FST to fit some code a-la CTGP.
     [[maybe_unused]] int fst_expand)
@@ -127,10 +186,64 @@ EntryPoint Apploader::load(
     DebugPause();
     settime(secs_to_ticks(time(NULL) - 946684800));
     DebugPause();
-    payload.loadSegmnts();
+    payload.loadAllSegments();
 
     DebugPause();
     return payload.getEntrypoint();
+}
+#endif
+
+Apploader::TickResult Apploader::tick()
+{
+    switch (m_stage) {
+    case TickStage::ReadVolumes:
+        m_mainVolume = readVolumes()[0];
+        m_stage = TickStage::ReadPartitions;
+        break;
+
+    case TickStage::ReadPartitions:
+        m_partitions = readPartitions(m_mainVolume);
+        m_stage = TickStage::OpenPartition;
+        break;
+
+    case TickStage::OpenPartition:
+        m_bootPartition = findBootPartition(m_mainVolume, m_partitions);
+        if (m_bootPartition == nullptr) {
+            irse::Log(LogS::Loader, LogL::ERROR,
+                      "Failed to find boot partition");
+            return TickResult::Error;
+        }
+        openPartition(*m_bootPartition, &m_meta);
+        m_stage = TickStage::LoadApploader;
+        break;
+
+    case TickStage::LoadApploader: {
+        const ApploaderInfo appInfo = readAppInfo();
+        dumpAppInfo(appInfo);
+        m_payload.init(appInfo);
+        m_stage = TickStage::LoadSegment;
+        break;
+    }
+
+    case TickStage::LoadSegment: {
+        const std::optional<AppPayload::CopyCommand> copy_cmd =
+            m_payload.popCopyCommand();
+        if (!copy_cmd.has_value()) {
+            m_stage = TickStage::GetEntryPoint;
+            break;
+        }
+
+        EncryptedRead(copy_cmd->dest, copy_cmd->length,
+                      round_down(copy_cmd->offset, 4), CachePolicy::None);
+        break;
+    }
+
+    case TickStage::GetEntryPoint:
+        m_entryPoint = m_payload.get_entrypoint();
+        return TickResult::Done;
+    }
+
+    return TickResult::Continue;
 }
 
 void Apploader::openBootPartition(ES::TMDFixed<512>* outMeta)
@@ -170,8 +283,7 @@ ApploaderInfo Apploader::readAppInfo()
     static ApploaderInfo app_info ATTRIBUTE_ALIGN(32);
 
     irse::Log(LogS::Loader, LogL::INFO, "Reading apploader info..");
-    EncryptedRead(&app_info, sizeof(app_info), 0x2440 / 4,
-                  CachePolicy::InvalidateDC);
+    EncryptedRead(&app_info, sizeof(app_info), 0x2440 / 4, CachePolicy::None);
     DebugPause();
     return app_info;
 }
@@ -222,7 +334,7 @@ std::array<Partition, 4> Apploader::readPartitions(const Volume& volume)
     memset(&partitions, 'F', sizeof(partitions));
 
     UnencryptedRead(partitions.data(), sizeof(partitions),
-                    volume.ofs_partition_info, CachePolicy::InvalidateDC);
+                    volume.ofs_partition_info, CachePolicy::None);
 
     return partitions;
 }
@@ -234,7 +346,7 @@ std::array<Volume, 4> Apploader::readVolumes()
 
     memset(&volumes, 0, sizeof(volumes));
     UnencryptedRead(volumes.data(), sizeof(volumes), 0x00010000,
-                    CachePolicy::InvalidateDC);
+                    CachePolicy::None);
     for (auto& v : volumes) {
         irse::Log(LogS::Loader, LogL::INFO, "| Volume %u %u", v.num_boot_info,
                   v.ofs_partition_info);

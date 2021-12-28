@@ -105,33 +105,31 @@ s32 IOSBoot::Launch(const void* data, u32 len)
                  ~0xC0000000);
 }
 
-u16 patchNewCommonKeyCode[] = {
-    0x200B, // mov  r0, #11         @ new common key handle
-    0xA103, // adr  r1, korean_key
-    0x2210, // mov  r2, #16         @ sizeof(korean_key)
-    0x4B01, // ldr  r3, =jump_addr
-    0x4718, // bx   r3
-    // clang-format off
-    0,0,0,0,0,0,0,0,0,0,0,
-    // clang-format on
-};
-
-s32 IOSBoot::PatchNewCommonKey()
+void IOSBoot::LaunchSaoirseIOS()
 {
-    u8* code = reinterpret_cast<u8*>(patchNewCommonKeyCode);
+    u32 elfSize = 0;
+    const void* elf = Arch::getFileStatic("saoirse_ios.elf", &elfSize);
+    assert(elf != nullptr);
 
-    static const u8 jumpAddr[4] = {0x13, 0xA7, 0x9C, 0x59};
-    memcpy(code + 0xC, jumpAddr, 4);
+    irse::Log(LogS::Core, LogL::INFO, "Starting up Saoirse IOS...");
+    s32 ret = Launch(elf, elfSize);
+    irse::Log(LogS::Core, LogL::INFO, "IOSBoot::Launch result: %d", ret);
 
-    static const u8 koreanKey[16] = {
-        0x63, 0xB8, 0x2B, 0xB4, 0xF4, 0x61, 0x4E, 0x2E,
-        0x13, 0xF2, 0xFE, 0xFB, 0xBA, 0x4C, 0x9B, 0x7E,
-    };
-    memcpy(code + 0x10, koreanKey, 16);
-
-    DCFlushRange(code, sizeof(patchNewCommonKeyCode));
-    return Entry((reinterpret_cast<u32>(code) & ~0xC0000000) | 1);
+    if (ret >= 0) {
+        Log::sInstance = new Log();
+        Log::sInstance->restartEvent();
+    }
 }
+
+void IOSBoot::Log::startGameIOS()
+{
+    Queue<u32> eventWaitQueue(1);
+    setEventWaitingQueue(&eventWaitQueue, 2);
+    logRM.ioctl(1, nullptr, 0, nullptr, 0);
+    eventWaitQueue.receive();
+}
+
+IOSBoot::Log* IOSBoot::Log::sInstance;
 
 s32 IOSBoot::Log::Callback(s32 result, [[maybe_unused]] void* usrdata)
 {

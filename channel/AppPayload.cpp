@@ -15,7 +15,7 @@ static s32 payloadPrintf(const char* format, ...)
     return 0;
 }
 
-AppPayload::AppPayload(const ApploaderInfo& info)
+void AppPayload::init(const ApploaderInfo& info)
 {
     readPayload(info);
 

@@ -8,20 +8,18 @@ LIBOGC_SUCKS_BEGIN
 #include <wiiuse/wpad.h>
 LIBOGC_SUCKS_END
 
+#include "Apploader.hpp"
+#include "GlobalsConfig.hpp"
 #include "IODeviceManager.hpp"
+#include "IOSBoot.hpp"
+#include "UIManager.h"
 #include "arch.h"
+#include <cstring>
 #include <disk.h>
 #include <ff.h>
-
-#include <cstring>
 #include <mutex>
 #include <stdio.h>
 #include <unistd.h>
-
-#include "Boot.hpp"
-#include "GlobalsConfig.hpp"
-
-#include "IOSBoot.hpp"
 
 using namespace irse;
 
@@ -83,29 +81,7 @@ void irse::Log(LogS src, LogL level, const char* format, ...)
     va_end(args);
 }
 
-/*
- * Checks to see if we have any events, like shutdown commands.
- * Returns to the previous stage if none, after waiting for some amount
- * of time.
- */
-static Stage stDefault(Stage from)
-{
-    Stage next;
-    if (!events.tryreceive(next)) {
-        //! No event
-        /* Wait 32 ms */
-        usleep(32000);
-        return from;
-    } else {
-        //! Received event
-        return next;
-    }
-}
-
-extern const char data_ar[];
-extern const char data_ar_end[];
-
-static Stage stInit([[maybe_unused]] Stage from)
+s32 main([[maybe_unused]] s32 argc, [[maybe_unused]] char** argv)
 {
     /* Initialize video and the debug console */
     VIDEO_Init();
@@ -127,351 +103,19 @@ static Stage stInit([[maybe_unused]] Stage from)
     irse::Log(LogS::Core, LogL::WARN, "Debug console initialized");
     VIDEO_WaitVSync();
 
+    extern const char data_ar[];
+    extern const char data_ar_end[];
     Arch::sInstance = new Arch(data_ar, data_ar_end - data_ar);
 
-    irse::Log(LogS::Core, LogL::INFO, "Patching korean key into IOS...");
-    s32 ret = IOSBoot::PatchNewCommonKey();
-    irse::Log(LogS::Core, LogL::INFO, "PatchNewCommonKey result: %d", ret);
-
-    // sleep(1);
-
-    irse::Log(LogS::Core, LogL::INFO, "Idle thread PC: 0x%08X",
-              read32(0x0D4E0040));
-
-#if 0
-    /* Cast as s32 removes high word the in title ID */
-    irse::Log(LogS::Core, LogL::INFO, "Launching IOS%d",
-              58);
-    IOS_ReloadIOS(58);
-
-    u32 elfSize = 0;
-    const void* elf = Arch::getFileStatic("saoirse_ios.elf", &elfSize);
-    assert(elf != nullptr);
-
-    irse::Log(LogS::Core, LogL::INFO, "Starting up IOS...");
-    ret = IOSBoot::Launch(elf, elfSize);
-    irse::Log(LogS::Core, LogL::INFO, "IOS Launch result: %d", ret);
-
-    IOSBoot::Log* log = new IOSBoot::Log();
-    Queue<u32> eventWaitQueue(1);
-    log->setEventWaitingQueue(&eventWaitQueue, 2);
-    log->restartEvent();
-    eventWaitQueue.receive();
-
-    printf("test file create\n");
-    ISFS_Initialize();
-    char name_list[32] ATTRIBUTE_ALIGN(32);
-    u32 num = 0;
-    ret = ISFS_ReadDir("/title/00010004/524d4350/data/rksys.dat", name_list, &num);
-    printf("ISFS_ReadDir ret: %d\n", ret);
-    ret = ISFS_CreateFile("/title/00010004/524d4350/data/rksys.dat", 0, 3, 3, 1);
-    printf("IOS_CreateFile ret: %d\n", ret);
-    ret = ISFS_ReadDir("/title/00010004/524d4350/data/rksys.dat", name_list, &num);
-    printf("ISFS_ReadDir ret: %d\n", ret);
-    sleep(2);
-    exit(0);
-
-
-    IODeviceManager* devmgr = new IODeviceManager();
-    devmgr->init();
-    devmgr->checkUSBStatus();
-
-    sleep(4);
-    exit(0);
-#endif
-
-    DVD::Init();
-    SDCard::Open();
-    return Stage::Wait;
-}
-
-static Stage stWait([[maybe_unused]] Stage from)
-{
-    static bool lastDiscState = false;
-    static bool lastCardState = false;
-
-    bool discState = DVD::IsInserted();
-    bool cardState = SDCard::IsInserted();
-
-    if (discState != lastDiscState) {
-        lastDiscState = discState;
-        return discState ? Stage::DiscInsert : Stage::DiscEject;
-    }
-
-    if (cardState != lastCardState) {
-        lastCardState = cardState;
-        return cardState ? Stage::SDInsert : Stage::SDEject;
-    }
-
-    /* temporary, the UI should handle this */
-    WPAD_ScanPads();
-    s32 down = WPAD_ButtonsDown(0);
-    if (down & WPAD_BUTTON_HOME) {
-        return Stage::ReturnToMenu;
-    }
-
-    return Stage::Default;
-}
-
-static Stage stReturnToMenu([[maybe_unused]] Stage from)
-{
-    irse::Log(LogS::Core, LogL::WARN, "Exiting...");
-
-    if (DVD::IsInserted()) {
-        DVD::ResetDrive(false);
-    }
-    exit(0);
-    /* Should never reach here */
-    return Stage::ReturnToMenu;
-}
-
-static inline bool startupDrive()
-{
-    /* If ReadDiskID succeeds here, that means the drive is already started */
-    DiErr ret = DVD::ReadDiskID(reinterpret_cast<DVD::DiskID*>(MEM1_BASE));
-    if (ret == DiErr::OK) {
-        irse::Log(LogS::Core, LogL::INFO, "Drive is already spinning");
-        return true;
-    }
-    if (ret != DiErr::DriveError)
-        return false;
-
-    /* Drive is not spinning */
-    irse::Log(LogS::Core, LogL::INFO, "Spinning up drive...");
-    ret = DVD::ResetDrive(true);
-    irse::Log(LogS::Core, LogL::INFO, "ResetDrive returned: 0x%X", ret);
-    if (ret != DiErr::OK)
-        return false;
-
-    ret = DVD::ReadDiskID(reinterpret_cast<DVD::DiskID*>(MEM1_BASE));
-    irse::Log(LogS::Core, LogL::INFO, "ReadDiskID returned: 0x%X", ret);
-    return ret == DiErr::OK;
-}
-
-static Stage stDiscInsert([[maybe_unused]] Stage from)
-{
-    if (!startupDrive())
-        return Stage::DiscError;
-
-    DiErr ret = DVD::ReadDiskID(reinterpret_cast<DVD::DiskID*>(MEM1_BASE));
-    if (ret != DiErr::OK) {
-        irse::Log(LogS::Core, LogL::ERROR, "DVD::ReadDiskID returned %s",
-                  DVDLow::PrintErr(ret));
-        return Stage::DiscError;
-    }
-
-    return Stage::ReadDisc;
-}
-
-static Stage stDiscEject([[maybe_unused]] Stage from)
-{
-    irse::Log(LogS::Core, LogL::INFO, "Disc ejected");
-    /* Notify UI controller of eject here */
-    return Stage::Wait;
-}
-
-static Stage stDiscError([[maybe_unused]] Stage from)
-{
-    irse::Log(LogS::Core, LogL::ERROR, "Disc error! Waiting for eject...");
-    /* Notify UI controller of error here */
-    return Stage::Wait;
-}
-
-#include "fst.h"
-
-#if 0
-static void fstTest()
-{
-    FSTEntry* fst = *reinterpret_cast<FSTEntry**>(0x80000038);
-    FSTBuilder::DirEntry* root;
-    {
-        FSTReader reader;
-        root = reader.process(fst, 0x81800000 - reinterpret_cast<u32>(fst));
-        assert(root != nullptr);
-    }
-
-    FSTBuilder::Entry* castle_course = root->find("Race/Course/castle_course.szs");
-    FSTBuilder::Entry* senior_course = root->find("Race/Course/rainbow_course.szs");
-
-    assert(castle_course != nullptr);
-    assert(senior_course != nullptr);
-
-    castle_course->file()->m_wordOffset = senior_course->file()->m_wordOffset;
-    castle_course->file()->m_byteLength = senior_course->file()->m_byteLength;
-
-    {
-        FSTBuilder builder;
-        builder.build(root);
-        builder.write(reinterpret_cast<void*>(fst));
-    }
-
-    irse::Log(LogS::Core, LogL::WARN,
-        "Overwrote castle_course with rainbow_course");
-}
-
-static DIP::DVDPatch fstTest()
-{
-    assert(FSServ::MountSDCard());
-    FIL fil;
-    FRESULT fret = f_open(&fil, "0:/beginner_course.szs", FA_READ);
-    printf("f_open result: %d\n", fret);
-    if (fret != FR_OK) {
-        sleep(2);
-        abort();
-    }
-
-    DIP::DVDPatch patch = {.disc_offset = 0x80000000,
-                           .disc_length = static_cast<u32>(f_size(&fil)),
-                           .start_cluster = fil.obj.sclust,
-                           .cur_cluster = fil.clust,
-                           .file_offset = 0,
-                           .drv = 0};
-
-    assert(FSServ::UnmountSDCard());
-
-    FSTEntry* fst = *reinterpret_cast<FSTEntry**>(0x80000038);
-    FSTBuilder::DirEntry* root;
-    {
-        FSTReader reader;
-        root = reader.process(fst, 0x81800000 - reinterpret_cast<u32>(fst));
-        assert(root != nullptr);
-    }
-
-    FSTBuilder::Entry* dvdFile = root->find("Race/Course/beginner_course.szs");
-    assert(dvdFile != nullptr);
-
-    dvdFile->file()->m_wordOffset = patch.disc_offset;
-    dvdFile->file()->m_byteLength = patch.disc_length;
-
-    /* remove entry test */
-    auto ent = root->find("thp");
-    root->remove(ent);
-    delete ent;
-
-    {
-        FSTBuilder builder;
-        builder.build(root);
-        builder.write(reinterpret_cast<void*>(fst));
-    }
-
-    return patch;
-}
-#endif
-
-static Stage stReadDisc([[maybe_unused]] Stage from)
-{
-    irse::Log(LogS::Core, LogL::INFO, "DiskID: %.6s",
-              reinterpret_cast<char*>(MEM1_BASE));
-
-    static Apploader loader;
-    ES::TMDFixed<512> meta ATTRIBUTE_ALIGN(32);
-
-    loader.openBootPartition(&meta);
-    auto main = loader.load();
-
-    DVD::Deinit();
-    WPAD_Shutdown();
-
-    // DIP::DVDPatch patch = fstTest();
-
-    SDCard::Shutdown();
-
-    /* Cast as s32 removes high word the in title ID */
-    irse::Log(LogS::Core, LogL::INFO, "Launching IOS%d",
-              static_cast<s32>(meta.sysVersion));
-    IOS_ReloadIOS(58);
-
-    u32 elfSize = 0;
-    const void* elf = Arch::getFileStatic("saoirse_ios.elf", &elfSize);
-    assert(elf != nullptr);
-
-    irse::Log(LogS::Core, LogL::INFO, "Starting up IOS...");
-    s32 ret = IOSBoot::Launch(elf, elfSize);
-    irse::Log(LogS::Core, LogL::INFO, "IOS Launch result: %d", ret);
-
-    IOSBoot::Log* log = new IOSBoot::Log();
-    Queue<u32> eventWaitQueue(1);
-    log->setEventWaitingQueue(&eventWaitQueue, 2);
-    log->restartEvent();
-    eventWaitQueue.receive();
-
-    DVD::Init();
-    startupDrive();
-
-    loader.openBootPartition(&meta);
-
-#if 0
-    if ((ret = DVDProxy::ApplyPatches(&patch, 1)) != 0) {
-        irse::Log(LogS::Core, LogL::ERROR, "DVD proxy error code: %d", ret);
-        sleep(4);
-    }
-#endif
-    // DVDProxy::StartGame();
-
-    DVD::Deinit();
-    delete log;
-
-    sleep(8);
-
-    VIDEO_SetBlack(true);
-    VIDEO_Flush();
-    VIDEO_WaitVSync();
-
-    SetupGlobals(0);
-    // patchMkwDIPath();
-
-    // TODO: Proper shutdown
-    SYS_ResetSystem(SYS_SHUTDOWN, 0, 0);
-    IRQ_Disable();
-
-    main();
-    /* Unreachable! */
-    abort();
-}
-
-static Stage stSDInsert([[maybe_unused]] Stage from)
-{
-    irse::Log(LogS::Core, LogL::INFO, "SD Card inserted");
-    return Stage::Wait;
-}
-
-static Stage stSDEject([[maybe_unused]] Stage from)
-{
-    irse::Log(LogS::Core, LogL::INFO, "SD Card ejected");
-    return Stage::Wait;
-}
-
-static s32 Loop([[maybe_unused]] void* arg)
-{
-    Stage stage = Stage::Init;
-    Stage prev = Stage::Default;
-    Stage next = Stage::ReturnToMenu;
-
-    while (1) {
-        switch (stage) {
-#define STAGE_CASE(name)                                                       \
-    case Stage::name:                                                          \
-        next = st##name(prev);                                                 \
-        break
-            STAGE_CASE(Default);
-            STAGE_CASE(Init);
-            STAGE_CASE(Wait);
-            STAGE_CASE(ReturnToMenu);
-            STAGE_CASE(DiscInsert);
-            STAGE_CASE(DiscEject);
-            STAGE_CASE(DiscError);
-            STAGE_CASE(ReadDisc);
-            STAGE_CASE(SDInsert);
-            STAGE_CASE(SDEject);
-#undef STAGE_CASE
-        }
-        prev = stage;
-        stage = next;
-    }
-}
-
-s32 main([[maybe_unused]] s32 argc, [[maybe_unused]] char** argv)
-{
-    // IOS_ReloadIOS(58);
-    return Loop(0);
+    // Launch Saoirse IOS
+    IOSBoot::LaunchSaoirseIOS();
+
+    // Start "UI" thread
+    new Thread(UIManager::threadEntry, nullptr, nullptr, 0x8000, 80);
+    // Start Apploader thread
+    new Thread(Apploader::threadEntry, nullptr, nullptr, 0x8000, 80);
+    // Start IODeviceManager thread
+    new Thread(IODeviceManager::threadEntry, nullptr, nullptr, 0x8000, 80);
+
+    LWP_SuspendThread(LWP_GetSelf());
 }

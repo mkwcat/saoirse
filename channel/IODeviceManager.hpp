@@ -15,6 +15,7 @@ class IODeviceManager
 {
 public:
     static IODeviceManager* sInstance;
+    static s32 threadEntry(void* arg);
 
     void eventLoop();
     int getMSCCount() const;

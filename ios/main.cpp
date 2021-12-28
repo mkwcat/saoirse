@@ -30,6 +30,9 @@ static u32 printBufQueueData;
 char logBuffer[PRINT_BUFFER_SIZE];
 static bool logEnabled = false;
 
+static s32 startGameWaitQueue = -1;
+static u32 startGameWaitQueueData;
+
 static const char* logColors[3] = {"\x1b[37;1m", "\x1b[33;1m", "\x1b[31;1m"};
 
 void peli::Log(LogL level, const char* format, ...)
@@ -129,6 +132,12 @@ static void Log_IPCRequest(IOSRequest* req)
             IOS_SendMessage(printBufQueue, (u32)req, 0);
             break;
         }
+        if (req->ioctl.cmd == 1) {
+            // Start game IOS command
+            IOS_SendMessage(startGameWaitQueue, 0, 0);
+            IOS_ResourceReply(req, IOS_SUCCESS);
+            break;
+        }
         IOS_ResourceReply(req, IOS_EINVAL);
         break;
 
@@ -182,6 +191,15 @@ s32 mainThreadProc(void* arg)
     cppInit();
     IOS::Resource::makeIpcToCallbackThread();
 
+    u32 msg;
+    ret = IOS_ReceiveMessage(startGameWaitQueue, &msg, 0);
+    if (ret != 0) {
+        peli::Log(LogL::ERROR, "IOS_ReceiveMessage(startGameWaitQueue) failed! %d", ret);
+        abort();
+    }
+
+    peli::Log(LogL::INFO, "Starting up game IOS...");
+
     if (!SDCard::Open()) {
         peli::Log(LogL::ERROR, "FS_StartRM: SDCard::Open returned false");
         abort();
@@ -218,7 +236,12 @@ static void saoMain()
 {
     logEnabled = true;
 
-    s32 ret = IOS_CreateThread(
+    s32 ret = IOS_CreateMessageQueue(&startGameWaitQueueData, 1);
+    if (ret < 0)
+        exitClr(YUV_DARK_RED);
+    startGameWaitQueue = ret;
+
+    ret = IOS_CreateThread(
         mainThreadProc, nullptr,
         reinterpret_cast<u32*>(mainThreadStack + sizeof(mainThreadStack)),
         sizeof(mainThreadStack), 127, false);

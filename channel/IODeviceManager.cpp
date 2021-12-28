@@ -1,6 +1,21 @@
 #include "IODeviceManager.hpp"
 #include "irse.h"
-#include <algorithm>
+#include <unistd.h>
+
+IODeviceManager* IODeviceManager::sInstance;
+
+s32 IODeviceManager::threadEntry([[maybe_unused]] void* arg)
+{
+    IODeviceManager::sInstance = new IODeviceManager;
+    IODeviceManager::sInstance->init();
+
+    while (1) {
+        usleep(100000);
+        IODeviceManager::sInstance->eventLoop();
+    }
+
+    return 0;
+}
 
 constexpr int DEVLIST_MAXSIZE = 8;
 constexpr int USB_CLASS_MASS_STORAGE = 0x08;
