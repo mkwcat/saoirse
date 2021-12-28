@@ -237,7 +237,7 @@ static s32 CopyFromNandToEFS(const char* nandPath, const char* efsPath)
     peli::Log(LogL::INFO, "[EFS::CopyFromNandToEFS] File size: 0x%X", size);
 
     FIL fil;
-    FRESULT fret = f_open(&fil, efsPath, FA_WRITE | FA_OPEN_EXISTING);
+    FRESULT fret = f_open(&fil, efsPath, FA_WRITE | FA_CREATE_NEW);
 
     if (fret != FR_OK) {
         peli::Log(LogL::ERROR,

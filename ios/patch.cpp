@@ -119,15 +119,10 @@ void patchIOSOpen()
 
 static bool checkImportKeyFunction(u32 addr)
 {
-    peli::Log(LogL::INFO, "checkImportKeyFunction(0x%08X)", addr);
-
     if (read16(addr) == 0xB5F0 && read16(addr + 0x12) == 0x2600 &&
         read16(addr + 0x14) == 0x281F && read16(addr + 0x16) == 0xD806) {
-            peli::Log(LogL::INFO, "return true!");
         return true;
     }
-
-    peli::Log(LogL::INFO, "return false!");
     return false;
 }
 
@@ -142,8 +137,6 @@ static u32 findImportKeyFunction()
     if (checkImportKeyFunction(0x13A79918)) {
         return 0x13A79918 + 1;
     }
-
-    peli::Log(LogL::INFO, "search for key function now");
 
     for (int i = 0; i < 0x1000; i += 2) {
         u32 addr = 0x13A79500 + i;
