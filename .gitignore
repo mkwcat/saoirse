@@ -1,4 +1,5 @@
 bin
 build_ios
 build_channel
+build_boot
 .vscode
