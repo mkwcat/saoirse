@@ -42,7 +42,15 @@ constexpr s32 mgrHandle = 200;
     (sizeof(EFS_DRIVE) - 1) + NAND_MAX_FILEPATH_LENGTH
 
 IOS::ResourceCtrl<ISFSIoctl> realFsMgr("/dev/fs");
-static std::array<FIL*, NAND_MAX_FILE_DESCRIPTOR_AMOUNT> spFileDescriptorArray;
+struct ProxyFile {
+    bool inUse;
+    bool filOpened;
+    char path[64];
+    u32 mode;
+    FIL fil;
+};
+static std::array<ProxyFile, NAND_MAX_FILE_DESCRIPTOR_AMOUNT>
+    spFileDescriptorArray;
 
 /*---------------------------------------------------------------------------*
  * Name        : IsFileDescriptorValid
@@ -55,26 +63,58 @@ static bool IsFileDescriptorValid(int fd)
     if (fd < 0 || fd >= static_cast<int>(spFileDescriptorArray.size()))
         return false;
 
-    if (spFileDescriptorArray[fd] == nullptr)
+    if (!spFileDescriptorArray[fd].inUse)
         return false;
 
     return true;
 }
 
-/*---------------------------------------------------------------------------*
- * Name        : GetAvailableFileDescriptor
- * Description : Gets an available index in the file descriptor array.
- * Returns     : An available index in the file descriptor array, or -1 if
- *               there is no index available in the file descriptor array.
- *---------------------------------------------------------------------------*/
-static int GetAvailableFileDescriptor()
+static int RegisterFileDescriptor(const char* path)
 {
-    auto it = std::find(spFileDescriptorArray.begin(),
-                        spFileDescriptorArray.end(), nullptr);
+    int match = 0;
 
-    return it == spFileDescriptorArray.end()
-               ? -1
-               : it - spFileDescriptorArray.begin();
+    for (int i = 0; i < NAND_MAX_FILE_DESCRIPTOR_AMOUNT; i++) {
+        // If the file was already opened, reuse the descriptor
+        if (spFileDescriptorArray[i].filOpened &&
+            !strcmp(spFileDescriptorArray[i].path, path)) {
+            
+            if (spFileDescriptorArray[i].inUse)
+                return ISFSError::Locked;
+            
+            spFileDescriptorArray[i].inUse = true;
+            return i;
+        }
+
+        if (!spFileDescriptorArray[i].inUse &&
+            spFileDescriptorArray[match].inUse)
+            match = i;
+
+        if (!spFileDescriptorArray[i].filOpened &&
+            spFileDescriptorArray[match].filOpened)
+            match = i;
+    }
+
+    if (spFileDescriptorArray[match].inUse)
+        return ISFSError::MaxOpen;
+
+    // Close and use the file descriptor
+
+    if (spFileDescriptorArray[match].filOpened)
+        f_close(&spFileDescriptorArray[match].fil);
+
+    spFileDescriptorArray[match].filOpened = false;
+    spFileDescriptorArray[match].inUse = true;
+    strncpy(spFileDescriptorArray[match].path, path, 64);
+
+    return match;
+}
+
+static void FreeFileDescriptor(int fd)
+{
+    if (!IsFileDescriptorValid(fd))
+        return;
+
+    spFileDescriptorArray[fd].inUse = false;
 }
 
 /*---------------------------------------------------------------------------*
@@ -278,18 +318,27 @@ static s32 CopyFromNandToEFS(const char* nandPath, const char* efsPath)
     return ISFSError::OK;
 }
 
+static s32 ReopenFile(s32 fd)
+{
+    const FRESULT fret = f_lseek(&spFileDescriptorArray[fd].fil, 0);
+    if (fret != FR_OK) {
+        peli::Log(LogL::ERROR,
+                  "[EFS::ReqProxyOpen] Failed to seek to position 0x%08X "
+                  "in file descriptor %d !",
+                  0, fd);
+
+        FreeFileDescriptor(fd);
+        return FResultToISFSError(fret);
+    }
+    return fd;
+}
+
 /*
  * Handle open file request from the filesystem proxy.
  * Returns: File descriptor, or ISFS error code.
  */
 static s32 ReqProxyOpen(const char* filepath, u32 mode)
 {
-    int fd = GetAvailableFileDescriptor();
-    if (fd < 0) {
-        peli::Log(LogL::ERROR, "[EFS::ReqProxyOpen] Too many descriptors open!");
-        return ISFSError::MaxOpen;
-    }
-
     if (mode > IOS_OPEN_RW)
         return ISFSError::Invalid;
 
@@ -298,18 +347,36 @@ static s32 ReqProxyOpen(const char* filepath, u32 mode)
     if (!GetReplacedFilepath(filepath, efsFilepath, sizeof(efsFilepath)))
         return ISFSError::Invalid;
 
-    spFileDescriptorArray[fd] = new FIL;
+    int fd = RegisterFileDescriptor(filepath);
+    if (fd < 0) {
+        peli::Log(LogL::ERROR,
+                  "[EFS::ReqProxyOpen] Could not register file descriptor: %d",
+                  fd);
+        return fd;
+    }
+    peli::Log(LogL::INFO, "Registered file descriptor %d", fd);
+
     ASSERT(IsFileDescriptorValid(fd));
-    const FRESULT fret = f_open(spFileDescriptorArray[fd], efsFilepath, mode);
+
+    spFileDescriptorArray[fd].mode = mode;
+
+    if (spFileDescriptorArray[fd].filOpened) {
+        peli::Log(LogL::INFO, "File already open, reusing descriptor");
+        return ReopenFile(fd);
+    }
+
+    const FRESULT fret =
+        f_open(&spFileDescriptorArray[fd].fil, efsFilepath, FA_READ | FA_WRITE);
     if (fret != FR_OK) {
         peli::Log(LogL::ERROR,
                   "[EFS::ReqProxyOpen] Failed to open file '%s', error: %d",
                   efsFilepath, fret);
 
-        delete spFileDescriptorArray[fd];
-        spFileDescriptorArray[fd] = nullptr;
+        FreeFileDescriptor(fd);
         return FResultToISFSError(fret);
     }
+
+    spFileDescriptorArray[fd].filOpened = true;
 
     peli::Log(
         LogL::INFO,
@@ -331,14 +398,13 @@ static s32 ReqClose(s32 fd)
     if (!IsFileDescriptorValid(fd))
         return ISFSError::Invalid;
 
-    if (f_close(spFileDescriptorArray[fd]) != FR_OK) {
+    if (f_sync(&spFileDescriptorArray[fd].fil) != FR_OK) {
         peli::Log(LogL::ERROR,
-                  "[EFS::ReqClose] Failed to close file descriptor %d !", fd);
+                  "[EFS::ReqClose] Failed to sync file descriptor %d !", fd);
         return ISFSError::Unknown;
     }
 
-    delete spFileDescriptorArray[fd];
-    spFileDescriptorArray[fd] = nullptr;
+    FreeFileDescriptor(fd);
 
     peli::Log(LogL::INFO,
               "[EFS::ReqClose] Successfully closed file descriptor %d !", fd);
@@ -358,9 +424,12 @@ static s32 ReqRead(s32 fd, void* data, u32 len)
     if (len == 0)
         return ISFSError::OK;
 
+    if (!(spFileDescriptorArray[fd].mode & IOS::Mode::Read))
+        return ISFSError::NoAccess;
+
     unsigned int bytesRead;
     const FRESULT fret =
-        f_read(spFileDescriptorArray[fd], data, len, &bytesRead);
+        f_read(&spFileDescriptorArray[fd].fil, data, len, &bytesRead);
     if (fret != FR_OK) {
         peli::Log(LogL::ERROR,
                   "[EFS::ReqRead] Failed to read %u bytes from file descriptor "
@@ -389,9 +458,12 @@ static s32 ReqWrite(s32 fd, const void* data, u32 len)
     if (len == 0)
         return ISFSError::OK;
 
+    if (!(spFileDescriptorArray[fd].mode & IOS::Mode::Write))
+        return ISFSError::NoAccess;
+
     unsigned int bytesWrote;
     const FRESULT fret =
-        f_write(spFileDescriptorArray[fd], data, len, &bytesWrote);
+        f_write(&spFileDescriptorArray[fd].fil, data, len, &bytesWrote);
     if (fret != FR_OK) {
         peli::Log(LogL::ERROR,
                   "[EFS::ReqWrite] Failed to write %u bytes to file descriptor "
@@ -420,7 +492,7 @@ static s32 ReqSeek(s32 fd, s32 where, s32 whence)
     if (whence < NAND_SEEK_SET || whence > NAND_SEEK_END)
         return ISFSError::Invalid;
 
-    FIL* fil = spFileDescriptorArray[fd];
+    FIL* fil = &spFileDescriptorArray[fd].fil;
     FSIZE_t offset = f_tell(fil);
     FSIZE_t endPosition = f_size(fil);
 
@@ -486,8 +558,8 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
                 return ISFSError::Invalid;
             }
             IOS::File::Stat* stat = reinterpret_cast<IOS::File::Stat*>(io);
-            stat->size = f_size(spFileDescriptorArray[fd]);
-            stat->pos = f_tell(spFileDescriptorArray[fd]);
+            stat->size = f_size(&spFileDescriptorArray[fd].fil);
+            stat->pos = f_tell(&spFileDescriptorArray[fd].fil);
             return ISFSError::OK;
         }
 
@@ -1042,10 +1114,6 @@ extern "C" s32 FS_StartRM([[maybe_unused]] void* arg)
     peli::Log(LogL::INFO, "Starting FS...");
 
     assert(realFsMgr.fd() >= 0);
-
-    for (int i = 0; i < NAND_MAX_FILE_DESCRIPTOR_AMOUNT; i++) {
-        spFileDescriptorArray[i] = nullptr;
-    }
 
     Queue<IOS::Request*> queue(8);
     const s32 ret = IOS_RegisterResourceManager("$", queue.id());

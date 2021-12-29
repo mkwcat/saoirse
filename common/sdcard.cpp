@@ -35,7 +35,6 @@
 #ifdef TARGET_IOS
 #include <ios.h>
 #include <main.h>
-#include <patch.h>
 #include <util.h>
 #else
 #include <gcutil.h>
@@ -144,6 +143,22 @@ static u8 __sd0_cid[16] ATTRIBUTE_ALIGN(32);
 static s32 __sdio_initialized = 0;
 
 static char _sd0_fs[] = "/dev/sdio/slot0";
+
+static inline void SyncBeforeRead([[maybe_unused]] const void* address,
+                                  [[maybe_unused]] u32 len)
+{
+#ifdef TARGET_IOS
+    IOS_InvalidateDCache(const_cast<void*>(address), len);
+#endif
+}
+
+static inline void SyncBeforeWrite([[maybe_unused]] const void* address,
+                                   [[maybe_unused]] u32 len)
+{
+#ifdef TARGET_IOS
+    IOS_FlushDCache(const_cast<void*>(address), len);
+#endif
+}
 
 static s32 __sdio_sendcommand(u32 cmd, u32 cmd_type, u32 rsp_type, u32 arg,
                               u32 blk_cnt, u32 blk_size, void* buffer,
@@ -599,11 +614,7 @@ s32 SDCard::ReadSectors(sec_t sector, sec_t numSectors, void* buffer)
     if (ret < 0)
         return ret;
 
-    if ((u32)buffer & 0x1F
-#ifdef TARGET_IOS
-        || !isPPCRegion(buffer)
-#endif
-    ) {
+    if ((u32)buffer & 0x1F) {
         ptr = (u8*)buffer;
         int secs_to_read;
         while (numSectors > 0) {
@@ -615,15 +626,12 @@ s32 SDCard::ReadSectors(sec_t sector, sec_t numSectors, void* buffer)
                 secs_to_read = 8;
             else
                 secs_to_read = numSectors;
+            SyncBeforeRead(rw_buffer, secs_to_read * PAGE_SIZE512);
             ret = __sdio_sendcommand(SDIO_CMD_READMULTIBLOCK, SDIOCMD_TYPE_AC,
                                      SDIO_RESPONSE_R1, blk_off, secs_to_read,
                                      PAGE_SIZE512, rw_buffer, NULL, 0);
             if (ret >= 0) {
-#ifdef TARGET_IOS
-                memcpy(ptr, toUncached(rw_buffer), PAGE_SIZE512 * secs_to_read);
-#else
                 memcpy(ptr, rw_buffer, PAGE_SIZE512 * secs_to_read);
-#endif
                 ptr += PAGE_SIZE512 * secs_to_read;
                 sector += secs_to_read;
                 numSectors -= secs_to_read;
@@ -633,6 +641,7 @@ s32 SDCard::ReadSectors(sec_t sector, sec_t numSectors, void* buffer)
     } else {
         if (__sd0_sdhc == 0)
             sector *= PAGE_SIZE512;
+        SyncBeforeRead(buffer, PAGE_SIZE512 * numSectors);
         ret = __sdio_sendcommand(SDIO_CMD_READMULTIBLOCK, SDIOCMD_TYPE_AC,
                                  SDIO_RESPONSE_R1, sector, numSectors,
                                  PAGE_SIZE512, buffer, NULL, 0);
@@ -656,11 +665,7 @@ s32 SDCard::WriteSectors(sec_t sector, sec_t numSectors, const void* buffer)
     if (ret < 0)
         return ret;
 
-    if ((u32)buffer & 0x1F
-#ifdef TARGET_IOS
-        || !isPPCRegion(buffer)
-#endif
-    ) {
+    if ((u32)buffer & 0x1F) {
         ptr = (u8*)buffer;
         int secs_to_write;
         while (numSectors > 0) {
@@ -672,11 +677,8 @@ s32 SDCard::WriteSectors(sec_t sector, sec_t numSectors, const void* buffer)
                 secs_to_write = 8;
             else
                 secs_to_write = numSectors;
-#ifdef TARGET_IOS
-            memcpy(toUncached(rw_buffer), ptr, PAGE_SIZE512 * secs_to_write);
-#else
             memcpy(rw_buffer, ptr, PAGE_SIZE512 * secs_to_write);
-#endif
+            SyncBeforeWrite(rw_buffer, PAGE_SIZE512 * secs_to_write);
             ret = __sdio_sendcommand(SDIO_CMD_WRITEMULTIBLOCK, SDIOCMD_TYPE_AC,
                                      SDIO_RESPONSE_R1, blk_off, secs_to_write,
                                      PAGE_SIZE512, rw_buffer, NULL, 0);
@@ -690,6 +692,7 @@ s32 SDCard::WriteSectors(sec_t sector, sec_t numSectors, const void* buffer)
     } else {
         if (__sd0_sdhc == 0)
             sector *= PAGE_SIZE512;
+        SyncBeforeWrite(buffer, PAGE_SIZE512 * numSectors);
         ret = __sdio_sendcommand(SDIO_CMD_WRITEMULTIBLOCK, SDIOCMD_TYPE_AC,
                                  SDIO_RESPONSE_R1, sector, numSectors,
                                  PAGE_SIZE512, (char*)buffer, NULL, 0);
