@@ -8,7 +8,7 @@ LIBOGC_SUCKS_BEGIN
 #include <wiiuse/wpad.h>
 LIBOGC_SUCKS_END
 
-#include "Apploader.hpp"
+#include "Apploader/Apploader.hpp"
 #include "GlobalsConfig.hpp"
 #include "IODeviceManager.hpp"
 #include "IOSBoot.hpp"
