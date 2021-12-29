@@ -11,9 +11,9 @@ constexpr bool validKernelCodePtr(u32 address)
 }
 
 template <class T>
-static inline T toUncached(T address)
+static inline T* toUncached(T* address)
 {
-    return reinterpret_cast<T>(reinterpret_cast<u32>(address) | 0x80000000);
+    return reinterpret_cast<T*>(reinterpret_cast<u32>(address) | 0x80000000);
 }
 
 constexpr u16 thumbBLHi(u32 src, u32 dest)
@@ -28,10 +28,9 @@ constexpr u16 thumbBLLo(u32 src, u32 dest)
     return ((diff >> 1) & 0x7FF) | 0xF800;
 }
 
-template <class T>
-static inline bool isPPCRegion(T ptr)
+static inline bool isPPCRegion(const void* ptr)
 {
-    u32 address = reinterpret_cast<u32>(ptr);
+    const u32 address = reinterpret_cast<u32>(ptr);
     return (address < 0x01800000) ||
            (address >= 0x10000000 && address < 0x13400000);
 }

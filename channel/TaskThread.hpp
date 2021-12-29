@@ -1,4 +1,5 @@
 #pragma once
+
 #include <os.h>
 #include <types.h>
 
@@ -13,7 +14,7 @@ public:
         return 0;
     }
 
-    void start(Queue<int>* onDestroyQueue)
+    void start(Queue<int>* onDestroyQueue = nullptr)
     {
         if (m_running)
             return;
@@ -23,11 +24,6 @@ public:
         m_onDestroyQueue = onDestroyQueue;
         m_thread.create(&__threadProc, reinterpret_cast<void*>(this), nullptr,
                         0x1000, 80);
-    }
-
-    void start()
-    {
-        start(nullptr);
     }
 
     void stop()
@@ -43,24 +39,24 @@ public:
     void taskBreak()
     {
         if (m_cancelTask) {
-            destroyThread(0);
+            _destroyThread(0);
         }
     }
 
     void taskAbort()
     {
-        destroyThread(-1);
+        _destroyThread(-1);
     }
 
     void taskSuccess()
     {
-        destroyThread(0);
+        _destroyThread(0);
     }
 
     virtual void taskEntry() = 0;
 
 private:
-    void destroyThread(int result)
+    void _destroyThread(int result)
     {
         m_running = false;
         m_thread.~Thread();
