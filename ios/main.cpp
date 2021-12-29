@@ -29,6 +29,8 @@ static s32 printBufQueue = -1;
 static u32 printBufQueueData;
 char logBuffer[PRINT_BUFFER_SIZE];
 static bool logEnabled = false;
+static bool logFileEnabled = false;
+static FIL logFile;
 
 static s32 startGameWaitQueue = -1;
 static u32 startGameWaitQueueData;
@@ -37,29 +39,38 @@ static const char* logColors[3] = {"\x1b[37;1m", "\x1b[33;1m", "\x1b[31;1m"};
 
 void peli::Log(LogL level, const char* format, ...)
 {
-    if (!logEnabled)
-        return;
-
     if (static_cast<s32>(level) >= 3)
         abort();
 
     IOSRequest* req;
-    const s32 ret = IOS_ReceiveMessage(printBufQueue, (u32*)&req, 0);
-    if (ret < 0)
-        exitClr(YUV_CYAN);
+    if (logEnabled) {
+        const s32 ret = IOS_ReceiveMessage(printBufQueue, (u32*)&req, 0);
+        if (ret < 0)
+            exitClr(YUV_CYAN);
+    }
 
     /* Use the temporary log buffer then memcpy into the request
      * output to work around a hardware bug */
-    const s32 pos = snprintf(logBuffer, PRINT_BUFFER_SIZE - 1, "%s[IOS] ",
+    const s32 pos = snprintf(logBuffer, PRINT_BUFFER_SIZE - 2, "%s[IOS] ",
                              logColors[static_cast<s32>(level)]);
     va_list args;
     va_start(args, format);
     vsnprintf(logBuffer + pos, PRINT_BUFFER_SIZE - pos - 1, format, args);
     va_end(args);
 
-    memcpy(req->ioctl.io, logBuffer, PRINT_BUFFER_SIZE);
-    IOS_FlushDCache(req->ioctl.io, PRINT_BUFFER_SIZE);
-    IOS_ResourceReply(req, 0);
+    if (logEnabled) {
+        memcpy(req->ioctl.io, logBuffer, PRINT_BUFFER_SIZE);
+        IOS_FlushDCache(req->ioctl.io, PRINT_BUFFER_SIZE);
+        IOS_ResourceReply(req, 0);
+    }
+
+    if (logFileEnabled) {
+        UINT bw = 0;
+        f_write(&logFile, logBuffer + 7, strlen(logBuffer) - 7, &bw);
+        static const char newline = '\n';
+        f_write(&logFile, &newline, 1, &bw);
+        f_sync(&logFile);
+    }
 }
 
 void peli::NotifyResourceStarted()
@@ -194,7 +205,8 @@ s32 mainThreadProc(void* arg)
     u32 msg;
     ret = IOS_ReceiveMessage(startGameWaitQueue, &msg, 0);
     if (ret != 0) {
-        peli::Log(LogL::ERROR, "IOS_ReceiveMessage(startGameWaitQueue) failed! %d", ret);
+        peli::Log(LogL::ERROR,
+                  "IOS_ReceiveMessage(startGameWaitQueue) failed! %d", ret);
         abort();
     }
 
@@ -208,6 +220,15 @@ s32 mainThreadProc(void* arg)
         OpenTestFile();
         peli::Log(LogL::INFO, "SD card mounted");
     }
+
+    peli::Log(LogL::INFO, "Opening log file");
+    FRESULT fret = f_open(&logFile, "0:/saoirselog.txt", FA_CREATE_ALWAYS | FA_WRITE);
+    if (fret != FR_OK) {
+        peli::Log(LogL::ERROR, "Failed to open log file! %d", fret);
+        abort();
+    }
+    logFileEnabled = true;
+    peli::Log(LogL::INFO, "Log file opened");
 
     ret = IOS_CreateThread(
         FS_StartRM, nullptr,

@@ -46,8 +46,10 @@ DRESULT disk_read(BYTE pdrv, BYTE* buff, LBA_t sector, UINT count)
     if (pdrv == DRV_SDCARD) {
         if (disk_status(pdrv) != 0)
             return RES_ERROR;
-        if (!SDCard::ReadSectors(sector, count, buff)) {
-            DiskLog(LogL::ERROR, "disk_read: SDCard::ReadSectors failed");
+
+        s32 ret = SDCard::ReadSectors(sector, count, buff);
+        if (ret < 0) {
+            DiskLog(LogL::ERROR, "disk_read: SDCard::ReadSectors failed: %d", ret);
             return RES_ERROR;
         }
         return RES_OK;
@@ -60,8 +62,10 @@ DRESULT disk_write(BYTE pdrv, const BYTE* buff, LBA_t sector, UINT count)
     if (pdrv == DRV_SDCARD) {
         if (disk_status(pdrv) != 0)
             return RES_ERROR;
-        if (!SDCard::WriteSectors(sector, count, buff)) {
-            DiskLog(LogL::ERROR, "disk_write: SDCard::WriteSectors failed");
+
+        s32 ret = SDCard::WriteSectors(sector, count, buff);
+        if (ret < 0) {
+            DiskLog(LogL::ERROR, "disk_write: SDCard::WriteSectors failed: %d", ret);
             return RES_ERROR;
         }
         return RES_OK;

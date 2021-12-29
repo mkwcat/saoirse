@@ -30,19 +30,22 @@
 #define LIBOGC_SUCKS_END _Pragma("GCC diagnostic pop")
 
 #ifdef __cplusplus
-template <typename T> static inline T round_up(T num, unsigned int align)
+template <typename T>
+constexpr T round_up(T num, unsigned int align)
 {
     u32 raw = (u32)num;
     return (T)((raw + align - 1) & -align);
 }
 
-template <typename T> static inline T round_down(T num, unsigned int align)
+template <typename T>
+constexpr T round_down(T num, unsigned int align)
 {
     u32 raw = (u32)num;
     return (T)(raw & -align);
 }
 
-template <class T> static inline bool aligned(T addr, unsigned int align)
+template <class T>
+constexpr bool aligned(T addr, unsigned int align)
 {
     return !(reinterpret_cast<unsigned int>(addr) & (align - 1));
 }
@@ -69,18 +72,30 @@ LIBOGC_SUCKS_BEGIN
 LIBOGC_SUCKS_END
 #else
 
-static inline void write32(u32 address, u32 value) { *(vu32*)address = value; }
+static inline void write32(u32 address, u32 value)
+{
+    *(vu32*)address = value;
+}
 
-static inline u32 read32(u32 address) { return *(vu32*)address; }
+static inline u32 read32(u32 address)
+{
+    return *(vu32*)address;
+}
 
 static inline void mask32(u32 address, u32 clear, u32 set)
 {
     *(vu32*)address = ((*(vu32*)address) & ~clear) | set;
 }
 
-static inline void write16(u32 address, u16 value) { *(vu16*)address = value; }
+static inline void write16(u32 address, u16 value)
+{
+    *(vu16*)address = value;
+}
 
-static inline u16 read16(u32 address) { return *(vu16*)address; }
+static inline u16 read16(u32 address)
+{
+    return *(vu16*)address;
+}
 
 static inline u32 bswap32(u32 val)
 {

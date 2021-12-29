@@ -125,17 +125,14 @@ static bool IsReplacedFilepath(const char* filepath)
 
     //! A list of filepaths to be replaced will be provided by the channel in
     //! the future
-    if (strcmp(filepath,
-               "/title/00010004/524d4345/data/rksys.dat" /* RMCE */) == 0)
+    if (strcmp(filepath, "/title/00010004/524d4345/data/" /* RMCE */) == 0)
         return true;
-    if (strcmp(filepath,
-               "/title/00010004/524d4350/data/rksys.dat" /* RMCP */) == 0)
+    if (strncmp(filepath, "/title/00010004/524d4350/data/" /* RMCP */,
+                sizeof("/title/00010004/524d4350/data/") - 1) == 0)
         return true;
-    if (strcmp(filepath,
-               "/title/00010004/524d434a/data/rksys.dat" /* RMCJ */) == 0)
+    if (strcmp(filepath, "/title/00010004/524d434a/data/" /* RMCJ */) == 0)
         return true;
-    if (strcmp(filepath,
-               "/title/00010004/524d434b/data/rksys.dat" /* RMCK */) == 0)
+    if (strcmp(filepath, "/title/00010004/524d434b/data/" /* RMCK */) == 0)
         return true;
 
     return false;
@@ -236,7 +233,7 @@ static s32 CopyFromNandToEFS(const char* nandPath, const char* efsPath)
     peli::Log(LogL::INFO, "[EFS::CopyFromNandToEFS] File size: 0x%X", size);
 
     FIL fil;
-    FRESULT fret = f_open(&fil, efsPath, FA_WRITE | FA_OPEN_EXISTING);
+    FRESULT fret = f_open(&fil, efsPath, FA_WRITE | FA_CREATE_NEW);
 
     if (fret != FR_OK) {
         peli::Log(LogL::ERROR,
@@ -288,8 +285,13 @@ static s32 CopyFromNandToEFS(const char* nandPath, const char* efsPath)
 static s32 ReqProxyOpen(const char* filepath, u32 mode)
 {
     int fd = GetAvailableFileDescriptor();
-    if (fd < 0)
+    if (fd < 0) {
+        peli::Log(LogL::ERROR, "[EFS::ReqProxyOpen] Too many descriptors open!");
+        for (int i = 0; i < 15; i++) {
+            peli::Log(LogL::INFO, "[EFS::ReqProxyOpen] %02d: 0x%08X", i, spFileDescriptorArray[i]);
+        }
         return ISFSError::MaxOpen;
+    }
 
     if (mode > IOS_OPEN_RW)
         return ISFSError::Invalid;
@@ -308,6 +310,7 @@ static s32 ReqProxyOpen(const char* filepath, u32 mode)
                   efsFilepath, fret);
 
         delete spFileDescriptorArray[fd];
+        spFileDescriptorArray[fd] = nullptr;
         return FResultToISFSError(fret);
     }
 
@@ -502,6 +505,7 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
         return ISFSError::Invalid;
     }
 
+    // TODO Add ISFS_Shutdown
     switch (cmd) {
     // [ISFS_Format]
     // in: not used
@@ -714,6 +718,8 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
 
         const char* pathOld = isfsRenameBlock->pathOld;
         const char* pathNew = isfsRenameBlock->pathNew;
+        peli::Log(LogL::INFO, "[EFS::ReqIoctl] Rename(%s, %s)", pathOld,
+                  pathNew);
 
         // Check if the old and new filepaths are valid
         if (!IsFilepathValid(pathOld) || !IsFilepathValid(pathNew))
@@ -738,7 +744,7 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
             if (ret != ISFSError::OK)
                 return ret;
 
-            ret = realFsMgr.ioctl(ISFSIoctl::Delete, const_cast<char*>(pathNew),
+            ret = realFsMgr.ioctl(ISFSIoctl::Delete, const_cast<char*>(pathOld),
                                   ISFSMaxPath, nullptr, 0);
             return ret;
         }
@@ -871,7 +877,7 @@ static s32 ReqIoctlv(s32 fd, ISFSIoctl cmd, u32 in_count, u32 out_count,
             return ISFSError::Invalid;
         }
 
-        return ISFSError::OK;
+        return ISFSError::NotFound;
     }
 
     // [ISFS_GetUsage]
@@ -904,17 +910,23 @@ static s32 ForwardRequest(IOS::Request* req)
             return ret + 100;
         return ret;
     }
+
     case IOS::Command::Close:
         return IOS_Close(fd);
+
     case IOS::Command::Read:
         return IOS_Read(fd, req->read.data, req->read.len);
+
     case IOS::Command::Write:
         return IOS_Write(fd, req->write.data, req->write.len);
+
     case IOS::Command::Seek:
         return IOS_Seek(fd, req->seek.where, req->seek.whence);
+
     case IOS::Command::Ioctl:
         return IOS_Ioctl(fd, req->ioctl.cmd, req->ioctl.in, req->ioctl.in_len,
                          req->ioctl.io, req->ioctl.io_len);
+
     case IOS::Command::Ioctlv:
         return IOS_Ioctlv(fd, req->ioctlv.cmd, req->ioctlv.in_count,
                           req->ioctlv.io_count, req->ioctlv.vec);
@@ -936,56 +948,95 @@ static s32 IPCRequest(IOS::Request* req)
 
     switch (req->cmd) {
     case IOS::Command::Open: {
-        if (req->open.path[0] != '$')
-            return IOSErr::NotFound;
+        if (req->open.path[0] != '$') {
+            ret = IOSErr::NotFound;
+            break;
+        }
         char path[64];
         strncpy(path, req->open.path, 64);
         path[0] = '/';
 
+        peli::Log(LogL::INFO, "[EFS::IPCRequest] IOS_Open(%s, 0x%X)", path,
+                  req->open.mode);
+
         if (!strncmp(path, "/dev/", 5)) {
             if (!strcmp(path, "/dev/flash")) {
                 /* No */
-                peli::Log(LogL::WARN, "Attempt to open /dev/flash from PPC");
-                return ISFSError::NoAccess;
+                peli::Log(
+                    LogL::WARN,
+                    "[EFS::IPCRequest] Attempt to open /dev/flash from PPC");
+                ret = ISFSError::NoAccess;
+                break;
             }
             if (!strcmp(path, "/dev/fs")) {
-                peli::Log(LogL::INFO, "Open /dev/fs from PPC");
-                return mgrHandle;
+                peli::Log(LogL::INFO,
+                          "[EFS::IPCRequest] Open /dev/fs from PPC");
+                ret = mgrHandle;
+                break;
             }
 
             /* Return IOSErr::NotFound to skip the request */
-            return IOSErr::NotFound;
+            ret = IOSErr::NotFound;
+            break;
         }
 
-        if (IsReplacedFilepath(path))
-            return ReqProxyOpen(path, req->open.mode);
+        if (IsReplacedFilepath(path)) {
+            ret = ReqProxyOpen(path, req->open.mode);
+            break;
+        }
 
-        peli::Log(LogL::INFO, "Forwarding open '%s' to real FS", path);
-        return ForwardRequest(req);
+        peli::Log(LogL::INFO, "[EFS::IPCRequest] Forwarding open to real FS");
+        ret = ForwardRequest(req);
+        break;
     }
+
     case IOS::Command::Close:
-        return ReqClose(req->fd);
+        peli::Log(LogL::INFO, "[EFS::IPCRequest] IOS_Close(%d)", req->fd);
+        ret = ReqClose(req->fd);
+        break;
+
     case IOS::Command::Read:
-        return ReqRead(req->fd, req->read.data, req->read.len);
+        peli::Log(LogL::INFO, "[EFS::IPCRequest] IOS_Read(%d, 0x%08X, 0x%X)",
+                  req->fd, req->read.data, req->read.len);
+        ret = ReqRead(req->fd, req->read.data, req->read.len);
+        break;
+
     case IOS::Command::Write:
-        return ReqWrite(req->fd, req->write.data, req->write.len);
+        peli::Log(LogL::INFO, "[EFS::IPCRequest] IOS_Write(%d, 0x%08X, 0x%X)",
+                  req->fd, req->write.data, req->write.len);
+        ret = ReqWrite(req->fd, req->write.data, req->write.len);
+        break;
+
     case IOS::Command::Seek:
-        return ReqSeek(req->fd, req->seek.where, req->seek.whence);
+        peli::Log(LogL::INFO, "[EFS::IPCRequest] IOS_Seek(%d, %d, %d)", req->fd,
+                  req->seek.where, req->seek.whence);
+        ret = ReqSeek(req->fd, req->seek.where, req->seek.whence);
+        break;
+
     case IOS::Command::Ioctl:
-        return ReqIoctl(req->fd, static_cast<ISFSIoctl>(req->ioctl.cmd),
-                        req->ioctl.in, req->ioctl.in_len, req->ioctl.io,
-                        req->ioctl.io_len);
+        peli::Log(LogL::INFO, "[EFS::IPCRequest] Received ioctl %d",
+                  req->ioctl.cmd);
+        ret = ReqIoctl(req->fd, static_cast<ISFSIoctl>(req->ioctl.cmd),
+                       req->ioctl.in, req->ioctl.in_len, req->ioctl.io,
+                       req->ioctl.io_len);
+        break;
+
     case IOS::Command::Ioctlv:
-        return ReqIoctlv(req->fd, static_cast<ISFSIoctl>(req->ioctlv.cmd),
-                         req->ioctlv.in_count, req->ioctlv.io_count,
-                         req->ioctlv.vec);
+        peli::Log(LogL::INFO, "[EFS::IPCRequest] Received ioctlv %d",
+                  req->ioctlv.cmd);
+        ret = ReqIoctlv(req->fd, static_cast<ISFSIoctl>(req->ioctlv.cmd),
+                        req->ioctlv.in_count, req->ioctlv.io_count,
+                        req->ioctlv.vec);
+        break;
 
     default:
-        peli::Log(LogL::ERROR, "EFS: Unknown command: %u",
+        peli::Log(LogL::ERROR, "[EFS::IPCRequest] Unknown command: %u",
                   static_cast<u32>(req->cmd));
-        return ISFSError::Invalid;
+        ret = ISFSError::Invalid;
+        break;
     }
 
+    peli::Log(LogL::INFO, "[EFS::IPCRequest] Reply: %d", ret);
     return ret;
 }
 
@@ -994,6 +1045,10 @@ extern "C" s32 FS_StartRM([[maybe_unused]] void* arg)
     peli::Log(LogL::INFO, "Starting FS...");
 
     assert(realFsMgr.fd() >= 0);
+
+    for (int i = 0; i < NAND_MAX_FILE_DESCRIPTOR_AMOUNT; i++) {
+        spFileDescriptorArray[i] = nullptr;
+    }
 
     Queue<IOS::Request*> queue(8);
     const s32 ret = IOS_RegisterResourceManager("$", queue.id());
