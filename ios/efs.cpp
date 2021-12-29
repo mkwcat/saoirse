@@ -4,7 +4,6 @@
 #include <isfs.h>
 #include <main.h>
 #include <os.h>
-#include <patch.h>
 #include <sdcard.h>
 #include <types.h>
 
@@ -42,7 +41,7 @@ constexpr s32 mgrHandle = 200;
 #define EFS_MAX_REPLACED_FILEPATH_LENGTH                                       \
     (sizeof(EFS_DRIVE) - 1) + NAND_MAX_FILEPATH_LENGTH
 
-IOS::ResourceCtrl<ISFSIoctl> realFsMgr(-1);
+IOS::ResourceCtrl<ISFSIoctl> realFsMgr("/dev/fs");
 static std::array<FIL*, NAND_MAX_FILE_DESCRIPTOR_AMOUNT> spFileDescriptorArray;
 
 /*---------------------------------------------------------------------------*
@@ -237,7 +236,7 @@ static s32 CopyFromNandToEFS(const char* nandPath, const char* efsPath)
     peli::Log(LogL::INFO, "[EFS::CopyFromNandToEFS] File size: 0x%X", size);
 
     FIL fil;
-    FRESULT fret = f_open(&fil, efsPath, FA_WRITE | FA_CREATE_NEW);
+    FRESULT fret = f_open(&fil, efsPath, FA_WRITE | FA_OPEN_EXISTING);
 
     if (fret != FR_OK) {
         peli::Log(LogL::ERROR,
@@ -326,11 +325,8 @@ static s32 ReqProxyOpen(const char* filepath, u32 mode)
  */
 static s32 ReqClose(s32 fd)
 {
-    if (fd == mgrHandle) {
-        // [FIXME] There can be more than one handle open
-        realFsMgr.~Resource();
+    if (fd == mgrHandle)
         return ISFSError::OK;
-    }
 
     if (!IsFileDescriptorValid(fd))
         return ISFSError::Invalid;
@@ -954,8 +950,6 @@ static s32 IPCRequest(IOS::Request* req)
             }
             if (!strcmp(path, "/dev/fs")) {
                 peli::Log(LogL::INFO, "Open /dev/fs from PPC");
-                // Open as PPCBOOT
-                new (&realFsMgr) IOS::ResourceCtrl<ISFSIoctl>("/dev/fs");
                 return mgrHandle;
             }
 
@@ -998,6 +992,8 @@ static s32 IPCRequest(IOS::Request* req)
 extern "C" s32 FS_StartRM([[maybe_unused]] void* arg)
 {
     peli::Log(LogL::INFO, "Starting FS...");
+
+    assert(realFsMgr.fd() >= 0);
 
     Queue<IOS::Request*> queue(8);
     const s32 ret = IOS_RegisterResourceManager("$", queue.id());
