@@ -10,7 +10,8 @@ constexpr bool validKernelCodePtr(u32 address)
     return address >= 0xFFFF0040 && (address & 2) != 2;
 }
 
-template <class T> constexpr T toUncached(T address)
+template <class T>
+static inline T toUncached(T address)
 {
     return reinterpret_cast<T>(reinterpret_cast<u32>(address) | 0x80000000);
 }
@@ -25,6 +26,14 @@ constexpr u16 thumbBLLo(u32 src, u32 dest)
 {
     s32 diff = dest - (src + 4);
     return ((diff >> 1) & 0x7FF) | 0xF800;
+}
+
+template <class T>
+static inline bool isPPCRegion(T ptr)
+{
+    u32 address = reinterpret_cast<u32>(ptr);
+    return (address < 0x01800000) ||
+           (address >= 0x10000000 && address < 0x13400000);
 }
 
 void patchIOSOpen();

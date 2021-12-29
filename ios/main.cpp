@@ -39,6 +39,9 @@ static const char* logColors[3] = {"\x1b[37;1m", "\x1b[33;1m", "\x1b[31;1m"};
 
 void peli::Log(LogL level, const char* format, ...)
 {
+    if (!logEnabled && !logFileEnabled)
+        return;
+
     if (static_cast<s32>(level) >= 3)
         abort();
 
@@ -129,6 +132,7 @@ static void Log_IPCRequest(IOSRequest* req)
             exitClr(YUV_CYAN);
         IOS_ResourceReply(req2, 2);
         IOS_ResourceReply(req, 0);
+        IOS_CancelThread(0, 0);
         break;
     }
 
@@ -221,6 +225,7 @@ s32 mainThreadProc(void* arg)
         peli::Log(LogL::INFO, "SD card mounted");
     }
 
+#if 0
     peli::Log(LogL::INFO, "Opening log file");
     FRESULT fret = f_open(&logFile, "0:/saoirselog.txt", FA_CREATE_ALWAYS | FA_WRITE);
     if (fret != FR_OK) {
@@ -229,11 +234,12 @@ s32 mainThreadProc(void* arg)
     }
     logFileEnabled = true;
     peli::Log(LogL::INFO, "Log file opened");
+#endif
 
     ret = IOS_CreateThread(
         FS_StartRM, nullptr,
         reinterpret_cast<u32*>(FS_RMStack + sizeof(FS_RMStack)),
-        sizeof(FS_RMStack), 80, false);
+        sizeof(FS_RMStack), 80, true);
     if (ret < 0)
         exitClr(YUV_DARK_BLUE);
     ret = IOS_StartThread(ret);
@@ -243,7 +249,7 @@ s32 mainThreadProc(void* arg)
     ret = IOS_CreateThread(
         DI_StartRM, nullptr,
         reinterpret_cast<u32*>(DI_RMStack + sizeof(DI_RMStack)),
-        sizeof(DI_RMStack), 80, false);
+        sizeof(DI_RMStack), 80, true);
     if (ret < 0)
         exitClr(YUV_DARK_RED);
     ret = IOS_StartThread(ret);
@@ -272,7 +278,7 @@ static void saoMain()
     ret = IOS_CreateThread(
         mainThreadProc, nullptr,
         reinterpret_cast<u32*>(mainThreadStack + sizeof(mainThreadStack)),
-        sizeof(mainThreadStack), 127, false);
+        sizeof(mainThreadStack), 80, true);
     if (ret < 0)
         exitClr(YUV_YELLOW);
     /* Patch for system mode */

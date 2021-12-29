@@ -35,6 +35,7 @@
 #ifdef TARGET_IOS
 #include <ios.h>
 #include <main.h>
+#include <patch.h>
 #include <util.h>
 #else
 #include <gcutil.h>
@@ -149,50 +150,37 @@ static s32 __sdio_sendcommand(u32 cmd, u32 cmd_type, u32 rsp_type, u32 arg,
                               void* reply, u32 rlen)
 {
     s32 ret;
+    IOS::Vector iovec[3];
+    struct _sdiorequest request ATTRIBUTE_ALIGN(32);
+    struct _sdioresponse response ATTRIBUTE_ALIGN(32);
 
-    struct {
-        IOS::Vector iovec[3] ATTRIBUTE_ALIGN(32);
-        struct _sdiorequest request ATTRIBUTE_ALIGN(32);
-        struct _sdioresponse response ATTRIBUTE_ALIGN(32);
-        u8 end ATTRIBUTE_ALIGN(32);
-    } cmddata;
+    request.cmd = cmd;
+    request.cmd_type = cmd_type;
+    request.rsp_type = rsp_type;
+    request.arg = arg;
+    request.blk_cnt = blk_cnt;
+    request.blk_size = blk_size;
+    request.dma_addr = buffer;
+    request.isdma = ((buffer != NULL) ? 1 : 0);
+    request.pad0 = 0;
 
-    cmddata.request.cmd = cmd;
-    cmddata.request.cmd_type = cmd_type;
-    cmddata.request.rsp_type = rsp_type;
-    cmddata.request.arg = arg;
-    cmddata.request.blk_cnt = blk_cnt;
-    cmddata.request.blk_size = blk_size;
-    cmddata.request.dma_addr = buffer;
-    cmddata.request.isdma = ((buffer != NULL) ? 1 : 0);
-    cmddata.request.pad0 = 0;
-
-    if (cmddata.request.isdma || __sd0_sdhc == 1) {
-        cmddata.iovec[0].data = &cmddata.request;
-        cmddata.iovec[0].len = sizeof(struct _sdiorequest);
-        cmddata.iovec[1].data = buffer;
-        cmddata.iovec[1].len = (blk_size * blk_cnt);
-        cmddata.iovec[2].data = &cmddata.response;
-        cmddata.iovec[2].len = sizeof(struct _sdioresponse);
-#ifdef TARGET_IOS
-        IOS_FlushDCache(buffer, blk_size * blk_cnt);
-        IOS_InvalidateDCache(buffer, blk_size * blk_cnt);
-        IOS_FlushDCache(&cmddata, sizeof(cmddata));
-        IOS_InvalidateDCache(&cmddata, sizeof(cmddata));
-#endif
-        ret = IOS_Ioctlv(__sd0_fd, IOCTL_SDIO_SENDCMD, 2, 1, cmddata.iovec);
-    } else {
-#ifdef TARGET_IOS
-        IOS_FlushDCache(&cmddata, sizeof(cmddata));
-        IOS_InvalidateDCache(&cmddata, sizeof(cmddata));
-#endif
-        ret = IOS_Ioctl(__sd0_fd, IOCTL_SDIO_SENDCMD, &cmddata.request,
-                        sizeof(struct _sdiorequest), &cmddata.response,
+    if (request.isdma || __sd0_sdhc == 1) {
+        iovec[0].data = &request;
+        iovec[0].len = sizeof(struct _sdiorequest);
+        iovec[1].data = buffer;
+        iovec[1].len = (blk_size * blk_cnt);
+        iovec[2].data = &response;
+        iovec[2].len = sizeof(struct _sdioresponse);
+        ret = IOS_Ioctlv(__sd0_fd, IOCTL_SDIO_SENDCMD, 2, 1, iovec);
+    } else
+        ret = IOS_Ioctl(__sd0_fd, IOCTL_SDIO_SENDCMD, &request,
+                        sizeof(struct _sdiorequest), &response,
                         sizeof(struct _sdioresponse));
-    }
 
     if (reply && !(rlen > 16))
-        memcpy(reply, &cmddata.response, rlen);
+        memcpy(reply, &response, rlen);
+
+    //	printf("  cmd= %08x\n", cmd);
 
     return ret;
 }
@@ -253,7 +241,6 @@ static s32 __sdio_gethcr(u8 reg, u8 size, u32* val)
     hcr_query[3] = size;
     hcr_query[4] = 0;
     hcr_query[5] = 0;
-
     ret = IOS_Ioctl(__sd0_fd, IOCTL_SDIO_READHCREG, (void*)hcr_query, 24,
                     &hcr_value, sizeof(u32));
     *val = hcr_value;
@@ -606,13 +593,17 @@ s32 SDCard::ReadSectors(sec_t sector, sec_t numSectors, void* buffer)
     sec_t blk_off;
 
     if (buffer == NULL)
-        return false;
+        return -1;
 
     ret = __sd0_select();
     if (ret < 0)
         return ret;
 
-    if ((u32)buffer & 0x1F) {
+    if ((u32)buffer & 0x1F
+#ifdef TARGET_IOS
+        || !isPPCRegion(buffer)
+#endif
+    ) {
         ptr = (u8*)buffer;
         int secs_to_read;
         while (numSectors > 0) {
@@ -628,7 +619,11 @@ s32 SDCard::ReadSectors(sec_t sector, sec_t numSectors, void* buffer)
                                      SDIO_RESPONSE_R1, blk_off, secs_to_read,
                                      PAGE_SIZE512, rw_buffer, NULL, 0);
             if (ret >= 0) {
+#ifdef TARGET_IOS
+                memcpy(ptr, toUncached(rw_buffer), PAGE_SIZE512 * secs_to_read);
+#else
                 memcpy(ptr, rw_buffer, PAGE_SIZE512 * secs_to_read);
+#endif
                 ptr += PAGE_SIZE512 * secs_to_read;
                 sector += secs_to_read;
                 numSectors -= secs_to_read;
@@ -655,13 +650,17 @@ s32 SDCard::WriteSectors(sec_t sector, sec_t numSectors, const void* buffer)
     u32 blk_off;
 
     if (buffer == NULL)
-        return false;
+        return -1;
 
     ret = __sd0_select();
     if (ret < 0)
-        return false;
+        return ret;
 
-    if ((u32)buffer & 0x1F) {
+    if ((u32)buffer & 0x1F
+#ifdef TARGET_IOS
+        || !isPPCRegion(buffer)
+#endif
+    ) {
         ptr = (u8*)buffer;
         int secs_to_write;
         while (numSectors > 0) {
@@ -673,7 +672,11 @@ s32 SDCard::WriteSectors(sec_t sector, sec_t numSectors, const void* buffer)
                 secs_to_write = 8;
             else
                 secs_to_write = numSectors;
+#ifdef TARGET_IOS
+            memcpy(toUncached(rw_buffer), ptr, PAGE_SIZE512 * secs_to_write);
+#else
             memcpy(rw_buffer, ptr, PAGE_SIZE512 * secs_to_write);
+#endif
             ret = __sdio_sendcommand(SDIO_CMD_WRITEMULTIBLOCK, SDIOCMD_TYPE_AC,
                                      SDIO_RESPONSE_R1, blk_off, secs_to_write,
                                      PAGE_SIZE512, rw_buffer, NULL, 0);

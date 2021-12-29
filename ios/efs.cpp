@@ -287,9 +287,6 @@ static s32 ReqProxyOpen(const char* filepath, u32 mode)
     int fd = GetAvailableFileDescriptor();
     if (fd < 0) {
         peli::Log(LogL::ERROR, "[EFS::ReqProxyOpen] Too many descriptors open!");
-        for (int i = 0; i < 15; i++) {
-            peli::Log(LogL::INFO, "[EFS::ReqProxyOpen] %02d: 0x%08X", i, spFileDescriptorArray[i]);
-        }
         return ISFSError::MaxOpen;
     }
 

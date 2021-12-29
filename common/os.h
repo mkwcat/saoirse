@@ -275,7 +275,7 @@ public:
         u32* stackTop = reinterpret_cast<u32*>(stack + stackSize);
 
         m_ret = IOS_CreateThread(__threadProc, reinterpret_cast<void*>(this),
-                                 stackTop, stackSize, prio, false);
+                                 stackTop, stackSize, prio, true);
         if (m_ret < 0)
             return;
 
