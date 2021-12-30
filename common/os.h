@@ -58,14 +58,14 @@ enum
 #ifdef TARGET_IOS
 /* IOS implementation */
 template <typename T>
-class Queue
+class IOS_Queue
 {
     static_assert(sizeof(T) == 4, "T must be equal to 4 bytes");
 
 public:
-    Queue(const Queue& from) = delete;
+    IOS_Queue(const IOS_Queue& from) = delete;
 
-    explicit Queue(u32 count = 8)
+    explicit IOS_Queue(u32 count = 8)
     {
         this->m_base = new u32[count];
         const s32 ret = IOS_CreateMessageQueue(this->m_base, count);
@@ -73,7 +73,7 @@ public:
         ASSERT(ret >= 0);
     }
 
-    ~Queue()
+    ~IOS_Queue()
     {
         const s32 ret = IOS_DestroyMessageQueue(this->m_queue);
         ASSERT(ret == IOSErr::OK);
@@ -106,18 +106,21 @@ private:
     s32 m_queue;
 };
 
+template<typename T>
+using Queue = IOS_Queue<T>;
+
 #else
 
 /* libogc implementation */
 template <typename T>
-class Queue
+class LibOGC_Queue
 {
     static_assert(sizeof(T) == 4, "T must be equal to 4 bytes");
 
 public:
-    Queue(const Queue& from) = delete;
+    LibOGC_Queue(const LibOGC_Queue& from) = delete;
 
-    explicit Queue(u32 count = 8)
+    explicit LibOGC_Queue(u32 count = 8)
     {
         if (count != 0) {
             const s32 ret = MQ_Init(&this->m_queue, count);
@@ -125,7 +128,7 @@ public:
         }
     }
 
-    ~Queue()
+    ~LibOGC_Queue()
     {
         MQ_Close(m_queue);
     }
@@ -162,6 +165,9 @@ private:
     mqbox_t m_queue;
 };
 
+template<typename T>
+using Queue = LibOGC_Queue<T>;
+
 #endif
 
 #ifdef TARGET_IOS
@@ -172,26 +178,28 @@ typedef mutex_t mutexid;
 
 #ifdef TARGET_IOS
 
-class Mutex
+class IOS_Mutex
 {
     // Not implemented yet!
-    Mutex() = delete;
+    IOS_Mutex() = delete;
 };
+
+using Mutex = IOS_Mutex;
 
 #else
 
-class Mutex
+class LibOGC_Mutex
 {
 public:
-    Mutex(const Mutex& from) = delete;
+    LibOGC_Mutex(const LibOGC_Mutex& from) = delete;
 
-    Mutex()
+    LibOGC_Mutex()
     {
         const s32 ret = LWP_MutexInit(&this->m_mutex, 0);
         ASSERT(ret == 0);
     }
 
-    explicit Mutex(mutexid id)
+    explicit LibOGC_Mutex(mutexid id)
     {
         m_mutex = id;
     }
@@ -217,18 +225,20 @@ protected:
     mutexid m_mutex;
 };
 
+using Mutex = LibOGC_Mutex;
+
 #endif
 
 #ifdef TARGET_IOS
 
-class Thread
+class IOS_Thread
 {
 public:
     typedef s32 (*Proc)(void* arg);
 
-    Thread(const Thread& rhs) = delete;
+    IOS_Thread(const IOS_Thread& rhs) = delete;
 
-    Thread()
+    IOS_Thread()
     {
         m_arg = nullptr;
         f_proc = nullptr;
@@ -237,7 +247,7 @@ public:
         m_ownedStack = nullptr;
     }
 
-    Thread(s32 thread)
+    IOS_Thread(s32 thread)
     {
         m_arg = nullptr;
         f_proc = nullptr;
@@ -247,7 +257,7 @@ public:
         m_ownedStack = nullptr;
     }
 
-    Thread(Proc proc, void* arg, u8* stack, u32 stackSize, s32 prio)
+    IOS_Thread(Proc proc, void* arg, u8* stack, u32 stackSize, s32 prio)
     {
         m_arg = nullptr;
         f_proc = nullptr;
@@ -257,7 +267,7 @@ public:
         create(proc, arg, stack, stackSize, prio);
     }
 
-    ~Thread()
+    ~IOS_Thread()
     {
         if (m_ownedStack != nullptr)
             delete m_ownedStack;
@@ -289,7 +299,7 @@ public:
 
     static s32 __threadProc(void* arg)
     {
-        Thread* thr = reinterpret_cast<Thread*>(arg);
+        IOS_Thread* thr = reinterpret_cast<IOS_Thread*>(arg);
         if (thr->f_proc != nullptr)
             thr->f_proc(thr->m_arg);
         return 0;
@@ -314,16 +324,18 @@ protected:
     u8* m_ownedStack;
 };
 
+using Thread = IOS_Thread;
+
 #else
 
-class Thread
+class LibOGC_Thread
 {
 public:
     typedef s32 (*Proc)(void* arg);
 
-    Thread(const Thread& rhs) = delete;
+    LibOGC_Thread(const LibOGC_Thread& rhs) = delete;
 
-    Thread()
+    LibOGC_Thread()
     {
         m_arg = nullptr;
         f_proc = nullptr;
@@ -331,7 +343,7 @@ public:
         m_tid = 0;
     }
 
-    Thread(lwp_t thread)
+    LibOGC_Thread(lwp_t thread)
     {
         m_arg = nullptr;
         f_proc = nullptr;
@@ -339,7 +351,7 @@ public:
         m_tid = thread;
     }
 
-    Thread(Proc proc, void* arg, u8* stack, u32 stackSize, s32 prio)
+    LibOGC_Thread(Proc proc, void* arg, u8* stack, u32 stackSize, s32 prio)
     {
         create(proc, arg, stack, stackSize, prio);
     }
@@ -357,7 +369,7 @@ public:
 
     static void* __threadProc(void* arg)
     {
-        Thread* thr = reinterpret_cast<Thread*>(arg);
+        LibOGC_Thread* thr = reinterpret_cast<LibOGC_Thread*>(arg);
         if (thr->f_proc != nullptr)
             thr->f_proc(thr->m_arg);
         return NULL;
@@ -369,6 +381,8 @@ protected:
     bool m_valid;
     lwp_t m_tid;
 };
+
+using Thread = LibOGC_Thread;
 
 #endif
 
