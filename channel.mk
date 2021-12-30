@@ -18,7 +18,7 @@ include $(DEVKITPPC)/wii_rules
 TARGET		:=	channel
 BUILD		:=	build_channel
 BIN         :=  bin
-SOURCES		:=	channel common
+SOURCES		:=	channel common $(wildcard channel/*)
 DATA		:=	data  
 INCLUDES	:=  $(SOURCES) $(BUILD)
 
