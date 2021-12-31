@@ -49,7 +49,8 @@ DRESULT disk_read(BYTE pdrv, BYTE* buff, LBA_t sector, UINT count)
 
         s32 ret = SDCard::ReadSectors(sector, count, buff);
         if (ret < 0) {
-            DiskLog(LogL::ERROR, "disk_read: SDCard::ReadSectors failed: %d", ret);
+            DiskLog(LogL::ERROR, "disk_read: SDCard::ReadSectors failed: %d",
+                    ret);
             return RES_ERROR;
         }
         return RES_OK;
@@ -65,7 +66,8 @@ DRESULT disk_write(BYTE pdrv, const BYTE* buff, LBA_t sector, UINT count)
 
         s32 ret = SDCard::WriteSectors(sector, count, buff);
         if (ret < 0) {
-            DiskLog(LogL::ERROR, "disk_write: SDCard::WriteSectors failed: %d", ret);
+            DiskLog(LogL::ERROR, "disk_write: SDCard::WriteSectors failed: %d",
+                    ret);
             return RES_ERROR;
         }
         return RES_OK;
@@ -96,7 +98,10 @@ DRESULT disk_ioctl(BYTE pdrv, BYTE cmd, void* buff)
 }
 
 /* todo */
-DWORD get_fattime() { return 0; }
+DWORD get_fattime()
+{
+    return 0;
+}
 
 FATFS fatfs;
 
@@ -111,9 +116,20 @@ bool MountSDCard()
         DiskLog(LogL::ERROR, "MountSDCard: f_mount SD Card failed: %d", fret);
         return false;
     }
+
+    fret = f_chdir("0:/saoirse");
+    if (fret != FR_OK) {
+        DiskLog(LogL::ERROR, "MountSDCard: failed to change directory: %d",
+                fret);
+        return false;
+    }
+
     return true;
 }
 
-bool UnmountSDCard() { return f_unmount("0:") == FR_OK; }
+bool UnmountSDCard()
+{
+    return f_unmount("0:") == FR_OK;
+}
 
 } // namespace FSServ

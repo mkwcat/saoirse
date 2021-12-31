@@ -201,7 +201,7 @@ static const char* GetReplacedFilepath(const char* filepath, char* out_buf,
     // Create and write the replaced filepath
     filepath = strchr(filepath, NAND_DIRECTORY_SEPARATOR_CHAR);
     if (snprintf(out_buf, EFS_MAX_REPLACED_FILEPATH_LENGTH, EFS_DRIVE "%s",
-                 filepath) <= 0) {
+                 filepath + 1) <= 0) {
         peli::Log(LogL::ERROR, "[EFS::GetReplacedFilepath] Failed to format "
                                "the replaced filepath !");
         return nullptr;

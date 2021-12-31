@@ -236,24 +236,24 @@ s32 mainThreadProc(void* arg)
     peli::Log(LogL::INFO, "Log file opened");
 #endif
 
-    ret = IOS_CreateThread(
+    s32 efsTid = IOS_CreateThread(
         FS_StartRM, nullptr,
         reinterpret_cast<u32*>(FS_RMStack + sizeof(FS_RMStack)),
         sizeof(FS_RMStack), 80, true);
-    if (ret < 0)
+    if (efsTid < 0)
         exitClr(YUV_DARK_BLUE);
-    ret = IOS_StartThread(ret);
-    if (ret < 0)
+    efsTid = IOS_StartThread(efsTid);
+    if (efsTid < 0)
         exitClr(YUV_DARK_BLUE);
 
-    ret = IOS_CreateThread(
+    s32 diTid = IOS_CreateThread(
         DI_StartRM, nullptr,
         reinterpret_cast<u32*>(DI_RMStack + sizeof(DI_RMStack)),
         sizeof(DI_RMStack), 80, true);
-    if (ret < 0)
+    if (diTid < 0)
         exitClr(YUV_DARK_RED);
-    ret = IOS_StartThread(ret);
-    if (ret < 0)
+    diTid = IOS_StartThread(diTid);
+    if (diTid < 0)
         exitClr(YUV_DARK_RED);
 
     return 0;
@@ -278,7 +278,7 @@ static void saoMain()
     ret = IOS_CreateThread(
         mainThreadProc, nullptr,
         reinterpret_cast<u32*>(mainThreadStack + sizeof(mainThreadStack)),
-        sizeof(mainThreadStack), 80, true);
+        sizeof(mainThreadStack), 127, true);
     if (ret < 0)
         exitClr(YUV_YELLOW);
     /* Patch for system mode */
