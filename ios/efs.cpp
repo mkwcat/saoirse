@@ -52,6 +52,52 @@ struct ProxyFile {
 static std::array<ProxyFile, NAND_MAX_FILE_DESCRIPTOR_AMOUNT>
     spFileDescriptorArray;
 
+static s32 FResultToISFSError(FRESULT fret)
+{
+    switch (fret) {
+    case FR_OK:
+        return ISFSError::OK;
+
+    case FR_INVALID_NAME:
+    case FR_INVALID_DRIVE:
+    case FR_INVALID_PARAMETER:
+    case FR_INVALID_OBJECT:
+        return ISFSError::Invalid;
+
+    case FR_DISK_ERR:
+    case FR_INT_ERR:
+    case FR_NO_FILESYSTEM:
+        return ISFSError::Corrupt;
+
+    case FR_NOT_READY:
+    case FR_NOT_ENABLED:
+        return ISFSError::NotReady;
+
+    case FR_NO_FILE:
+    case FR_NO_PATH:
+        return ISFSError::NotFound;
+
+    case FR_DENIED:
+    case FR_WRITE_PROTECTED:
+        return ISFSError::NoAccess;
+
+    case FR_EXIST:
+        return ISFSError::Exists;
+
+    case FR_LOCKED:
+        return ISFSError::Locked;
+
+    case FR_TOO_MANY_OPEN_FILES:
+        return ISFSError::MaxOpen;
+
+    case FR_MKFS_ABORTED:
+    case FR_NOT_ENOUGH_CORE:
+    case FR_TIMEOUT:
+    default:
+        return ISFSError::Unknown;
+    }
+}
+
 /*---------------------------------------------------------------------------*
  * Name        : IsFileDescriptorValid
  * Description : Checks if a file descriptor is valid.
@@ -115,6 +161,38 @@ static void FreeFileDescriptor(int fd)
         return;
 
     spFileDescriptorArray[fd].inUse = false;
+}
+
+static int FindOpenFileDescriptor(const char* path)
+{
+    for (int i = 0; i < NAND_MAX_FILE_DESCRIPTOR_AMOUNT; i++) {
+        if (spFileDescriptorArray[i].filOpened &&
+            !strcmp(path, spFileDescriptorArray[i].path))
+            return i;
+    }
+
+    return NAND_MAX_FILE_DESCRIPTOR_AMOUNT;
+}
+
+static s32 TryCloseFileDescriptor(int fd)
+{
+    if (spFileDescriptorArray[fd].inUse)
+        return ISFSError::Locked;
+
+    if (!spFileDescriptorArray[fd].filOpened)
+        return ISFSError::OK;
+
+    const FRESULT fret = f_close(&spFileDescriptorArray[fd].fil);
+    if (fret != FR_OK) {
+        peli::Log(
+            LogL::ERROR,
+            "[EFS::TryCloseFileDescriptor] Failed to close file, error: %d",
+            fret);
+        return FResultToISFSError(fret);
+    }
+
+    spFileDescriptorArray[fd].filOpened = false;
+    return FR_OK;
 }
 
 /*---------------------------------------------------------------------------*
@@ -208,52 +286,6 @@ static const char* GetReplacedFilepath(const char* filepath, char* out_buf,
     }
 
     return out_buf;
-}
-
-static s32 FResultToISFSError(FRESULT fret)
-{
-    switch (fret) {
-    case FR_OK:
-        return ISFSError::OK;
-
-    case FR_INVALID_NAME:
-    case FR_INVALID_DRIVE:
-    case FR_INVALID_PARAMETER:
-    case FR_INVALID_OBJECT:
-        return ISFSError::Invalid;
-
-    case FR_DISK_ERR:
-    case FR_INT_ERR:
-    case FR_NO_FILESYSTEM:
-        return ISFSError::Corrupt;
-
-    case FR_NOT_READY:
-    case FR_NOT_ENABLED:
-        return ISFSError::NotReady;
-
-    case FR_NO_FILE:
-    case FR_NO_PATH:
-        return ISFSError::NotFound;
-
-    case FR_DENIED:
-    case FR_WRITE_PROTECTED:
-        return ISFSError::NoAccess;
-
-    case FR_EXIST:
-        return ISFSError::Exists;
-
-    case FR_LOCKED:
-        return ISFSError::Locked;
-
-    case FR_TOO_MANY_OPEN_FILES:
-        return ISFSError::MaxOpen;
-
-    case FR_MKFS_ABORTED:
-    case FR_NOT_ENOUGH_CORE:
-    case FR_TIMEOUT:
-    default:
-        return ISFSError::Unknown;
-    }
 }
 
 static u8 efsCopyBuffer[0x2000] ATTRIBUTE_ALIGN(32); // 8 KB
@@ -755,6 +787,18 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
         // Check if the filepath should be replaced
         if (!IsReplacedFilepath(filepath))
             return realFsMgr.ioctl(ISFSIoctl::Delete, in, in_len, io, io_len);
+
+        s32 ret = FindOpenFileDescriptor(filepath);
+        if (ret < 0) {
+            return ret;
+        }
+
+        if (ret != NAND_MAX_FILE_DESCRIPTOR_AMOUNT) {
+            ret = TryCloseFileDescriptor(ret);
+            if (ret != ISFSError::OK) {
+                return ret;
+            }
+        }
 
         // Get the replaced filepath
         char efsFilepath[EFS_MAX_REPLACED_FILEPATH_LENGTH];
