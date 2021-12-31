@@ -77,10 +77,10 @@ static int RegisterFileDescriptor(const char* path)
         // If the file was already opened, reuse the descriptor
         if (spFileDescriptorArray[i].filOpened &&
             !strcmp(spFileDescriptorArray[i].path, path)) {
-            
+
             if (spFileDescriptorArray[i].inUse)
                 return ISFSError::Locked;
-            
+
             spFileDescriptorArray[i].inUse = true;
             return i;
         }
@@ -513,6 +513,11 @@ static s32 ReqSeek(s32 fd, s32 where, s32 whence)
     offset += where;
     if (offset > endPosition)
         return ISFSError::Invalid;
+
+    if (offset == f_tell(fil)) {
+        peli::Log(LogL::INFO, "Skipping seek");
+        return offset;
+    }
 
     const FRESULT fresult = f_lseek(fil, offset);
     if (fresult != FR_OK) {
