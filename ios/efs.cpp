@@ -174,6 +174,26 @@ static int FindOpenFileDescriptor(const char* path)
     return NAND_MAX_FILE_DESCRIPTOR_AMOUNT;
 }
 
+static int FindAvailableFileDescriptor()
+{
+    int match = 0;
+
+    for (int i = 0; i < NAND_MAX_FILE_DESCRIPTOR_AMOUNT; i++) {
+        if (!spFileDescriptorArray[i].inUse &&
+            spFileDescriptorArray[match].inUse)
+            match = i;
+
+        if (!spFileDescriptorArray[i].filOpened &&
+            spFileDescriptorArray[match].filOpened)
+            match = i;
+    }
+
+    if (spFileDescriptorArray[match].inUse)
+        return ISFSError::MaxOpen;
+
+    return match;
+}
+
 static s32 TryCloseFileDescriptor(int fd)
 {
     if (spFileDescriptorArray[fd].inUse)
@@ -928,7 +948,8 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
             return ISFSError::Invalid;
 
         FIL fil;
-        const FRESULT fresult = f_open(&fil, efsFilepath, FA_CREATE_NEW);
+        const FRESULT fresult =
+            f_open(&fil, efsFilepath, FA_CREATE_NEW | FA_READ | FA_WRITE);
         if (fresult != FR_OK) {
             peli::Log(LogL::ERROR,
                       "[EFS::ReqIoctl] Failed to create file '%s' !",
@@ -936,10 +957,17 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
             return FResultToISFSError(fresult);
         }
 
+        f_sync(&fil);
+
+        s32 ret = FindAvailableFileDescriptor();
+        if (ret >= 0 && ret < NAND_MAX_FILE_DESCRIPTOR_AMOUNT) {
+            spFileDescriptorArray[ret].filOpened = true;
+            spFileDescriptorArray[ret].fil = fil; // Copy
+        }
+
         peli::Log(LogL::INFO,
                   "[EFS::ReqIoctl] Successfully created file '%s' !",
                   efsFilepath);
-        f_close(&fil);
 
         return ISFSError::OK;
     }
