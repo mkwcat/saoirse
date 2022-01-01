@@ -162,64 +162,27 @@ using Queue = LibOGC_Queue<T>;
 
 #endif
 
-#ifdef TARGET_IOS
-typedef s32 mutexid;
-#else
-typedef mutex_t mutexid;
-#endif
-
-#ifdef TARGET_IOS
-
-class IOS_Mutex
-{
-    // Not implemented yet!
-    IOS_Mutex() = delete;
-};
-
-using Mutex = IOS_Mutex;
-
-#else
-
-class LibOGC_Mutex
+class Mutex
 {
 public:
-    LibOGC_Mutex(const LibOGC_Mutex& from) = delete;
+    Mutex(const Mutex& from) = delete;
 
-    LibOGC_Mutex()
-    {
-        const s32 ret = LWP_MutexInit(&this->m_mutex, 0);
-        ASSERT(ret == 0);
+    Mutex() : m_queue(1) {
+        m_queue.send(0);
     }
 
-    explicit LibOGC_Mutex(mutexid id)
-    {
-        m_mutex = id;
+    void lock() {
+        m_queue.receive();
     }
 
-    void lock()
-    {
-        const s32 ret = LWP_MutexLock(this->m_mutex);
-        ASSERT(ret == 0);
-    }
-
-    void unlock()
-    {
-        const s32 ret = LWP_MutexUnlock(this->m_mutex);
-        ASSERT(ret == 0);
-    }
-
-    mutexid id() const
-    {
-        return m_mutex;
+    void unlock() {
+        m_queue.send(0);
     }
 
 protected:
-    mutexid m_mutex;
+    Queue<u32> m_queue;
 };
 
-using Mutex = LibOGC_Mutex;
-
-#endif
 
 #ifdef TARGET_IOS
 

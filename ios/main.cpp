@@ -15,7 +15,7 @@
 #include <stdarg.h>
 
 u8 mainThreadStack[0x400] ATTRIBUTE_ALIGN(32);
-u8 DI_RMStack[0x400] ATTRIBUTE_ALIGN(32);
+u8 DI_RMStack[0x800] ATTRIBUTE_ALIGN(32);
 u8 FS_RMStack[0x800] ATTRIBUTE_ALIGN(32);
 
 u8 mainHeapData[0x1000] ATTRIBUTE_ALIGN(32);
@@ -83,11 +83,11 @@ static void OpenTestFile()
 
 s32 mainThreadProc(void* arg)
 {
-    patchIOSOpen();
-    importKoreanCommonKey();
-
     IOS::Resource::makeIpcToCallbackThread();
     cppInit();
+
+    patchIOSOpen();
+    importKoreanCommonKey();
 
     PRINT(IOS, INFO, "Wait for start request...");
     IPCLog::sInstance->waitForStartRequest();

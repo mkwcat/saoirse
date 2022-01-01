@@ -21,9 +21,7 @@ static constexpr std::array<const char*, 3> logColors = {
     "\x1b[33;1m",
     "\x1b[31;1m",
 };
-#ifndef TARGET_IOS
 static Mutex logMutex;
-#endif
 constexpr u32 logMask = 0xFFFFFFFF;
 constexpr u32 logLevel = 0;
 
@@ -34,8 +32,6 @@ void Log::VPrint(LogSource src, const char* srcStr, LogLevel level,
     if (!ipcLogEnabled && !fileLogEnabled)
         return;
 #endif
-    if (src == LogSource::IOS_EmuDI)
-        return;
 
     u32 slvl = static_cast<u32>(level);
     u32 schan = static_cast<u32>(src);
@@ -48,10 +44,7 @@ void Log::VPrint(LogSource src, const char* srcStr, LogLevel level,
             return;
     }
     {
-#ifndef TARGET_IOS
-        // todo for IOS!
         std::unique_lock<Mutex> lock(logMutex);
-#endif
 
         static std::array<char, 256> logBuffer;
         u32 len = vsnprintf(&logBuffer[0], logBuffer.size(), format, args);
