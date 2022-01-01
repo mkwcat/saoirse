@@ -1,8 +1,7 @@
 #pragma once
+#include <System/Types.hpp>
 
-#include <types.h>
-
-namespace DIP
+namespace EmuDI
 {
 
 struct DVDPatch {

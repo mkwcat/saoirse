@@ -1,14 +1,13 @@
 #include "AppInfo.hpp"
 #include "AppPayload.hpp"
-#include "TaskThread.hpp"
-#include <es.h>
-#include <gctypes.h>
-
+#include <Main/TaskThread.hpp>
+#include <System/ES.hpp>
+#include <System/Types.hpp>
+#include <System/Util.hpp>
 #include <array>
 #include <optional>
 #include <span>
 #include <stdint.h>
-#include <util.h>
 
 struct Volume {
     u32 num_boot_info;

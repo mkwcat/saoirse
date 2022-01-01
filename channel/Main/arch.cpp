@@ -1,6 +1,6 @@
-#include "arch.h"
-#include <string.h>
+#include "Arch.hpp"
 #include <stdio.h>
+#include <string.h>
 
 Arch* Arch::sInstance;
 
@@ -42,7 +42,8 @@ const void* Arch::getFile(const char* name, u32* size)
     }
 
     for (auto it : m_subfiles) {
-        if (strlen(rname) == it.nameLen && !strncmp(rname, it.name, it.nameLen)) {
+        if (strlen(rname) == it.nameLen &&
+            !strncmp(rname, it.name, it.nameLen)) {
             if (size != nullptr) {
                 *size = it.size;
             }

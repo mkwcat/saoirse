@@ -1,6 +1,6 @@
-#include "usb.h"
-#include <types.h>
-#include <util.h>
+#include "USB.hpp"
+#include <System/Types.hpp>
+#include <System/Util.hpp>
 
 USB::USB(s32 id)
 {

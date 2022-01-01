@@ -1,10 +1,14 @@
 #pragma once
-#include <types.h>
+#include <System/Types.hpp>
 
 namespace ES
 {
 
-enum class SigType : u32 { RSA_2048 = 0x00010001, RSA_4096 = 0x00010000 };
+enum class SigType : u32
+{
+    RSA_2048 = 0x00010001,
+    RSA_4096 = 0x00010000
+};
 
 struct TMDContent {
     u32 cid;
@@ -41,10 +45,14 @@ struct TMDHeader {
 } __attribute__((packed));
 
 struct TMD : TMDHeader {
-    TMDContent* contents() { return reinterpret_cast<TMDContent*>(this + 1); }
+    TMDContent* contents()
+    {
+        return reinterpret_cast<TMDContent*>(this + 1);
+    }
 };
 
-template <u16 TNumContents> struct TMDFixed : TMD {
+template <u16 TNumContents>
+struct TMDFixed : TMD {
     TMDContent contents[TNumContents];
 };
 

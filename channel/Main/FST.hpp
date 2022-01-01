@@ -1,9 +1,8 @@
 #pragma once
-
+#include <System/Types.hpp>
+#include <System/Util.hpp>
 #include <cassert>
 #include <string>
-#include <types.h>
-#include <util.h>
 #include <vector>
 
 struct FSTEntry {
@@ -31,8 +30,12 @@ public:
     struct DirEntry;
 
     struct Entry {
-        explicit Entry(const char* name) : m_name(name), m_parent(nullptr) {}
-        virtual ~Entry() {}
+        explicit Entry(const char* name) : m_name(name), m_parent(nullptr)
+        {
+        }
+        virtual ~Entry()
+        {
+        }
         virtual bool isDir() const = 0;
         DirEntry* dir()
         {
@@ -56,7 +59,10 @@ public:
               m_byteLength(byteLength)
         {
         }
-        bool isDir() const { return false; }
+        bool isDir() const
+        {
+            return false;
+        }
 
         u32 m_wordOffset;
         u32 m_byteLength;
@@ -70,7 +76,10 @@ public:
             for (auto it : m_children)
                 delete it;
         }
-        bool isDir() const { return true; }
+        bool isDir() const
+        {
+            return true;
+        }
 
         DirEntry& operator+=(DirEntry&& entry)
         {

@@ -1,16 +1,18 @@
 #include "main.h"
+#include "IPCLog.hpp"
 #include "patch.h"
+#include <Debug/Log.hpp>
+#include <Disk/Disk.hpp>
+#include <Disk/SDCard.hpp>
+#include <FAT/ff.h>
+#include <System/Hollywood.hpp>
+#include <System/OS.hpp>
+#include <System/Types.hpp>
+#include <System/Util.hpp>
 #include <cstdio>
 #include <cstring>
-#include <disk.h>
-#include <ff.h>
-#include <hollywood.h>
 #include <ios.h>
-#include <os.h>
-#include <sdcard.h>
 #include <stdarg.h>
-#include <types.h>
-#include <util.h>
 
 u8 mainThreadStack[0x400] ATTRIBUTE_ALIGN(32);
 u8 DI_RMStack[0x400] ATTRIBUTE_ALIGN(32);
@@ -22,144 +24,30 @@ s32 mainHeap = -1;
 extern "C" s32 DI_StartRM(void* arg);
 extern "C" s32 FS_StartRM(void* arg);
 
-#define PRINT_BUFFER_SIZE 256
-
-u32 stdoutQueueData[8];
-static s32 printBufQueue = -1;
-static u32 printBufQueueData;
-char logBuffer[PRINT_BUFFER_SIZE];
-static bool logEnabled = false;
-static bool logFileEnabled = false;
-static FIL logFile;
-
-static s32 startGameWaitQueue = -1;
-static u32 startGameWaitQueueData;
-
-static const char* logColors[3] = {"\x1b[37;1m", "\x1b[33;1m", "\x1b[31;1m"};
-
-void peli::Log(LogL level, const char* format, ...)
-{
-    if (!logEnabled && !logFileEnabled)
-        return;
-
-    if (static_cast<s32>(level) >= 3)
-        abort();
-
-    IOSRequest* req;
-    if (logEnabled) {
-        const s32 ret = IOS_ReceiveMessage(printBufQueue, (u32*)&req, 0);
-        if (ret < 0)
-            exitClr(YUV_CYAN);
-    }
-
-    /* Use the temporary log buffer then memcpy into the request
-     * output to work around a hardware bug */
-    const s32 pos = snprintf(logBuffer, PRINT_BUFFER_SIZE - 2, "%s[IOS] ",
-                             logColors[static_cast<s32>(level)]);
-    va_list args;
-    va_start(args, format);
-    vsnprintf(logBuffer + pos, PRINT_BUFFER_SIZE - pos - 1, format, args);
-    va_end(args);
-
-    if (logEnabled) {
-        memcpy(req->ioctl.io, logBuffer, PRINT_BUFFER_SIZE);
-        IOS_FlushDCache(req->ioctl.io, PRINT_BUFFER_SIZE);
-        IOS_ResourceReply(req, 0);
-    }
-
-    if (logFileEnabled) {
-        UINT bw = 0;
-        f_write(&logFile, logBuffer + 7, strlen(logBuffer) - 7, &bw);
-        static const char newline = '\n';
-        f_write(&logFile, &newline, 1, &bw);
-        f_sync(&logFile);
-    }
-}
-
-void peli::NotifyResourceStarted()
-{
-    if (!logEnabled)
-        return;
-
-    IOSRequest* req;
-    const s32 ret = IOS_ReceiveMessage(printBufQueue, (u32*)&req, 0);
-    if (ret < 0)
-        exitClr(YUV_CYAN);
-
-    IOS_ResourceReply(req, 1);
-}
-
 void usleep(u32 usec)
 {
     u32 queueData;
     const s32 queue = IOS_CreateMessageQueue(&queueData, 1);
     if (queue < 0) {
-        peli::Log(LogL::ERROR, "usleep: failed to create message queue: %d",
-                  queue);
+        PRINT(IOS, ERROR, "usleep: failed to create message queue: %d", queue);
         abort();
     }
 
     const s32 timer = IOS_CreateTimer(usec, 0, queue, 1);
     if (timer < 0) {
-        peli::Log(LogL::ERROR, "usleep: failed to create timer: %d", timer);
+        PRINT(IOS, ERROR, "usleep: failed to create timer: %d", timer);
         abort();
     }
 
     u32 msg;
     const s32 ret = IOS_ReceiveMessage(queue, &msg, 0);
     if (ret < 0 || msg != 1) {
-        peli::Log(LogL::ERROR, "usleep: IOS_ReceiveMessage failure: %d", ret);
+        PRINT(IOS, ERROR, "usleep: IOS_ReceiveMessage failure: %d", ret);
         abort();
     }
 
     IOS_DestroyTimer(timer);
     IOS_DestroyMessageQueue(queue);
-}
-
-static void Log_IPCRequest(IOSRequest* req)
-{
-    switch (req->cmd) {
-    case IOS_OPEN:
-        IOS_ResourceReply(req, 0);
-        break;
-
-    case IOS_CLOSE: {
-        logEnabled = false;
-        usleep(10000);
-        IOSRequest* req2;
-        const s32 ret = IOS_ReceiveMessage(printBufQueue, (u32*)&req2, 0);
-        if (ret < 0)
-            exitClr(YUV_CYAN);
-        IOS_ResourceReply(req2, 2);
-        IOS_ResourceReply(req, 0);
-        IOS_CancelThread(0, 0);
-        break;
-    }
-
-    case IOS_IOCTL:
-        if (req->ioctl.cmd == 0) {
-            /* Read from console */
-            if (req->ioctl.io_len != PRINT_BUFFER_SIZE) {
-                IOS_ResourceReply(req, IOS_EINVAL);
-                break;
-            }
-            /* Will reply on next printf */
-            IOS_SendMessage(printBufQueue, (u32)req, 0);
-            break;
-        }
-        if (req->ioctl.cmd == 1) {
-            // Start game IOS command
-            IOS_SendMessage(startGameWaitQueue, 0, 0);
-            IOS_ResourceReply(req, IOS_SUCCESS);
-            break;
-        }
-        IOS_ResourceReply(req, IOS_EINVAL);
-        break;
-
-    default:
-        IOS_ResourceReply(req, IOS_EINVAL);
-        break;
-    }
 }
 
 void kwrite32(u32 address, u32 value)
@@ -190,7 +78,7 @@ static void OpenTestFile()
     /* We must attempt to open a file first for FatFS to function properly */
     FIL testFile;
     FRESULT fret = f_open(&testFile, "0:/", FA_READ);
-    peli::Log(LogL::INFO, "Test open result: %d", fret);
+    PRINT(IOS, INFO, "Test open result: %d", fret);
 }
 
 s32 mainThreadProc(void* arg)
@@ -198,42 +86,31 @@ s32 mainThreadProc(void* arg)
     patchIOSOpen();
     importKoreanCommonKey();
 
-    s32 ret = IOS_CreateHeap(mainHeapData, sizeof(mainHeapData));
-    if (ret < 0)
-        exitClr(YUV_YELLOW);
-    mainHeap = ret;
-
-    cppInit();
     IOS::Resource::makeIpcToCallbackThread();
+    cppInit();
 
-    u32 msg;
-    ret = IOS_ReceiveMessage(startGameWaitQueue, &msg, 0);
-    if (ret != 0) {
-        peli::Log(LogL::ERROR,
-                  "IOS_ReceiveMessage(startGameWaitQueue) failed! %d", ret);
-        abort();
-    }
-
-    peli::Log(LogL::INFO, "Starting up game IOS...");
+    PRINT(IOS, INFO, "Wait for start request...");
+    IPCLog::sInstance->waitForStartRequest();
+    PRINT(IOS, INFO, "Starting up game IOS...");
 
     if (!SDCard::Open()) {
-        peli::Log(LogL::ERROR, "FS_StartRM: SDCard::Open returned false");
+        PRINT(IOS, ERROR, "FS_StartRM: SDCard::Open returned false");
         abort();
     }
     if (FSServ::MountSDCard()) {
         OpenTestFile();
-        peli::Log(LogL::INFO, "SD card mounted");
+        PRINT(IOS, INFO, "SD card mounted");
     }
 
 #if 0
-    peli::Log(LogL::INFO, "Opening log file");
+    PRINT(IOS, INFO, "Opening log file");
     FRESULT fret = f_open(&logFile, "0:/saoirselog.txt", FA_CREATE_ALWAYS | FA_WRITE);
     if (fret != FR_OK) {
-        peli::Log(LogL::ERROR, "Failed to open log file! %d", fret);
+        PRINT(IOS, ERROR, "Failed to open log file! %d", fret);
         abort();
     }
     logFileEnabled = true;
-    peli::Log(LogL::INFO, "Log file opened");
+    PRINT(IOS, INFO, "Log file opened");
 #endif
 
     s32 efsTid = IOS_CreateThread(
@@ -261,17 +138,13 @@ s32 mainThreadProc(void* arg)
 
 static void saoMain()
 {
-    logEnabled = true;
-
-    s32 ret = IOS_CreateMessageQueue(&startGameWaitQueueData, 1);
+    s32 ret = IOS_CreateHeap(mainHeapData, sizeof(mainHeapData));
     if (ret < 0)
-        exitClr(YUV_DARK_RED);
-    startGameWaitQueue = ret;
+        exitClr(YUV_YELLOW);
+    mainHeap = ret;
 
-    ret = IOS_CreateMessageQueue(&printBufQueueData, 1);
-    if (ret < 0)
-        exitClr(YUV_DARK_RED);
-    printBufQueue = ret;
+    IPCLog::sInstance = new IPCLog();
+    Log::ipcLogEnabled = true;
 
     IOS_SetThreadPriority(0, 40);
 
@@ -288,21 +161,7 @@ static void saoMain()
     if (ret < 0)
         exitClr(YUV_YELLOW);
 
-    s32 queue = IOS_CreateMessageQueue(stdoutQueueData, 8);
-    if (queue < 0)
-        exitClr(YUV_WHITE);
-
-    ret = IOS_RegisterResourceManager("/dev/stdout", queue);
-    if (ret < 0)
-        exitClr(YUV_WHITE);
-
-    while (1) {
-        IOSRequest* req;
-        if (IOS_ReceiveMessage(queue, (u32*)&req, 0) < 0)
-            exitClr(YUV_WHITE);
-
-        Log_IPCRequest(req);
-    }
+    IPCLog::sInstance->run();
 }
 
 void* operator new(std::size_t size)
@@ -356,7 +215,7 @@ void exitClr(u32 color)
 
 void abort()
 {
-    peli::Log(LogL::ERROR, "Abort was called!");
+    PRINT(IOS, ERROR, "Abort was called!");
     IOS_CancelThread(0, 0);
     while (1) {
     }
@@ -364,8 +223,8 @@ void abort()
 
 void __assert_fail(const char* expr, const char* file, s32 line)
 {
-    peli::Log(LogL::ERROR, "Assertion failed:\n\n%s\nfile %s, line %d", expr,
-              file, line);
+    PRINT(IOS, ERROR, "Assertion failed:\n\n%s\nfile %s, line %d", expr, file,
+          line);
     abort();
 }
 

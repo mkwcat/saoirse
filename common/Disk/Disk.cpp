@@ -1,22 +1,16 @@
-#include <diskio.h>
-#include <sdcard.h>
-
-#ifdef TARGET_IOS
-#include <main.h>
-#define DiskLog(level, ...) peli::Log(level, __VA_ARGS__)
-#else
-#include <irse.h>
-#define DiskLog(level, ...) irse::Log(LogS::DiskIO, level, __VA_ARGS__)
-#endif
+#include "Disk.hpp"
+#include <Debug/Log.hpp>
+#include <Disk/SDCard.hpp>
+#include <FAT/diskio.h>
 
 constexpr BYTE DRV_SDCARD = 0;
 
 DSTATUS disk_status(BYTE pdrv)
 {
-    // DiskLog(LogL::INFO, "disk_status: drv: %d", pdrv);
+    // PRINT(DiskIO, INFO, "disk_status: drv: %d", pdrv);
     if (pdrv == DRV_SDCARD) {
         if (!SDCard::IsInitialized() || !SDCard::IsInserted()) {
-            DiskLog(LogL::WARN, "disk_status returning STA_NODISK");
+            PRINT(DiskIO, WARN, "disk_status returning STA_NODISK");
             return STA_NODISK;
         }
         return 0;
@@ -26,31 +20,31 @@ DSTATUS disk_status(BYTE pdrv)
 
 DSTATUS disk_initialize(BYTE pdrv)
 {
-    // DiskLog(LogL::INFO, "disk_initialize: drv: %d", pdrv);
+    // PRINT(DiskIO, INFO, "disk_initialize: drv: %d", pdrv);
     if (pdrv == DRV_SDCARD) {
         if (!SDCard::Startup()) {
             /* No way to differentiate between error and not inserted */
-            DiskLog(LogL::WARN,
-                    "disk_initialize: SDCard::Startup returned false");
+            PRINT(DiskIO, WARN,
+                  "disk_initialize: SDCard::Startup returned false");
             return STA_NODISK;
         }
         return 0;
     }
-    DiskLog(LogL::ERROR, "disk_initialize: unknown pdrv (%d)", pdrv);
+    PRINT(DiskIO, ERROR, "disk_initialize: unknown pdrv (%d)", pdrv);
     return STA_NOINIT;
 }
 
 DRESULT disk_read(BYTE pdrv, BYTE* buff, LBA_t sector, UINT count)
 {
-    // DiskLog(LogL::INFO, "disk read sec: %d, cnt: %d", sector, count);
+    // PRINT(DiskIO, INFO, "disk read sec: %d, cnt: %d", sector, count);
     if (pdrv == DRV_SDCARD) {
         if (disk_status(pdrv) != 0)
             return RES_ERROR;
 
         s32 ret = SDCard::ReadSectors(sector, count, buff);
         if (ret < 0) {
-            DiskLog(LogL::ERROR, "disk_read: SDCard::ReadSectors failed: %d",
-                    ret);
+            PRINT(DiskIO, ERROR, "disk_read: SDCard::ReadSectors failed: %d",
+                  ret);
             return RES_ERROR;
         }
         return RES_OK;
@@ -66,8 +60,8 @@ DRESULT disk_write(BYTE pdrv, const BYTE* buff, LBA_t sector, UINT count)
 
         s32 ret = SDCard::WriteSectors(sector, count, buff);
         if (ret < 0) {
-            DiskLog(LogL::ERROR, "disk_write: SDCard::WriteSectors failed: %d",
-                    ret);
+            PRINT(DiskIO, ERROR, "disk_write: SDCard::WriteSectors failed: %d",
+                  ret);
             return RES_ERROR;
         }
         return RES_OK;
@@ -92,7 +86,7 @@ DRESULT disk_ioctl(BYTE pdrv, BYTE cmd, void* buff)
         return RES_NOTRDY;
 
     default:
-        DiskLog(LogL::ERROR, "disk_ioctl: unknown command: %d", cmd);
+        PRINT(DiskIO, ERROR, "disk_ioctl: unknown command: %d", cmd);
         return RES_PARERR;
     }
 }
@@ -113,14 +107,14 @@ bool MountSDCard()
     /* Mount SD Card */
     FRESULT fret = f_mount(&fatfs, "0:", 0);
     if (fret != FR_OK) {
-        DiskLog(LogL::ERROR, "MountSDCard: f_mount SD Card failed: %d", fret);
+        PRINT(DiskIO, ERROR, "MountSDCard: f_mount SD Card failed: %d", fret);
         return false;
     }
 
     fret = f_chdir("0:/saoirse");
     if (fret != FR_OK) {
-        DiskLog(LogL::ERROR, "MountSDCard: failed to change directory: %d",
-                fret);
+        PRINT(DiskIO, ERROR, "MountSDCard: failed to change directory: %d",
+              fret);
         return false;
     }
 

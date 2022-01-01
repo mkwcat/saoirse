@@ -19,7 +19,8 @@
 
 constexpr s32 ISFSMaxPath = NAND_MAX_FILEPATH_LENGTH;
 
-enum class ISFSIoctl {
+enum class ISFSIoctl
+{
     Format = 0x1,
     GetStats = 0x2,
     CreateDir = 0x3,

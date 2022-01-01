@@ -1,5 +1,6 @@
 #include "IODeviceManager.hpp"
-#include "irse.h"
+#include <Debug/Log.hpp>
+#include <cstdlib>
 #include <unistd.h>
 
 IODeviceManager* IODeviceManager::sInstance;
@@ -44,19 +45,19 @@ int IODeviceManager::getFreeMSCHandle() const
     }
     // This theoretically should never happen, even if there were more than
     // 8 USB ports. The driver just doesn't allow it.
-    irse::Log(LogS::IOMgr, LogL::ERROR,
-              "No free MSC handle available. This should not happen!");
+    PRINT(IOMgr, ERROR,
+          "No free MSC handle available. This should not happen!");
     abort();
 }
 
 void IODeviceManager::insertMSCDevice(s32 deviceId, u16 vid, u16 pid)
 {
-    irse::Log(LogS::IOMgr, LogL::INFO,
-              "Insert USB Mass Storage Device:\n"
-              "deviceId: 0x%08X\n"
-              "vid: 0x%04X\n"
-              "pid: 0x%04X",
-              deviceId, vid, pid);
+    PRINT(IOMgr, INFO,
+          "Insert USB Mass Storage Device:\n"
+          "deviceId: 0x%08X\n"
+          "vid: 0x%04X\n"
+          "pid: 0x%04X",
+          deviceId, vid, pid);
 
     int entry = getFreeMSCHandle();
     m_mscHandle[entry] = {
@@ -78,14 +79,13 @@ void IODeviceManager::initMSC()
     s32 ret = USB_GetDeviceList(devList, DEVLIST_MAXSIZE,
                                 USB_CLASS_MASS_STORAGE, &deviceCount);
     if (ret < 0) {
-        irse::Log(LogS::IOMgr, LogL::ERROR, "USB_GetDeviceList failed! (%d)",
-                  ret);
+        PRINT(IOMgr, ERROR, "USB_GetDeviceList failed! (%d)", ret);
         abort();
     }
 
     if (deviceCount > 0) {
-        irse::Log(LogS::IOMgr, LogL::WARN,
-                  "Initializing %d USB storage device(s)", deviceCount);
+        PRINT(IOMgr, WARN, "Initializing %d USB storage device(s)",
+              deviceCount);
 
         for (int i = 0; i < deviceCount; i++) {
             insertMSCDevice(devList[i].device_id, devList[i].vid,

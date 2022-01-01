@@ -1,12 +1,14 @@
+#include "IPCLog.hpp"
+#include <DVD/EmuDI.hpp>
+#include <Debug/Log.hpp>
+#include <Disk/Disk.hpp>
+#include <FAT/ff.h>
+#include <System/Types.hpp>
 #include <cstring>
-#include <dip.h>
-#include <disk.h>
-#include <ff.h>
 #include <ios.h>
 #include <main.h>
-#include <types.h>
 
-namespace DIP
+namespace EmuDI
 {
 
 typedef struct {
@@ -84,12 +86,12 @@ static inline bool IsPatchedOffset(u32 wordOffset)
 
 static s32 Read(s32 handle, u8* outbuf, u32 offset, u32 length)
 {
-    peli::Log(LogL::INFO, "Read!");
+    PRINT(IOS_EmuDI, INFO, "Read!");
 
     if (!IsPatchedOffset(offset)) {
         if (!IsPatchedOffset(offset + (length >> 2) - 1)) {
             /* Not patched read, forward to real DI */
-            peli::Log(LogL::INFO, "Forwarding read to real DI");
+            PRINT(IOS_EmuDI, INFO, "Forwarding read to real DI");
             return RealRead(handle, outbuf, offset, length);
         }
         /*
@@ -98,7 +100,7 @@ static s32 Read(s32 handle, u8* outbuf, u32 offset, u32 length)
         const s32 ret =
             RealRead(handle, outbuf, offset, (0x80000000 - offset) << 2);
         if (ret != DI_EOK) {
-            peli::Log(LogL::ERROR, "DI_Read: Partial read failed: %d", ret);
+            PRINT(IOS_EmuDI, ERROR, "DI_Read: Partial read failed: %d", ret);
             /* If it fails, just memset 0 the output buffer */
             memset(outbuf, 0, (0x80000000 - offset) << 2);
         }
@@ -108,10 +110,10 @@ static s32 Read(s32 handle, u8* outbuf, u32 offset, u32 length)
     }
 
     for (u32 idx = SearchPatch(offset); length != 0; idx++) {
-        peli::Log(LogL::INFO, "DI_Read: Read patch %d of %d", idx,
-                  DiNumPatches);
+        PRINT(IOS_EmuDI, INFO, "DI_Read: Read patch %d of %d", idx,
+              DiNumPatches);
         if (idx >= DiNumPatches) {
-            peli::Log(LogL::WARN, "DI_Read: Out of bounds DVD read");
+            PRINT(IOS_EmuDI, WARN, "DI_Read: Out of bounds DVD read");
             memset(outbuf, 0, length);
             return DI_EOK; /* Just success, I guess? */
         }
@@ -124,7 +126,7 @@ static s32 Read(s32 handle, u8* outbuf, u32 offset, u32 length)
             const FRESULT fret =
                 f_lseek(&f, (offset - DiPatches[idx].disc_offset) << 2);
             if (fret != FR_OK) {
-                peli::Log(LogL::ERROR, "DI_Read: FS_LSeek failed: %d", fret);
+                PRINT(IOS_EmuDI, ERROR, "DI_Read: FS_LSeek failed: %d", fret);
                 abort();
             }
             read_len -= (offset - DiPatches[idx].disc_offset) << 2;
@@ -133,10 +135,10 @@ static s32 Read(s32 handle, u8* outbuf, u32 offset, u32 length)
         if (read_len > length)
             read_len = length;
         UINT read = 0;
-        peli::Log(LogL::INFO, "doing read!");
+        PRINT(IOS_EmuDI, INFO, "doing read!");
         const FRESULT fret = f_read(&f, outbuf, read_len, &read);
         if (fret != FR_OK) {
-            peli::Log(LogL::ERROR, "DI_Read: FS_Read failed: %d", fret);
+            PRINT(IOS_EmuDI, ERROR, "DI_Read: FS_Read failed: %d", fret);
             memset(outbuf + read, 0, read_len - read);
         }
 
@@ -166,8 +168,9 @@ static bool DI_DoNewIOCTL(IOSRequest* req)
 
         DiNumPatches = req->ioctl.in_len / sizeof(DVDPatch);
         if (req->ioctl.in_len > sizeof(DiPatches)) {
-            peli::Log(LogL::ERROR, "DI_PROXY_IOCTL_PATCHDVD: "
-                                   "Not enough memory for DVD patches");
+            PRINT(IOS_EmuDI, ERROR,
+                  "DI_PROXY_IOCTL_PATCHDVD: "
+                  "Not enough memory for DVD patches");
             IOS_ResourceReply(req, IOS_ENOMEM);
             return true;
         }
@@ -179,7 +182,7 @@ static bool DI_DoNewIOCTL(IOSRequest* req)
     case DI_PROXY_IOCTL_STARTGAME: {
         if (GameStarted)
             return false;
-        peli::Log(LogL::WARN, "DI_PROXY_IOCTL_STARTGAME: Starting game...");
+        PRINT(IOS_EmuDI, WARN, "DI_PROXY_IOCTL_STARTGAME: Starting game...");
         GameStarted = true;
         IOS_ResourceReply(req, IOS_SUCCESS);
         return true;
@@ -201,9 +204,9 @@ static bool DI_DoNewIOCTL(IOSRequest* req)
         u32 offset = block->args[1];
         u32 length = block->args[0];
         if (length > req->ioctl.io_len) {
-            peli::Log(LogL::ERROR,
-                      "DI_IOCTL_READ: Output size < read length (0x%X, 0x%x)",
-                      length, req->ioctl.io_len);
+            PRINT(IOS_EmuDI, ERROR,
+                  "DI_IOCTL_READ: Output size < read length (0x%X, 0x%x)",
+                  length, req->ioctl.io_len);
             IOS_ResourceReply(req, DI_ESECURITY);
             return true;
         }
@@ -273,7 +276,7 @@ void HandleRequest(IOSRequest* req)
         break;
 
     default:
-        peli::Log(LogL::ERROR, "Received unhandled command: %d", req->cmd);
+        PRINT(IOS_EmuDI, ERROR, "Received unhandled command: %d", req->cmd);
         /* Real DI just... does not reply to unknown commands? [check] */
         break;
     }
@@ -281,34 +284,33 @@ void HandleRequest(IOSRequest* req)
 
 extern "C" s32 DI_StartRM(void* arg)
 {
-    peli::Log(LogL::INFO, "Starting DI...");
+    PRINT(IOS_EmuDI, INFO, "Starting DI...");
 
     s32 ret = IOS_CreateMessageQueue(__diMsgData, 8);
     if (ret < 0) {
-        peli::Log(LogL::ERROR,
-                  "DI_ThreadEntry: IOS_CreateMessageQueue failed: %d", ret);
+        PRINT(IOS_EmuDI, ERROR,
+              "DI_ThreadEntry: IOS_CreateMessageQueue failed: %d", ret);
         abort();
     }
     DiMsgQueue = ret;
 
     ret = IOS_RegisterResourceManager("~dev/di", DiMsgQueue);
     if (ret != IOS_SUCCESS) {
-        peli::Log(LogL::ERROR,
-                  "DI_ThreadEntry: IOS_RegisterResourceManager failed: %d",
-                  ret);
+        PRINT(IOS_EmuDI, ERROR,
+              "DI_ThreadEntry: IOS_RegisterResourceManager failed: %d", ret);
         abort();
     }
 
-    peli::Log(LogL::INFO, "DI started");
+    PRINT(IOS_EmuDI, INFO, "DI started");
 
     DiStarted = true;
-    peli::NotifyResourceStarted();
+    IPCLog::sInstance->notify();
     while (1) {
         IOSRequest* req;
         ret = IOS_ReceiveMessage(DiMsgQueue, (u32*)&req, 0);
         if (ret != IOS_SUCCESS) {
-            peli::Log(LogL::ERROR,
-                      "DI_ThreadEntry: IOS_ReceiveMessage failed: %d", ret);
+            PRINT(IOS_EmuDI, ERROR,
+                  "DI_ThreadEntry: IOS_ReceiveMessage failed: %d", ret);
             abort();
         }
 
@@ -317,4 +319,4 @@ extern "C" s32 DI_StartRM(void* arg)
     return 0;
 }
 
-} // namespace DIP
+} // namespace EmuDI

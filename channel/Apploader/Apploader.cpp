@@ -1,22 +1,15 @@
 #include "Apploader.hpp"
 #include "AppPayload.hpp"
 #include "GlobalsConfig.hpp"
-#include "dvd.h"
-#include "irse.h"
-#include <util.h>
-
+#include "IOSBoot.hpp"
+#include <Debug/Log.hpp>
+#include <Main/DVD.hpp>
+#include <System/Util.hpp>
 #include <algorithm>
 #include <array>
 #include <chrono>
 #include <cstdio>
-#include <gcutil.h>
 #include <iostream>
-LIBOGC_SUCKS_BEGIN
-#include <ogc/cache.h>
-#include <ogc/lwp_watchdog.h>
-#include <ogc/system.h>
-LIBOGC_SUCKS_END
-#include "IOSBoot.hpp"
 #include <optional>
 #include <span>
 #include <stdint.h>
@@ -24,6 +17,11 @@ LIBOGC_SUCKS_END
 #include <thread>
 #include <time.h>
 #include <unistd.h>
+LIBOGC_SUCKS_BEGIN
+#include <ogc/cache.h>
+#include <ogc/lwp_watchdog.h>
+#include <ogc/system.h>
+LIBOGC_SUCKS_END
 
 void Apploader::taskEntry()
 {
@@ -66,8 +64,8 @@ static void UnencryptedRead(void* dst, u32 len, u32 ofs, CachePolicy invalidate)
     const auto result = cmd.cmd()->syncReply();
 
     if (result != DiErr::OK) {
-        irse::Log(LogS::Loader, LogL::ERROR, "Failed to execute read: %s",
-                  DVDLow::PrintErr(result));
+        PRINT(Loader, ERROR, "Failed to execute read: %s",
+              DVDLow::PrintErr(result));
         return;
     }
 
@@ -82,8 +80,7 @@ static void EncryptedRead(void* dst, u32 len, u32 ofs, CachePolicy invalidate)
     const auto result = cmd.cmd()->syncReply();
 
     if (result != DiErr::OK) {
-        irse::Log(LogS::Loader, LogL::ERROR,
-                  "Failed to execute encrypted read");
+        PRINT(Loader, ERROR, "Failed to execute encrypted read");
         return;
     }
 
@@ -165,11 +162,11 @@ void Apploader::openBootPartition(ES::TMDFixed<512>* outMeta)
     const Partition* boot_partition =
         findBootPartition(main_volume, partitions);
     if (boot_partition == nullptr) {
-        irse::Log(LogS::Loader, LogL::ERROR, "Failed to find boot partition");
+        PRINT(Loader, ERROR, "Failed to find boot partition");
         taskAbort();
     }
-    irse::Log(LogS::Loader, LogL::INFO, "Boot partition: %p",
-              reinterpret_cast<const void*>(boot_partition));
+    PRINT(Loader, INFO, "Boot partition: %p",
+          reinterpret_cast<const void*>(boot_partition));
 
     taskBreak();
 
@@ -179,11 +176,11 @@ void Apploader::openBootPartition(ES::TMDFixed<512>* outMeta)
 void Apploader::dumpAppInfo(const ApploaderInfo& app_info)
 {
     auto mem_dump = [](std::span<u32> mem) {
-        irse::Log(LogS::Loader, LogL::INFO, "MEMORY DUMP");
+        PRINT(Loader, INFO, "MEMORY DUMP");
         for (std::size_t i = 0; i < mem.size(); i += 4) {
-            irse::Log(LogS::Loader, LogL::INFO, "%p: %08X %08X %08X %08X",
-                      reinterpret_cast<void*>(&mem[i]), mem[i], mem[i + 1],
-                      mem[i + 2], mem[i + 3]);
+            PRINT(Loader, INFO, "%p: %08X %08X %08X %08X",
+                  reinterpret_cast<void*>(&mem[i]), mem[i], mem[i + 1],
+                  mem[i + 2], mem[i + 3]);
         }
     };
     mem_dump({(u32*)&app_info, 32});
@@ -193,7 +190,7 @@ ApploaderInfo Apploader::readAppInfo()
 {
     static ApploaderInfo app_info ATTRIBUTE_ALIGN(32);
 
-    irse::Log(LogS::Loader, LogL::INFO, "Reading apploader info..");
+    PRINT(Loader, INFO, "Reading apploader info..");
     EncryptedRead(&app_info, sizeof(app_info), 0x2440 / 4, CachePolicy::None);
     DebugPause();
     return app_info;
@@ -208,8 +205,8 @@ void Apploader::openPartition(const Partition& partition,
     const auto result = cmd.cmd()->syncReply();
 
     if (result != DiErr::OK) {
-        irse::Log(LogS::Loader, LogL::ERROR, "Failed to open partition: %s",
-                  DVDLow::PrintErr(result));
+        PRINT(Loader, ERROR, "Failed to open partition: %s",
+              DVDLow::PrintErr(result));
         taskAbort();
     }
 }
@@ -219,12 +216,11 @@ Apploader::findBootPartition(const Volume& main_volume,
                              const std::array<Partition, 4>& partitions)
 {
     for (const auto& part : partitions) {
-        irse::Log(LogS::Loader, LogL::INFO, "| Partition: %08X %08X",
-                  part.offset, part.type);
+        PRINT(Loader, INFO, "| Partition: %08X %08X", part.offset, part.type);
     }
 
     if (main_volume.num_boot_info > partitions.size()) {
-        irse::Log(LogS::Loader, LogL::ERROR, "Invalid volume header");
+        PRINT(Loader, ERROR, "Invalid volume header");
         return nullptr;
     }
 
@@ -233,20 +229,19 @@ Apploader::findBootPartition(const Volume& main_volume,
         [](const Partition& part) { return part.type == 0; });
 
     if (found_it == partitions.end()) {
-        irse::Log(LogS::Loader, LogL::ERROR, "Couldn't find boot partition");
+        PRINT(Loader, ERROR, "Couldn't find boot partition");
         return nullptr;
     }
 
-    irse::Log(LogS::Loader, LogL::INFO, "Partition: %08X %08X",
-              found_it->offset, found_it->type);
+    PRINT(Loader, INFO, "Partition: %08X %08X", found_it->offset,
+          found_it->type);
     return &*found_it;
 }
 
 std::array<Partition, 4> Apploader::readPartitions(const Volume& volume)
 {
-    irse::Log(LogS::Loader, LogL::INFO,
-              "Reading partition headers offset: %i..",
-              static_cast<s32>(volume.ofs_partition_info));
+    PRINT(Loader, INFO, "Reading partition headers offset: %i..",
+          static_cast<s32>(volume.ofs_partition_info));
 
     std::array<Partition, 4> partitions ATTRIBUTE_ALIGN(32);
 
@@ -261,14 +256,14 @@ std::array<Partition, 4> Apploader::readPartitions(const Volume& volume)
 std::array<Volume, 4> Apploader::readVolumes()
 {
     std::array<Volume, 4> volumes ATTRIBUTE_ALIGN(32);
-    irse::Log(LogS::Loader, LogL::INFO, "Reading table of contents..");
+    PRINT(Loader, INFO, "Reading table of contents..");
 
     memset(&volumes, 0, sizeof(volumes));
     UnencryptedRead(volumes.data(), sizeof(volumes), 0x00010000,
                     CachePolicy::None);
     for (auto& v : volumes) {
-        irse::Log(LogS::Loader, LogL::INFO, "| Volume %u %u", v.num_boot_info,
-                  v.ofs_partition_info);
+        PRINT(Loader, INFO, "| Volume %u %u", v.num_boot_info,
+              v.ofs_partition_info);
     }
 
     return volumes;

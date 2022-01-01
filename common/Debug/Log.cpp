@@ -1,0 +1,98 @@
+#include "Log.hpp"
+#include <System/OS.hpp>
+#include <System/Types.hpp>
+#ifdef TARGET_IOS
+#include <IPCLog.hpp>
+#endif
+#include <array>
+#include <cstring>
+#include <mutex>
+#include <stdarg.h>
+#include <stdio.h>
+
+#ifdef TARGET_IOS
+bool Log::ipcLogEnabled = false;
+bool Log::fileLogEnabled = false;
+FIL Log::logFile;
+#endif
+
+static constexpr std::array<const char*, 3> logColors = {
+    "\x1b[37;1m",
+    "\x1b[33;1m",
+    "\x1b[31;1m",
+};
+#ifndef TARGET_IOS
+static Mutex logMutex;
+#endif
+constexpr u32 logMask = 0xFFFFFFFF;
+constexpr u32 logLevel = 0;
+
+void Log::VPrint(LogSource src, const char* srcStr, LogLevel level,
+                 const char* format, va_list args)
+{
+#ifdef TARGET_IOS
+    if (!ipcLogEnabled && !fileLogEnabled)
+        return;
+#endif
+    if (src == LogSource::IOS_EmuDI)
+        return;
+
+    u32 slvl = static_cast<u32>(level);
+    u32 schan = static_cast<u32>(src);
+    ASSERT(slvl < logColors.size());
+
+    if (level != LogLevel::ERROR) {
+        if (!(logMask & (1 << schan)))
+            return;
+        if (slvl < logLevel)
+            return;
+    }
+    {
+#ifndef TARGET_IOS
+        // todo for IOS!
+        std::unique_lock<Mutex> lock(logMutex);
+#endif
+
+        static std::array<char, 256> logBuffer;
+        u32 len = vsnprintf(&logBuffer[0], logBuffer.size(), format, args);
+        if (len >= logBuffer.size()) {
+            len = logBuffer.size() - 1;
+            logBuffer[len] = 0;
+        }
+
+        // Remove newline at the end of log
+        if (logBuffer[len - 1] == '\n')
+            logBuffer[len - 1] = 0;
+
+#ifdef TARGET_IOS
+        static std::array<char, 256> printBuffer;
+        snprintf(&printBuffer[0], printBuffer.size(), "%s[%s] %s\x1b[37;1m",
+                 logColors[slvl], srcStr, logBuffer.data());
+
+        if (ipcLogEnabled) {
+            IPCLog::sInstance->print(&printBuffer[0]);
+        }
+
+        if (fileLogEnabled) {
+            UINT bw = 0;
+            // Subtract 7 twice to remove the color codes on both sides
+            f_write(&logFile, &logBuffer[7], strlen(&logBuffer[7]) - 7, &bw);
+            static const char newline = '\n';
+            f_write(&logFile, &newline, 1, &bw);
+            f_sync(&logFile);
+        }
+#else
+        printf("%s[%s] %s\n\x1b[37;1m", logColors[slvl], srcStr,
+               logBuffer.data());
+#endif
+    }
+}
+
+void Log::Print(LogSource src, const char* srcStr, LogLevel level,
+                const char* format, ...)
+{
+    va_list args;
+    va_start(args, format);
+    VPrint(src, srcStr, level, format, args);
+    va_end(args);
+}

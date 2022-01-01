@@ -1,4 +1,5 @@
-#include <types.h>
+#pragma once
+#include <System/Types.hpp>
 
 constexpr bool validJumptablePtr(u32 address)
 {

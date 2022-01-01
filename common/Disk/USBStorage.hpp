@@ -1,11 +1,10 @@
 #pragma once
-
-#include <types.h>
+#include <System/Types.hpp>
 
 class USBStorage
 {
-    USBStorage(u32 sector_size, u32 sector_count, u8 lun, u8 ep_in, u8 ep_out, u16 vid, u16 pid, u32 tag,
-               u32 interface, s32 usb_fd);
+    USBStorage(u32 sector_size, u32 sector_count, u8 lun, u8 ep_in, u8 ep_out,
+               u16 vid, u16 pid, u32 tag, u32 interface, s32 usb_fd);
 
     enum
     {

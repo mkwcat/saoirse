@@ -1,13 +1,13 @@
 #pragma once
-#include "util.h"
+#include <System/Types.hpp>
+#include <System/Util.hpp>
 #include <string.h>
-#include <types.h>
 // saoirse implementation
-#include <usbstorage.h>
+#include <Disk/USBStorage.hpp>
 LIBOGC_SUCKS_BEGIN
+#include <ogc/ipc.h>
 #include <ogc/usb.h>
 // libogc implementation
-#include <ogc/ipc.h>
 #include <ogc/usbstorage.h>
 LIBOGC_SUCKS_END
 
@@ -26,8 +26,7 @@ public:
 
     static constexpr int maxMSCCount = 8;
 
-    struct MSCHandle
-    {
+    struct MSCHandle {
         bool m_inserted;
         bool m_valid;
         s32 m_deviceId;

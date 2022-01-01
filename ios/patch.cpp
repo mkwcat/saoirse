@@ -1,8 +1,9 @@
 #include "patch.h"
 #include "main.h"
+#include <Debug/Log.hpp>
+#include <System/Util.hpp>
 #include <ios.h>
 #include <string.h>
-#include <util.h>
 
 char* iosOpenStrncpy(char* dest, const char* src, u32 num, s32 pid)
 {
@@ -48,7 +49,7 @@ static u32 findSyscallTable()
     if (read32(0xFFFF0004) != 0xE59FF018 || undefinedHandler < 0xFFFF0040 ||
         undefinedHandler >= 0xFFFFF000 || (undefinedHandler & 3) ||
         read32(undefinedHandler) != 0xE9CD7FFF) {
-        peli::Log(LogL::ERROR, "findSyscallTable: Invalid undefined handler");
+        PRINT(IOS, ERROR, "findSyscallTable: Invalid undefined handler");
         abort();
     }
 
@@ -72,11 +73,11 @@ __attribute__((noinline)) void invalidateICacheLine(u32 addr)
  * as a fallback? */
 void patchIOSOpen()
 {
-    peli::Log(LogL::WARN, "The search for IOS_Open syscall");
+    PRINT(IOS, WARN, "The search for IOS_Open syscall");
 
     u32 jumptable = findSyscallTable();
     if (jumptable == 0) {
-        peli::Log(LogL::ERROR, "Could not find syscall table");
+        PRINT(IOS, ERROR, "Could not find syscall table");
         abort();
     }
 
@@ -96,8 +97,8 @@ void patchIOSOpen()
                 addr - i + 4,
                 thumbBLLo(addr - i + 2, (u32)toUncached(&iosOpenStrncpyHook)));
 
-            peli::Log(LogL::WARN, "Patched %08X = %04X%04X", addr - i + 2,
-                      read16(addr - i + 2), read16(addr - i + 4));
+            PRINT(IOS, WARN, "Patched %08X = %04X%04X", addr - i + 2,
+                  read16(addr - i + 2), read16(addr - i + 4));
 
             // IOS automatically aligns flush
             IOS_FlushDCache((void*)(addr - i + 2), 4);
@@ -107,7 +108,7 @@ void patchIOSOpen()
         }
     }
 
-    peli::Log(LogL::ERROR, "Could not find IOS_Open instruction to patch");
+    PRINT(IOS, ERROR, "Could not find IOS_Open instruction to patch");
 }
 
 static bool checkImportKeyFunction(u32 addr)
@@ -151,11 +152,11 @@ void importKoreanCommonKey()
     u32 func = findImportKeyFunction();
 
     if (func == 0) {
-        peli::Log(LogL::ERROR, "Could not find import key function");
+        PRINT(IOS, ERROR, "Could not find import key function");
         return;
     }
 
-    peli::Log(LogL::WARN, "Found import key function at 0x%08X", func);
+    PRINT(IOS, WARN, "Found import key function at 0x%08X", func);
 
     // Call function by address
     (*(void (*)(int keyIndex, const u8* key, u32 keySize))func)(

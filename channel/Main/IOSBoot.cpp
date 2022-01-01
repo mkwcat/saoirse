@@ -1,5 +1,6 @@
 #include "IOSBoot.hpp"
-#include "arch.h"
+#include "Arch.hpp"
+#include <Debug/Log.hpp>
 #include <new>
 #include <ogc/cache.h>
 #include <stdio.h>
@@ -71,7 +72,7 @@ s32 IOSBoot::Entry(u32 entrypoint)
     if (sha.fd() < 0)
         return sha.fd();
 
-    irse::Log(LogS::Core, LogL::INFO, "Exploit: Setting up MEM1");
+    PRINT(Core, INFO, "Exploit: Setting up MEM1");
     u32* mem1 = reinterpret_cast<u32*>(MEM1_BASE);
     mem1[0] = 0x4903468D; // ldr r1, =0x10100000; mov sp, r1;
     mem1[1] = 0x49034788; // ldr r1, =entrypoint; blx r1;
@@ -91,7 +92,7 @@ s32 IOSBoot::Entry(u32 entrypoint)
     vec.out[1].data = MEM1_BASE;
     vec.out[1].len = 32;
 
-    irse::Log(LogS::Core, LogL::INFO, "Exploit: Doing exploit call");
+    PRINT(Core, INFO, "Exploit: Doing exploit call");
     return sha.ioctlv(0, vec);
 }
 
@@ -111,53 +112,70 @@ void IOSBoot::LaunchSaoirseIOS()
     const void* elf = Arch::getFileStatic("saoirse_ios.elf", &elfSize);
     assert(elf != nullptr);
 
-    irse::Log(LogS::Core, LogL::INFO, "Starting up Saoirse IOS...");
+    PRINT(Core, INFO, "Starting up Saoirse IOS...");
     s32 ret = Launch(elf, elfSize);
-    irse::Log(LogS::Core, LogL::INFO, "IOSBoot::Launch result: %d", ret);
+    PRINT(Core, INFO, "IOSBoot::Launch result: %d", ret);
 
     if (ret >= 0) {
-        Log::sInstance = new Log();
-        Log::sInstance->restartEvent();
+        IPCLog::sInstance = new IPCLog();
     }
 }
 
-void IOSBoot::Log::startGameIOS()
+void IOSBoot::IPCLog::startGameIOS()
 {
     Queue<u32> eventWaitQueue(1);
     setEventWaitingQueue(&eventWaitQueue, 2);
-    logRM.ioctl(1, nullptr, 0, nullptr, 0);
+    logRM.ioctl(Log::IPCLogIoctl::StartGameEvent, nullptr, 0, nullptr, 0);
     eventWaitQueue.receive();
 }
 
-IOSBoot::Log* IOSBoot::Log::sInstance;
+IOSBoot::IPCLog* IOSBoot::IPCLog::sInstance;
 
-s32 IOSBoot::Log::Callback(s32 result, [[maybe_unused]] void* usrdata)
+bool IOSBoot::IPCLog::handleEvent(s32 result)
 {
-    IOSBoot::Log* obj = reinterpret_cast<IOSBoot::Log*>(usrdata);
-
     if (result < 0) {
-        irse::Log(LogS::Core, LogL::ERROR, "/dev/stdout error: %d", result);
-        return 0;
+        PRINT(Core, ERROR, "/dev/stdout error: %d", result);
+        return false;
     }
-    if (result == 0) {
-        puts(obj->logBuffer);
-    } else if (result == 1) {
-        irse::Log(LogS::Core, LogL::INFO, "Received resource notify event");
-        obj->m_eventCount++;
 
-        if (obj->m_eventCount == obj->m_triggerEventCount) {
-            obj->m_triggerEventCount = -1;
-            obj->m_eventQueue->send(0);
+    switch (static_cast<Log::IPCLogReply>(result)) {
+    case Log::IPCLogReply::Print:
+        puts(logBuffer);
+        return true;
+
+    case Log::IPCLogReply::Notice:
+        PRINT(Core, INFO, "Received resource notify event");
+        m_eventCount++;
+
+        if (m_eventCount == m_triggerEventCount) {
+            m_triggerEventCount = -1;
+            m_eventQueue->send(0);
         }
-    } else if (result == 2) {
-        return 0;
+        return true;
+
+    case Log::IPCLogReply::Close:
+        return false;
     }
 
-    obj->restartEvent();
+    return true;
+}
+
+s32 IOSBoot::IPCLog::threadEntry(void* userdata)
+{
+    IPCLog* log = reinterpret_cast<IPCLog*>(userdata);
+
+    while (true) {
+        s32 result =
+            log->logRM.ioctl(Log::IPCLogIoctl::RegisterPrintHook, NULL, 0,
+                             log->logBuffer, sizeof(log->logBuffer));
+        if (!log->handleEvent(result))
+            break;
+    }
+
     return 0;
 }
 
-IOSBoot::Log::Log()
+IOSBoot::IPCLog::IPCLog()
 {
     if (this->logRM.fd() == static_cast<s32>(IOSErr::NotFound)) {
         /* Unfortunately there isn't really a way to detect the moment the log
@@ -171,10 +189,12 @@ IOSBoot::Log::Log()
         }
     }
     if (this->logRM.fd() < 0) {
-        irse::Log(LogS::Core, LogL::ERROR, "/dev/stdout open error: %d",
-                  this->logRM.fd());
+        PRINT(Core, ERROR, "/dev/stdout open error: %d", this->logRM.fd());
         return;
     }
+
+    new (&m_thread)
+        Thread(threadEntry, reinterpret_cast<void*>(this), nullptr, 0x800, 80);
 }
 
 #if 0

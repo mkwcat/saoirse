@@ -1,12 +1,10 @@
 #pragma once
-
-// TODO: some common stuff needs to be ported to IOS
-
+#include <System/Types.hpp>
+#include <System/Util.hpp>
 #ifdef TARGET_IOS
 #include <ios.h>
 #include <main.h>
 #else
-#include <util.h>
 LIBOGC_SUCKS_BEGIN
 #include <ogc/ipc.h>
 #include <ogc/lwp.h>
@@ -15,7 +13,6 @@ LIBOGC_SUCKS_BEGIN
 LIBOGC_SUCKS_END
 #include <cassert>
 #endif
-#include <bit>
 
 #define DASSERT assert
 #define ASSERT assert
@@ -82,16 +79,14 @@ public:
 
     void send(T msg, u32 flags = 0)
     {
-        const s32 ret =
-            IOS_SendMessage(this->m_queue, reinterpret_cast<u32>(msg), flags);
+        const s32 ret = IOS_SendMessage(this->m_queue, (u32)(msg), flags);
         ASSERT(ret == IOSErr::OK);
     }
 
     T receive(u32 flags = 0)
     {
         T msg;
-        const s32 ret = IOS_ReceiveMessage(this->m_queue,
-                                           reinterpret_cast<u32*>(&msg), flags);
+        const s32 ret = IOS_ReceiveMessage(this->m_queue, (u32*)(&msg), flags);
         ASSERT(ret == IOSErr::OK);
         return reinterpret_cast<T>(msg);
     }
@@ -106,7 +101,7 @@ private:
     s32 m_queue;
 };
 
-template<typename T>
+template <typename T>
 using Queue = IOS_Queue<T>;
 
 #else
@@ -135,24 +130,21 @@ public:
 
     void send(T msg, u32 flags = 0)
     {
-        const BOOL ret =
-            MQ_Send(this->m_queue, reinterpret_cast<mqmsg_t>(msg), flags);
+        const BOOL ret = MQ_Send(this->m_queue, (mqmsg_t)(msg), flags);
         ASSERT(ret == TRUE);
     }
 
     T receive()
     {
         T msg;
-        const BOOL ret =
-            MQ_Receive(this->m_queue, reinterpret_cast<mqmsg_t*>(&msg), 0);
+        const BOOL ret = MQ_Receive(this->m_queue, (mqmsg_t*)(&msg), 0);
         ASSERT(ret == TRUE);
         return msg;
     }
 
     bool tryreceive(T& msg)
     {
-        const BOOL ret =
-            MQ_Receive(this->m_queue, reinterpret_cast<mqmsg_t*>(&msg), 1);
+        const BOOL ret = MQ_Receive(this->m_queue, (mqmsg_t*)(&msg), 1);
         return ret;
     }
 
@@ -165,7 +157,7 @@ private:
     mqbox_t m_queue;
 };
 
-template<typename T>
+template <typename T>
 using Queue = LibOGC_Queue<T>;
 
 #endif

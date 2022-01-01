@@ -1,7 +1,7 @@
 #pragma once
+#include <System/OS.hpp>
+#include <System/Types.hpp>
 #include <new>
-#include <os.h>
-#include <types.h>
 
 class USB
 {

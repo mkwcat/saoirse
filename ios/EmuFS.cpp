@@ -1,18 +1,19 @@
-#include <disk.h>
-#include <ff.h>
-#include <ios.h>
-#include <isfs.h>
-#include <main.h>
-#include <os.h>
-#include <sdcard.h>
-#include <types.h>
-
+#include "IPCLog.hpp"
+#include <Debug/Log.hpp>
+#include <Disk/Disk.hpp>
+#include <Disk/SDCard.hpp>
+#include <FAT/ff.h>
+#include <System/ISFS.hpp>
+#include <System/OS.hpp>
+#include <System/Types.hpp>
 #include <algorithm>
 #include <array>
 #include <cstdio>
 #include <cstring>
+#include <ios.h>
+#include <main.h>
 
-namespace EFS
+namespace EmuFS
 {
 
 /*
@@ -204,10 +205,9 @@ static s32 TryCloseFileDescriptor(int fd)
 
     const FRESULT fret = f_close(&spFileDescriptorArray[fd].fil);
     if (fret != FR_OK) {
-        peli::Log(
-            LogL::ERROR,
-            "[EFS::TryCloseFileDescriptor] Failed to close file, error: %d",
-            fret);
+        PRINT(IOS_EmuFS, ERROR,
+              "[EmuFS::TryCloseFileDescriptor] Failed to close file, error: %d",
+              fret);
         return FResultToISFSError(fret);
     }
 
@@ -300,8 +300,9 @@ static const char* GetReplacedFilepath(const char* filepath, char* out_buf,
     filepath = strchr(filepath, NAND_DIRECTORY_SEPARATOR_CHAR);
     if (snprintf(out_buf, EFS_MAX_REPLACED_FILEPATH_LENGTH, EFS_DRIVE "%s",
                  filepath + 1) <= 0) {
-        peli::Log(LogL::ERROR, "[EFS::GetReplacedFilepath] Failed to format "
-                               "the replaced filepath !");
+        PRINT(IOS_EmuFS, ERROR,
+              "[EmuFS::GetReplacedFilepath] Failed to format "
+              "the replaced filepath !");
         return nullptr;
     }
 
@@ -315,21 +316,21 @@ static s32 CopyFromNandToEFS(const char* nandPath, const char* efsPath)
     IOS::File isfsFile(nandPath, IOS::Mode::Read);
 
     if (isfsFile.fd() < 0) {
-        peli::Log(LogL::ERROR,
-                  "[EFS::CopyFromNandToEFS] Failed to open ISFS file: %d",
-                  isfsFile.fd());
+        PRINT(IOS_EmuFS, ERROR,
+              "[EmuFS::CopyFromNandToEFS] Failed to open ISFS file: %d",
+              isfsFile.fd());
         return isfsFile.fd();
     }
 
     s32 size = isfsFile.size();
-    peli::Log(LogL::INFO, "[EFS::CopyFromNandToEFS] File size: 0x%X", size);
+    PRINT(IOS_EmuFS, INFO, "[EmuFS::CopyFromNandToEFS] File size: 0x%X", size);
 
     FIL fil;
     FRESULT fret = f_open(&fil, efsPath, FA_WRITE | FA_CREATE_NEW);
 
     if (fret != FR_OK) {
-        peli::Log(LogL::ERROR,
-                  "[EFS::CopyFromNandToEFS] Failed to open EFS file: %d", fret);
+        PRINT(IOS_EmuFS, ERROR,
+              "[EmuFS::CopyFromNandToEFS] Failed to open EFS file: %d", fret);
         return FResultToISFSError(fret);
     }
 
@@ -342,10 +343,10 @@ static s32 CopyFromNandToEFS(const char* nandPath, const char* efsPath)
 
         if ((u32)ret != readlen) {
             f_close(&fil);
-            peli::Log(LogL::ERROR,
-                      "[EFS::CopyFromNandToEFS] Failed to read from ISFS file: "
-                      "%d != %d",
-                      ret, readlen);
+            PRINT(IOS_EmuFS, ERROR,
+                  "[EmuFS::CopyFromNandToEFS] Failed to read from ISFS file: "
+                  "%d != %d",
+                  ret, readlen);
             if (ret < 0)
                 return ret;
             return ISFSError::Unknown;
@@ -356,10 +357,10 @@ static s32 CopyFromNandToEFS(const char* nandPath, const char* efsPath)
 
         if (fret != FR_OK || (u32)bw != readlen) {
             f_close(&fil);
-            peli::Log(LogL::ERROR,
-                      "[EFS::CopyFromNandToEFS] Failed to write to EFS file: "
-                      "%d != 0 OR %d != %d",
-                      fret, readlen, bw);
+            PRINT(IOS_EmuFS, ERROR,
+                  "[EmuFS::CopyFromNandToEFS] Failed to write to EFS file: "
+                  "%d != 0 OR %d != %d",
+                  fret, readlen, bw);
             if (fret != FR_OK)
                 return FResultToISFSError(fret);
             return ISFSError::Unknown;
@@ -374,10 +375,10 @@ static s32 ReopenFile(s32 fd)
 {
     const FRESULT fret = f_lseek(&spFileDescriptorArray[fd].fil, 0);
     if (fret != FR_OK) {
-        peli::Log(LogL::ERROR,
-                  "[EFS::ReqProxyOpen] Failed to seek to position 0x%08X "
-                  "in file descriptor %d !",
-                  0, fd);
+        PRINT(IOS_EmuFS, ERROR,
+              "[EmuFS::ReqProxyOpen] Failed to seek to position 0x%08X "
+              "in file descriptor %d !",
+              0, fd);
 
         FreeFileDescriptor(fd);
         return FResultToISFSError(fret);
@@ -401,28 +402,28 @@ static s32 ReqProxyOpen(const char* filepath, u32 mode)
 
     int fd = RegisterFileDescriptor(filepath);
     if (fd < 0) {
-        peli::Log(LogL::ERROR,
-                  "[EFS::ReqProxyOpen] Could not register file descriptor: %d",
-                  fd);
+        PRINT(IOS_EmuFS, ERROR,
+              "[EmuFS::ReqProxyOpen] Could not register file descriptor: %d",
+              fd);
         return fd;
     }
-    peli::Log(LogL::INFO, "Registered file descriptor %d", fd);
+    PRINT(IOS_EmuFS, INFO, "Registered file descriptor %d", fd);
 
     ASSERT(IsFileDescriptorValid(fd));
 
     spFileDescriptorArray[fd].mode = mode;
 
     if (spFileDescriptorArray[fd].filOpened) {
-        peli::Log(LogL::INFO, "File already open, reusing descriptor");
+        PRINT(IOS_EmuFS, INFO, "File already open, reusing descriptor");
         return ReopenFile(fd);
     }
 
     const FRESULT fret =
         f_open(&spFileDescriptorArray[fd].fil, efsFilepath, FA_READ | FA_WRITE);
     if (fret != FR_OK) {
-        peli::Log(LogL::ERROR,
-                  "[EFS::ReqProxyOpen] Failed to open file '%s', error: %d",
-                  efsFilepath, fret);
+        PRINT(IOS_EmuFS, ERROR,
+              "[EmuFS::ReqProxyOpen] Failed to open file '%s', error: %d",
+              efsFilepath, fret);
 
         FreeFileDescriptor(fd);
         return FResultToISFSError(fret);
@@ -430,10 +431,10 @@ static s32 ReqProxyOpen(const char* filepath, u32 mode)
 
     spFileDescriptorArray[fd].filOpened = true;
 
-    peli::Log(
-        LogL::INFO,
-        "[EFS::ReqProxyOpen] Successfully opened file '%s' (fd=%d, mode=%u) !",
-        efsFilepath, fd, mode);
+    PRINT(IOS_EmuFS, INFO,
+          "[EmuFS::ReqProxyOpen] Successfully opened file '%s' (fd=%d, "
+          "mode=%u) !",
+          efsFilepath, fd, mode);
 
     return fd;
 }
@@ -451,15 +452,15 @@ static s32 ReqClose(s32 fd)
         return ISFSError::Invalid;
 
     if (f_sync(&spFileDescriptorArray[fd].fil) != FR_OK) {
-        peli::Log(LogL::ERROR,
-                  "[EFS::ReqClose] Failed to sync file descriptor %d !", fd);
+        PRINT(IOS_EmuFS, ERROR,
+              "[EmuFS::ReqClose] Failed to sync file descriptor %d !", fd);
         return ISFSError::Unknown;
     }
 
     FreeFileDescriptor(fd);
 
-    peli::Log(LogL::INFO,
-              "[EFS::ReqClose] Successfully closed file descriptor %d !", fd);
+    PRINT(IOS_EmuFS, INFO,
+          "[EmuFS::ReqClose] Successfully closed file descriptor %d !", fd);
 
     return ISFSError::OK;
 }
@@ -483,16 +484,16 @@ static s32 ReqRead(s32 fd, void* data, u32 len)
     const FRESULT fret =
         f_read(&spFileDescriptorArray[fd].fil, data, len, &bytesRead);
     if (fret != FR_OK) {
-        peli::Log(LogL::ERROR,
-                  "[EFS::ReqRead] Failed to read %u bytes from file descriptor "
-                  "%d, error: %d",
-                  len, fd, fret);
+        PRINT(IOS_EmuFS, ERROR,
+              "[EmuFS::ReqRead] Failed to read %u bytes from file descriptor "
+              "%d, error: %d",
+              len, fd, fret);
         return FResultToISFSError(fret);
     }
 
-    peli::Log(
-        LogL::INFO,
-        "[EFS::ReqRead] Successfully read %u bytes from file descriptor %d !",
+    PRINT(
+        IOS_EmuFS, INFO,
+        "[EmuFS::ReqRead] Successfully read %u bytes from file descriptor %d !",
         bytesRead, fd);
 
     return bytesRead;
@@ -517,16 +518,16 @@ static s32 ReqWrite(s32 fd, const void* data, u32 len)
     const FRESULT fret =
         f_write(&spFileDescriptorArray[fd].fil, data, len, &bytesWrote);
     if (fret != FR_OK) {
-        peli::Log(LogL::ERROR,
-                  "[EFS::ReqWrite] Failed to write %u bytes to file descriptor "
-                  "%d, error: %d",
-                  len, fd, fret);
+        PRINT(IOS_EmuFS, ERROR,
+              "[EmuFS::ReqWrite] Failed to write %u bytes to file descriptor "
+              "%d, error: %d",
+              len, fd, fret);
         return FResultToISFSError(fret);
     }
 
-    peli::Log(
-        LogL::INFO,
-        "[EFS::ReqWrite] Successfully wrote %u bytes to file descriptor %d !",
+    PRINT(
+        IOS_EmuFS, INFO,
+        "[EmuFS::ReqWrite] Successfully wrote %u bytes to file descriptor %d !",
         bytesWrote, fd);
 
     return bytesWrote;
@@ -567,23 +568,23 @@ static s32 ReqSeek(s32 fd, s32 where, s32 whence)
         return ISFSError::Invalid;
 
     if (offset == f_tell(fil)) {
-        peli::Log(LogL::INFO, "Skipping seek");
+        PRINT(IOS_EmuFS, INFO, "Skipping seek");
         return offset;
     }
 
     const FRESULT fresult = f_lseek(fil, offset);
     if (fresult != FR_OK) {
-        peli::Log(LogL::ERROR,
-                  "[EFS::ReqSeek] Failed to seek to position 0x%08X in file "
-                  "descriptor %d !",
-                  offset, fd);
+        PRINT(IOS_EmuFS, ERROR,
+              "[EmuFS::ReqSeek] Failed to seek to position 0x%08X in file "
+              "descriptor %d !",
+              offset, fd);
         return FResultToISFSError(fresult);
     }
 
-    peli::Log(LogL::INFO,
-              "[EFS::ReqSeek] Successfully seeked to position 0x%08X in file "
-              "descriptor %d !",
-              offset, fd);
+    PRINT(IOS_EmuFS, INFO,
+          "[EmuFS::ReqSeek] Successfully seeked to position 0x%08X in file "
+          "descriptor %d !",
+          offset, fd);
 
     return offset;
 }
@@ -609,9 +610,8 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
              * I'd rather not have the whole of IOS panic over an alignment
              * exception */
             if (!aligned(io, 4)) {
-                peli::Log(
-                    LogL::ERROR,
-                    "[EFS::ReqIoctl] Invalid GetFileStats input alignment");
+                PRINT(IOS_EmuFS, ERROR,
+                      "[EmuFS::ReqIoctl] Invalid GetFileStats input alignment");
                 return ISFSError::Invalid;
             }
             IOS::File::Stat* stat = reinterpret_cast<IOS::File::Stat*>(io);
@@ -620,8 +620,8 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
             return ISFSError::OK;
         }
 
-        peli::Log(LogL::ERROR, "[EFS::ReqIoctl] Unknown file ioctl: %u",
-                  static_cast<s32>(cmd));
+        PRINT(IOS_EmuFS, ERROR, "[EmuFS::ReqIoctl] Unknown file ioctl: %u",
+              static_cast<s32>(cmd));
         return ISFSError::Invalid;
     }
 
@@ -639,7 +639,8 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
     case ISFSIoctl::Format:
         /* Hmm, a command to remove everything in the filesystem and brick the
          * Wii. Very good. */
-        peli::Log(LogL::ERROR, "[EFS::ReqIoctl] Attempt to use ISFS_Format!");
+        PRINT(IOS_EmuFS, ERROR,
+              "[EmuFS::ReqIoctl] Attempt to use ISFS_Format!");
         return ISFSError::NoAccess;
 
     // [ISFS_CreateDir]
@@ -673,15 +674,15 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
 
         const FRESULT fresult = f_mkdir(path);
         if (fresult != FR_OK) {
-            peli::Log(LogL::ERROR,
-                      "[EFS::ReqIoctl] Failed to create directory '%s' !",
-                      efsFilepath);
+            PRINT(IOS_EmuFS, ERROR,
+                  "[EmuFS::ReqIoctl] Failed to create directory '%s' !",
+                  efsFilepath);
             return FResultToISFSError(fresult);
         }
 
-        peli::Log(LogL::INFO,
-                  "[EFS::ReqIoctl] Successfully created directory '%s' !",
-                  efsFilepath);
+        PRINT(IOS_EmuFS, INFO,
+              "[EmuFS::ReqIoctl] Successfully created directory '%s' !",
+              efsFilepath);
 
         return ISFSError::OK;
     }
@@ -717,17 +718,17 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
 
         const FRESULT fresult = f_stat(efsFilepath, nullptr);
         if (fresult != FR_OK) {
-            peli::Log(LogL::ERROR,
-                      "[EFS::ReqIoctl] Failed to set attributes for file or "
-                      "directory '%s' !",
-                      efsFilepath);
+            PRINT(IOS_EmuFS, ERROR,
+                  "[EmuFS::ReqIoctl] Failed to set attributes for file or "
+                  "directory '%s' !",
+                  efsFilepath);
             return FResultToISFSError(fresult);
         }
 
-        peli::Log(LogL::INFO,
-                  "[EFS::ReqIoctl] Successfully set attributes for file or "
-                  "directory '%s' !",
-                  efsFilepath);
+        PRINT(IOS_EmuFS, INFO,
+              "[EmuFS::ReqIoctl] Successfully set attributes for file or "
+              "directory '%s' !",
+              efsFilepath);
 
         return ISFSError::OK;
     }
@@ -764,10 +765,10 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
 
         const FRESULT fresult = f_stat(efsFilepath, nullptr);
         if (fresult != FR_OK) {
-            peli::Log(LogL::ERROR,
-                      "[EFS::ReqIoctl] Failed to get attributes for file or "
-                      "directory '%s' !",
-                      efsFilepath);
+            PRINT(IOS_EmuFS, ERROR,
+                  "[EmuFS::ReqIoctl] Failed to get attributes for file or "
+                  "directory '%s' !",
+                  efsFilepath);
             return FResultToISFSError(fresult);
         }
 
@@ -780,10 +781,10 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
         isfsAttrBlock->otherPerm = OTHER_PERM;
         isfsAttrBlock->attributes = ATTRIBUTES;
 
-        peli::Log(LogL::INFO,
-                  "[EFS::ReqIoctl] Successfully got attributes for file or "
-                  "directory '%s' !",
-                  efsFilepath);
+        PRINT(IOS_EmuFS, INFO,
+              "[EmuFS::ReqIoctl] Successfully got attributes for file or "
+              "directory '%s' !",
+              efsFilepath);
 
         return ISFSError::OK;
     }
@@ -827,17 +828,15 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
 
         const FRESULT fresult = f_unlink(efsFilepath);
         if (fresult != FR_OK) {
-            peli::Log(
-                LogL::ERROR,
-                "[EFS::ReqIoctl] Failed to delete file or directory '%s' !",
-                efsFilepath);
+            PRINT(IOS_EmuFS, ERROR,
+                  "[EmuFS::ReqIoctl] Failed to delete file or directory '%s' !",
+                  efsFilepath);
             return FResultToISFSError(fresult);
         }
 
-        peli::Log(
-            LogL::INFO,
-            "[EFS::ReqIoctl] Successfully deleted file or directory '%s' !",
-            efsFilepath);
+        PRINT(IOS_EmuFS, INFO,
+              "[EmuFS::ReqIoctl] Successfully deleted file or directory '%s' !",
+              efsFilepath);
 
         return ISFSError::OK;
     }
@@ -856,8 +855,8 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
 
         const char* pathOld = isfsRenameBlock->pathOld;
         const char* pathNew = isfsRenameBlock->pathNew;
-        peli::Log(LogL::INFO, "[EFS::ReqIoctl] Rename(%s, %s)", pathOld,
-                  pathNew);
+        PRINT(IOS_EmuFS, INFO, "[EmuFS::ReqIoctl] Rename(%s, %s)", pathOld,
+              pathNew);
 
         // Check if the old and new filepaths are valid
         if (!IsFilepathValid(pathOld) || !IsFilepathValid(pathNew))
@@ -903,17 +902,17 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
 
         const FRESULT fresult = f_rename(efsOldFilepath, efsNewFilepath);
         if (fresult != FR_OK) {
-            peli::Log(LogL::ERROR,
-                      "[EFS::ReqIoctl] Failed to rename file or directory '%s' "
-                      "to '%s' !",
-                      efsOldFilepath, efsNewFilepath);
+            PRINT(IOS_EmuFS, ERROR,
+                  "[EmuFS::ReqIoctl] Failed to rename file or directory '%s' "
+                  "to '%s' !",
+                  efsOldFilepath, efsNewFilepath);
             return FResultToISFSError(fresult);
         }
 
-        peli::Log(LogL::INFO,
-                  "[EFS::ReqIoctl] Successfully renamed file or directory '%s' "
-                  "to '%s' !",
-                  efsOldFilepath, efsNewFilepath);
+        PRINT(IOS_EmuFS, INFO,
+              "[EmuFS::ReqIoctl] Successfully renamed file or directory '%s' "
+              "to '%s' !",
+              efsOldFilepath, efsNewFilepath);
 
         return ISFSError::OK;
     }
@@ -951,9 +950,9 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
         const FRESULT fresult =
             f_open(&fil, efsFilepath, FA_CREATE_NEW | FA_READ | FA_WRITE);
         if (fresult != FR_OK) {
-            peli::Log(LogL::ERROR,
-                      "[EFS::ReqIoctl] Failed to create file '%s' !",
-                      efsFilepath);
+            PRINT(IOS_EmuFS, ERROR,
+                  "[EmuFS::ReqIoctl] Failed to create file '%s' !",
+                  efsFilepath);
             return FResultToISFSError(fresult);
         }
 
@@ -965,16 +964,16 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
             spFileDescriptorArray[ret].fil = fil; // Copy
         }
 
-        peli::Log(LogL::INFO,
-                  "[EFS::ReqIoctl] Successfully created file '%s' !",
-                  efsFilepath);
+        PRINT(IOS_EmuFS, INFO,
+              "[EmuFS::ReqIoctl] Successfully created file '%s' !",
+              efsFilepath);
 
         return ISFSError::OK;
     }
 
     default:
-        peli::Log(LogL::ERROR, "[EFS::ReqIoctl] Unknown manager ioctl: %u",
-                  cmd);
+        PRINT(IOS_EmuFS, ERROR, "[EmuFS::ReqIoctl] Unknown manager ioctl: %u",
+              cmd);
         return ISFSError::Invalid;
     }
 }
@@ -1034,8 +1033,8 @@ static s32 ReqIoctlv(s32 fd, ISFSIoctl cmd, u32 in_count, u32 out_count,
     }
 
     default:
-        peli::Log(LogL::ERROR, "[EFS::ReqIoctlv] Unknown manager ioctlv: %u",
-                  cmd);
+        PRINT(IOS_EmuFS, ERROR, "[EmuFS::ReqIoctlv] Unknown manager ioctlv: %u",
+              cmd);
         return ISFSError::Invalid;
     }
 }
@@ -1078,8 +1077,8 @@ static s32 ForwardRequest(IOS::Request* req)
                           req->ioctlv.io_count, req->ioctlv.vec);
 
     default:
-        peli::Log(LogL::ERROR, "EFS: Unknown command: %u",
-                  static_cast<u32>(req->cmd));
+        PRINT(IOS_EmuFS, ERROR, "EFS: Unknown command: %u",
+              static_cast<u32>(req->cmd));
         return ISFSError::Invalid;
     }
 }
@@ -1102,21 +1101,21 @@ static s32 IPCRequest(IOS::Request* req)
         strncpy(path, req->open.path, 64);
         path[0] = '/';
 
-        peli::Log(LogL::INFO, "[EFS::IPCRequest] IOS_Open(%s, 0x%X)", path,
-                  req->open.mode);
+        PRINT(IOS_EmuFS, INFO, "[EmuFS::IPCRequest] IOS_Open(%s, 0x%X)", path,
+              req->open.mode);
 
         if (!strncmp(path, "/dev/", 5)) {
             if (!strcmp(path, "/dev/flash")) {
                 /* No */
-                peli::Log(
-                    LogL::WARN,
-                    "[EFS::IPCRequest] Attempt to open /dev/flash from PPC");
+                PRINT(
+                    IOS_EmuFS, WARN,
+                    "[EmuFS::IPCRequest] Attempt to open /dev/flash from PPC");
                 ret = ISFSError::NoAccess;
                 break;
             }
             if (!strcmp(path, "/dev/fs")) {
-                peli::Log(LogL::INFO,
-                          "[EFS::IPCRequest] Open /dev/fs from PPC");
+                PRINT(IOS_EmuFS, INFO,
+                      "[EmuFS::IPCRequest] Open /dev/fs from PPC");
                 ret = mgrHandle;
                 break;
             }
@@ -1131,76 +1130,78 @@ static s32 IPCRequest(IOS::Request* req)
             break;
         }
 
-        peli::Log(LogL::INFO, "[EFS::IPCRequest] Forwarding open to real FS");
+        PRINT(IOS_EmuFS, INFO,
+              "[EmuFS::IPCRequest] Forwarding open to real FS");
         ret = ForwardRequest(req);
         break;
     }
 
     case IOS::Command::Close:
-        peli::Log(LogL::INFO, "[EFS::IPCRequest] IOS_Close(%d)", req->fd);
+        PRINT(IOS_EmuFS, INFO, "[EmuFS::IPCRequest] IOS_Close(%d)", req->fd);
         ret = ReqClose(req->fd);
         break;
 
     case IOS::Command::Read:
-        peli::Log(LogL::INFO, "[EFS::IPCRequest] IOS_Read(%d, 0x%08X, 0x%X)",
-                  req->fd, req->read.data, req->read.len);
+        PRINT(IOS_EmuFS, INFO, "[EmuFS::IPCRequest] IOS_Read(%d, 0x%08X, 0x%X)",
+              req->fd, req->read.data, req->read.len);
         ret = ReqRead(req->fd, req->read.data, req->read.len);
         break;
 
     case IOS::Command::Write:
-        peli::Log(LogL::INFO, "[EFS::IPCRequest] IOS_Write(%d, 0x%08X, 0x%X)",
-                  req->fd, req->write.data, req->write.len);
+        PRINT(IOS_EmuFS, INFO,
+              "[EmuFS::IPCRequest] IOS_Write(%d, 0x%08X, 0x%X)", req->fd,
+              req->write.data, req->write.len);
         ret = ReqWrite(req->fd, req->write.data, req->write.len);
         break;
 
     case IOS::Command::Seek:
-        peli::Log(LogL::INFO, "[EFS::IPCRequest] IOS_Seek(%d, %d, %d)", req->fd,
-                  req->seek.where, req->seek.whence);
+        PRINT(IOS_EmuFS, INFO, "[EmuFS::IPCRequest] IOS_Seek(%d, %d, %d)",
+              req->fd, req->seek.where, req->seek.whence);
         ret = ReqSeek(req->fd, req->seek.where, req->seek.whence);
         break;
 
     case IOS::Command::Ioctl:
-        peli::Log(LogL::INFO, "[EFS::IPCRequest] Received ioctl %d",
-                  req->ioctl.cmd);
+        PRINT(IOS_EmuFS, INFO, "[EmuFS::IPCRequest] Received ioctl %d",
+              req->ioctl.cmd);
         ret = ReqIoctl(req->fd, static_cast<ISFSIoctl>(req->ioctl.cmd),
                        req->ioctl.in, req->ioctl.in_len, req->ioctl.io,
                        req->ioctl.io_len);
         break;
 
     case IOS::Command::Ioctlv:
-        peli::Log(LogL::INFO, "[EFS::IPCRequest] Received ioctlv %d",
-                  req->ioctlv.cmd);
+        PRINT(IOS_EmuFS, INFO, "[EmuFS::IPCRequest] Received ioctlv %d",
+              req->ioctlv.cmd);
         ret = ReqIoctlv(req->fd, static_cast<ISFSIoctl>(req->ioctlv.cmd),
                         req->ioctlv.in_count, req->ioctlv.io_count,
                         req->ioctlv.vec);
         break;
 
     default:
-        peli::Log(LogL::ERROR, "[EFS::IPCRequest] Unknown command: %u",
-                  static_cast<u32>(req->cmd));
+        PRINT(IOS_EmuFS, ERROR, "[EmuFS::IPCRequest] Unknown command: %u",
+              static_cast<u32>(req->cmd));
         ret = ISFSError::Invalid;
         break;
     }
 
-    peli::Log(LogL::INFO, "[EFS::IPCRequest] Reply: %d", ret);
+    PRINT(IOS_EmuFS, INFO, "[EmuFS::IPCRequest] Reply: %d", ret);
     return ret;
 }
 
 extern "C" s32 FS_StartRM([[maybe_unused]] void* arg)
 {
-    peli::Log(LogL::INFO, "Starting FS...");
+    PRINT(IOS_EmuFS, INFO, "Starting FS...");
 
     assert(realFsMgr.fd() >= 0);
 
     Queue<IOS::Request*> queue(8);
     const s32 ret = IOS_RegisterResourceManager("$", queue.id());
     if (ret != IOSErr::OK) {
-        peli::Log(LogL::ERROR,
-                  "FS_StartRM: IOS_RegisterResourceManager failed: %d", ret);
+        PRINT(IOS_EmuFS, ERROR,
+              "FS_StartRM: IOS_RegisterResourceManager failed: %d", ret);
         abort();
     }
 
-    peli::NotifyResourceStarted();
+    IPCLog::sInstance->notify();
     while (true) {
         IOS::Request* req = queue.receive();
         IOS_ResourceReply(reinterpret_cast<IOSRequest*>(req), IPCRequest(req));
@@ -1209,4 +1210,4 @@ extern "C" s32 FS_StartRM([[maybe_unused]] void* arg)
     return 0;
 }
 
-} // namespace EFS
+} // namespace EmuFS

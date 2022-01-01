@@ -1,13 +1,13 @@
 #pragma once
-
-#include <types.h>
-#include <util.h>
+#include <System/Types.hpp>
+#include <System/Util.hpp>
 
 constexpr u32 HW_BASE = 0x0D000000;
 constexpr u32 HW_BASE_TRUSTED = 0x0D800000;
 
 /* ACR (Hollywood Registers) */
-enum class ACRReg {
+enum class ACRReg
+{
     IPC_PPCMSG = 0x000,
     IPC_PPCCTRL = 0x004,
     IPC_ARMMSG = 0x008,
@@ -58,7 +58,8 @@ inline void ACRMask(ACRReg reg, u32 clear, u32 set)
 }
 
 /* GPIO pin connections */
-enum class GPIOPin {
+enum class GPIOPin
+{
     POWER = 0x000001,
     SHUTDOWN = 0x000002,
     FAN = 0x000004,

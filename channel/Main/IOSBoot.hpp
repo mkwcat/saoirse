@@ -1,9 +1,8 @@
 #pragma once
-
-#include "irse.h"
-#include <os.h>
-#include <types.h>
-#include <util.h>
+#include <Debug/Log.hpp>
+#include <System/OS.hpp>
+#include <System/Types.hpp>
+#include <System/Util.hpp>
 
 namespace IOSBoot
 {
@@ -13,22 +12,16 @@ s32 Launch(const void* data, u32 len);
 void LaunchSaoirseIOS();
 s32 PatchNewCommonKey();
 
-class Log
+class IPCLog
 {
 public:
-    static Log* sInstance;
+    static IPCLog* sInstance;
 
-    Log();
+    IPCLog();
 
     int getEventCount() const
     {
         return m_eventCount;
-    }
-
-    void restartEvent()
-    {
-        logRM.ioctlAsync(0, NULL, 0, this->logBuffer, sizeof(this->logBuffer),
-                         &Callback, reinterpret_cast<void*>(this));
     }
 
     void startGameIOS();
@@ -41,15 +34,18 @@ public:
     }
 
 protected:
-    static s32 Callback(s32, void*);
+    bool handleEvent(s32 result);
+    static s32 threadEntry(void* userdata);
 
     bool reset = false;
-    IOS::ResourceCtrl<s32> logRM{"/dev/stdout"};
+    IOS::ResourceCtrl<Log::IPCLogIoctl> logRM{"/dev/stdout"};
     char logBuffer[256] ATTRIBUTE_ALIGN(32);
 
     int m_eventCount = 0;
     Queue<u32>* m_eventQueue;
     int m_triggerEventCount = -1;
+
+    Thread m_thread;
 };
 
 #if 0

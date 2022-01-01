@@ -1,5 +1,4 @@
 #pragma once
-
 #include <stdint.h>
 
 void SetupGlobals(int fst_expand);

@@ -1,4 +1,5 @@
-#include "os.h"
+#include "OS.hpp"
+#include <System/Types.hpp>
 
 #ifdef TARGET_IOS
 

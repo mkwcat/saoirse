@@ -1,4 +1,4 @@
-#include "UIManager.h"
+#include "UIManager.hpp"
 #include <ogc/video.h>
 
 void UIManager::calc()

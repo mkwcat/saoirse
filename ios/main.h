@@ -1,11 +1,8 @@
 #pragma once
-
-#include <types.h>
-#include <util.h>
+#include <System/Types.hpp>
+#include <System/Util.hpp>
 
 EXTERN_C_START
-
-enum class LogL { INFO, WARN, ERROR };
 
 #define YUV_RED ((84 << 24) | (255 << 16) | (76 << 8))
 #define YUV_DARK_RED ((106 << 24) | (192 << 16) | (38 << 8))
@@ -34,12 +31,6 @@ enum class LogL { INFO, WARN, ERROR };
 #define YUV_10 YUV_DARK_YELLOW
 #define YUV_11 YUV_WHITE
 #define YUV_12 YUV_GRAY
-
-namespace peli
-{
-void Log(LogL level, const char* format, ...);
-void NotifyResourceStarted();
-}
 
 void exitClr(u32 color);
 void __assert_fail(const char* expr, const char* file, s32 line);

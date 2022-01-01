@@ -1,11 +1,11 @@
 #pragma once
+#include <DVD/EmuDI.hpp>
+#include <System/ES.hpp>
+#include <System/OS.hpp>
+#include <System/Util.hpp>
 
-#include <dip.h>
-#include <es.h>
-#include <os.h>
-#include <util.h>
-
-enum class DiIoctl : u8 {
+enum class DiIoctl : u8
+{
     ReadDiskID = 0x70,
     EncryptedRead = 0x71,
 
@@ -20,7 +20,8 @@ enum class DiIoctl : u8 {
     Proxy_StartGame = 0x01
 };
 
-enum class DiErr : s32 {
+enum class DiErr : s32
+{
     FileNotFound = -6,
     LibError = -2,
     NoAccess = -1,
@@ -59,7 +60,10 @@ struct DVDCommand {
 
     void sendIoctl(DiIoctl cmd, void* out, u32 outLen);
     void sendIoctlv(DiIoctl cmd, u32 inputCnt, u32 outputCnt);
-    DiErr syncReply() { return this->reply_queue.receive(); }
+    DiErr syncReply()
+    {
+        return this->reply_queue.receive();
+    }
     DiErr syncReplyAssertRet(DiErr expected);
     void beginIoctlv(u32 inputCnt, u32 outputCnt)
     {
@@ -92,11 +96,19 @@ DVDLow::DVDCommand* GetCommand();
 void ReleaseCommand(DVDLow::DVDCommand*);
 
 struct UniqueCommand {
-    UniqueCommand() : m_cmd(GetCommand()) {}
-    ~UniqueCommand() { ReleaseCommand(m_cmd); }
+    UniqueCommand() : m_cmd(GetCommand())
+    {
+    }
+    ~UniqueCommand()
+    {
+        ReleaseCommand(m_cmd);
+    }
     UniqueCommand(const UniqueCommand& from) = delete;
 
-    DVDLow::DVDCommand* cmd() { return m_cmd; }
+    DVDLow::DVDCommand* cmd()
+    {
+        return m_cmd;
+    }
 
 protected:
     DVDLow::DVDCommand* const m_cmd;
@@ -127,7 +139,7 @@ bool IsInserted();
 namespace DVDProxy
 {
 
-s32 ApplyPatches(DIP::DVDPatch* patches, u32 patchCount);
+s32 ApplyPatches(EmuDI::DVDPatch* patches, u32 patchCount);
 void StartGame();
 
 } // namespace DVDProxy

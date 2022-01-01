@@ -1,5 +1,4 @@
 #pragma once
-
 #ifndef TARGET_IOS
 #   include <gctypes.h>
 #else

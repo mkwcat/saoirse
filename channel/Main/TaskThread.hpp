@@ -1,7 +1,6 @@
 #pragma once
-
-#include <os.h>
-#include <types.h>
+#include <System/OS.hpp>
+#include <System/Types.hpp>
 
 class TaskThread
 {

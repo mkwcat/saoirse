@@ -29,15 +29,14 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "sdcard.h"
-#include <os.h>
+#include "SDCard.hpp"
+#include <System/OS.hpp>
+#include <System/Util.hpp>
 #include <string.h>
 #ifdef TARGET_IOS
 #include <ios.h>
 #include <main.h>
-#include <util.h>
 #else
-#include <gcutil.h>
 #include <ogc/ipc.h>
 #include <unistd.h>
 #endif

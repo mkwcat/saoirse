@@ -1,9 +1,8 @@
-#include "dvd.h"
-#include "hollywood.h"
-#include "irse.h"
+#include "DVD.hpp"
+#include <Debug/Log.hpp>
+#include <System/OS.hpp>
 #include <array>
 #include <cstdio>
-#include <os.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <utility>
@@ -20,7 +19,11 @@ constexpr const char* DVD_CACHE_FILE =
 constexpr std::size_t DVD_CACHE_SIZE = 0xB00000;
 constexpr std::ptrdiff_t DVD_CACHE_DISKID_OFFS = 0x20;
 
-enum EStatus { STATUS_NOTINSERTED = 1, STATUS_INSERTED = 2 };
+enum EStatus
+{
+    STATUS_NOTINSERTED = 1,
+    STATUS_INSERTED = 2
+};
 
 const char* DVDLow::PrintErr(DiErr err)
 {
@@ -51,7 +54,10 @@ DVDLow::DVDCommand* DVD::GetCommand()
     return block;
 }
 
-void DVD::ReleaseCommand(DVDLow::DVDCommand* block) { dataQueue->send(block); }
+void DVD::ReleaseCommand(DVDLow::DVDCommand* block)
+{
+    dataQueue->send(block);
+}
 
 static s32 DVD_Callback(s32 result, void* usrdata)
 {
@@ -75,7 +81,7 @@ void DVD::Init()
     dataQueue = new Queue<DVDLow::DVDCommand*>(8);
     for (s32 i = 0; i < 8; i++)
         dataQueue->send(&sDvdBlocks[i]);
-    irse::Log(LogS::DVD, LogL::WARN, "DVD initialized");
+    PRINT(DVD, WARN, "DVD initialized");
 }
 
 void DVD::Deinit()
@@ -89,12 +95,11 @@ bool DVD::OpenCacheFile()
 {
     IOS::File f(DVD_CACHE_FILE, IOS::Mode::Read);
     if (f.fd() < 0) {
-        irse::Log(LogS::DVD, LogL::ERROR, "Failed to open cache.dat: %d",
-                  f.fd());
+        PRINT(DVD, ERROR, "Failed to open cache.dat: %d", f.fd());
         return false;
     }
     if (f.size() != DVD_CACHE_SIZE) {
-        irse::Log(LogS::DVD, LogL::ERROR, "Invalid cache.dat size");
+        PRINT(DVD, ERROR, "Invalid cache.dat size");
         return false;
     }
 
@@ -109,8 +114,7 @@ DiErr DVD::ResetDrive(bool spinup)
     DVDLow::ResetAsync(*block.cmd(), spinup);
     const DiErr ret = block.cmd()->syncReply();
     if (ret != DiErr::OK)
-        irse::Log(LogS::DVD, LogL::WARN, "Failed to reset drive: %s\n",
-                  DVDLow::PrintErr(ret));
+        PRINT(DVD, WARN, "Failed to reset drive: %s\n", DVDLow::PrintErr(ret));
     return ret;
 }
 
@@ -261,17 +265,16 @@ DiErr DVDLow::DVDCommand::syncReplyAssertRet(DiErr expected)
     const DiErr ret = this->syncReply();
 
     if (ret != expected) {
-        irse::Log(LogS::DVD, LogL::ERROR,
-                  "SyncReplyAssertRet: ret == %s, expected %s",
-                  DVDLow::PrintErr(ret), DVDLow::PrintErr(expected));
+        PRINT(DVD, ERROR, "SyncReplyAssertRet: ret == %s, expected %s",
+              DVDLow::PrintErr(ret), DVDLow::PrintErr(expected));
         abort();
     }
 
     return ret;
 }
 
-s32 DVDProxy::ApplyPatches(DIP::DVDPatch* patches, u32 patchCount)
+s32 DVDProxy::ApplyPatches(EmuDI::DVDPatch* patches, u32 patchCount)
 {
     return di.ioctl(DiIoctl::Proxy_PatchDVD, patches,
-                    patchCount * sizeof(DIP::DVDPatch), nullptr, 0);
+                    patchCount * sizeof(EmuDI::DVDPatch), nullptr, 0);
 }

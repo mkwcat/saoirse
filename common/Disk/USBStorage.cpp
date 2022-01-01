@@ -30,12 +30,12 @@ distribution.
 
 -------------------------------------------------------------*/
 
-#include "usbstorage.h"
-#include "usb.h"
+#include "USBStorage.hpp"
+#include "USB.hpp"
+#include <System/OS.hpp>
+#include <System/Types.hpp>
+#include <System/Util.hpp>
 #include <cstring>
-#include <os.h>
-#include <types.h>
-#include <util.h>
 
 #ifdef TARGET_IOS
 #include <main.h>
