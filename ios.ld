@@ -10,10 +10,8 @@ PHDRS {
 }
 
 MEMORY {
-	exe(rx) 	: ORIGIN = 0x13750000, LENGTH = 0x20000
-	ram(rw) 	: ORIGIN = 0x13750000 + 0x20000, LENGTH = 0x20000
+	ram(rwx) 	: ORIGIN = 0x13620000, LENGTH = 0x80000
 	kernel(rx)	: ORIGIN = 0x7FEF0000, LENGTH = 0x10000
-	kernel_phys(rx)	: ORIGIN = 0x13750000 + 0x20000 + 0x20000, LENGTH = 0x10000
 }
 
 SECTIONS
@@ -25,9 +23,9 @@ SECTIONS
 	.text : {
     	*(.text*)
 		*(.syscall*)
-	} > exe : text = 0
+	} > ram : text = 0
 
-	.data : ALIGN(32) {
+	.data : ALIGN(0x1000) {
 		*(.data*)
 	} > ram : data = 0
 	.rodata : ALIGN(32) {
@@ -36,18 +34,17 @@ SECTIONS
 		_init_array_start = .;
 		KEEP(*(.init_array))
 		_init_array_end = .;
-	} > ram
+	} > ram : data = 0
 	.bss : ALIGN(32) {
 		__bss_start = .;
 		*(.bss*)
 		*(.sbss*)
 		__bss_end = .;
-	} > ram
+	} > ram : data = 0
 	
-	. = ALIGN(0x4000);
-	.kernel : ALIGN(32) {
+	.kernel : ALIGN(0x1000) {
 		*(.kernel*)
-	} > kernel AT > kernel_phys : kernel = 0
+	} > kernel AT > ram : kernel = 0
 	
 	/DISCARD/ :
 	{
