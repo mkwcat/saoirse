@@ -7,7 +7,7 @@ IPCLog* IPCLog::sInstance;
 
 IPCLog::IPCLog() : m_ipcQueue(8), m_responseQueue(1), m_startRequestQueue(1)
 {
-    s32 ret = IOS_RegisterResourceManager("/dev/stdout", m_ipcQueue.id());
+    s32 ret = IOS_RegisterResourceManager("/dev/saoirse", m_ipcQueue.id());
     if (ret < 0)
         exitClr(YUV_WHITE);
 }

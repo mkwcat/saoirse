@@ -38,7 +38,7 @@ protected:
     static s32 threadEntry(void* userdata);
 
     bool reset = false;
-    IOS::ResourceCtrl<Log::IPCLogIoctl> logRM{"/dev/stdout"};
+    IOS::ResourceCtrl<Log::IPCLogIoctl> logRM{"/dev/saoirse"};
     char logBuffer[256] ATTRIBUTE_ALIGN(32);
 
     int m_eventCount = 0;

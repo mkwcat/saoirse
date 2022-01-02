@@ -134,7 +134,7 @@ IOSBoot::IPCLog* IOSBoot::IPCLog::sInstance;
 bool IOSBoot::IPCLog::handleEvent(s32 result)
 {
     if (result < 0) {
-        PRINT(Core, ERROR, "/dev/stdout error: %d", result);
+        PRINT(Core, ERROR, "/dev/saoirse error: %d", result);
         return false;
     }
 
@@ -177,20 +177,21 @@ s32 IOSBoot::IPCLog::threadEntry(void* userdata)
 
 IOSBoot::IPCLog::IPCLog()
 {
-    if (this->logRM.fd() == static_cast<s32>(IOSError::NotFound)) {
-        /* Unfortunately there isn't really a way to detect the moment the log
-         * resource manager is created, so we just have to keep trying until it
-         * succeeds. */
+    if (this->logRM.fd() == IOSError::NotFound) {
+        // Unfortunately there isn't really a way to detect the moment the log
+        // resource manager is created, so we just have to keep trying until it
+        // succeeds.
         for (s32 i = 0; i < 1000; i++) {
             usleep(1000);
-            new (&this->logRM) IOS::ResourceCtrl<s32>("/dev/stdout");
-            if (this->logRM.fd() != static_cast<s32>(IOSError::NotFound))
+            new (&this->logRM) IOS::ResourceCtrl<s32>("/dev/saoirse");
+            if (this->logRM.fd() != IOSError::NotFound)
                 break;
         }
     }
     if (this->logRM.fd() < 0) {
-        PRINT(Core, ERROR, "/dev/stdout open error: %d", this->logRM.fd());
-        return;
+        PRINT(Core, ERROR, "/dev/saoirse open error: %d", this->logRM.fd());
+        // [TODO] Maybe this could be handled better?
+        abort();
     }
 
     new (&m_thread)
