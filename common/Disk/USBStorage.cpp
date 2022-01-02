@@ -99,7 +99,7 @@ s32 USBStorage::__send_cbw(u8 lun, u32 len, u8 flags, const u8* cb, u8 cbLen)
     s32 retval = USBStorage::Error_OK;
 
     if (cbLen == 0 || cbLen > 16)
-        return IOSErr::Invalid;
+        return IOSError::Invalid;
 
     write32(((u32)cbw_buffer), bswap32(CBW_SIGNATURE));
     write32(((u32)cbw_buffer) + 4, bswap32(++__tag));

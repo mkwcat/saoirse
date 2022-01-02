@@ -1085,7 +1085,7 @@ static s32 ForwardRequest(IOS::Request* req)
 
 static s32 IPCRequest(IOS::Request* req)
 {
-    s32 ret = IOSErr::Invalid;
+    s32 ret = IOSError::Invalid;
 
     const s32 fd = req->fd;
     if (req->cmd != IOS::Command::Open && fd >= 100 && fd < 200)
@@ -1094,7 +1094,7 @@ static s32 IPCRequest(IOS::Request* req)
     switch (req->cmd) {
     case IOS::Command::Open: {
         if (req->open.path[0] != '$') {
-            ret = IOSErr::NotFound;
+            ret = IOSError::NotFound;
             break;
         }
         char path[64];
@@ -1120,8 +1120,8 @@ static s32 IPCRequest(IOS::Request* req)
                 break;
             }
 
-            /* Return IOSErr::NotFound to skip the request */
-            ret = IOSErr::NotFound;
+            /* Return IOSError::NotFound to skip the request */
+            ret = IOSError::NotFound;
             break;
         }
 
@@ -1195,7 +1195,7 @@ extern "C" s32 FS_StartRM([[maybe_unused]] void* arg)
 
     Queue<IOS::Request*> queue(8);
     const s32 ret = IOS_RegisterResourceManager("$", queue.id());
-    if (ret != IOSErr::OK) {
+    if (ret != IOSError::OK) {
         PRINT(IOS_EmuFS, ERROR,
               "FS_StartRM: IOS_RegisterResourceManager failed: %d", ret);
         abort();

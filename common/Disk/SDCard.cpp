@@ -245,7 +245,7 @@ static s32 __sdio_gethcr(u8 reg, u8 size, u32* val)
     u32 hcr_query[6] ATTRIBUTE_ALIGN(32);
 
     if (val == NULL)
-        return IOSErr::OK;
+        return IOSError::OK;
 
     hcr_value = 0;
     *val = 0;

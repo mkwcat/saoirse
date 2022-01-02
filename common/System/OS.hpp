@@ -23,7 +23,7 @@ LIBOGC_SUCKS_END
 #define MEM1_BASE ((void*)0x80000000)
 #endif
 
-namespace IOSErr
+namespace IOSError
 {
 enum
 {
@@ -32,7 +32,7 @@ enum
     Invalid = -4,
     NotFound = -6
 };
-} // namespace IOSErr
+} // namespace IOSError
 
 namespace ISFSError
 {
@@ -73,21 +73,21 @@ public:
     ~IOS_Queue()
     {
         const s32 ret = IOS_DestroyMessageQueue(this->m_queue);
-        ASSERT(ret == IOSErr::OK);
+        ASSERT(ret == IOSError::OK);
         delete[] this->m_base;
     }
 
     void send(T msg, u32 flags = 0)
     {
         const s32 ret = IOS_SendMessage(this->m_queue, (u32)(msg), flags);
-        ASSERT(ret == IOSErr::OK);
+        ASSERT(ret == IOSError::OK);
     }
 
     T receive(u32 flags = 0)
     {
         T msg;
         const s32 ret = IOS_ReceiveMessage(this->m_queue, (u32*)(&msg), flags);
-        ASSERT(ret == IOSErr::OK);
+        ASSERT(ret == IOSError::OK);
         return reinterpret_cast<T>(msg);
     }
 
@@ -792,7 +792,7 @@ public:
     {
         Stat stat;
         const s32 ret = this->stats(&stat);
-        ASSERT(ret == IOSErr::OK);
+        ASSERT(ret == IOSError::OK);
         return stat.pos;
     }
 
@@ -800,7 +800,7 @@ public:
     {
         Stat stat;
         const s32 ret = this->stats(&stat);
-        ASSERT(ret == IOSErr::OK);
+        ASSERT(ret == IOSError::OK);
         return stat.size;
     }
 

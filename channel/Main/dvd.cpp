@@ -237,7 +237,7 @@ void DVDLow::DVDCommand::sendIoctl(DiIoctl cmd, void* out, u32 outLen)
         di.ioctlAsync(cmd, this->input_buf, sizeof(this->input_buf), out,
                       outLen, &DVD_Callback, reinterpret_cast<void*>(this));
 
-    if (ret != IOSErr::OK)
+    if (ret != IOSError::OK)
         this->reply_queue.send(static_cast<DiErr>(ret));
 }
 
@@ -256,7 +256,7 @@ void DVDLow::DVDCommand::sendIoctlv(DiIoctl cmd, u32 inputCnt, u32 outputCnt)
         di.ioctlvAsync(cmd, inputCnt, outputCnt, this->vec, &DVD_Callback,
                        reinterpret_cast<void*>(this));
 
-    if (ret != IOSErr::OK)
+    if (ret != IOSError::OK)
         this->reply_queue.send(static_cast<DiErr>(ret));
 }
 

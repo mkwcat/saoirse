@@ -29,7 +29,7 @@ void IPCLog::handleRequest(IOS::Request* req)
 {
     switch (req->cmd) {
     case IOS::Command::Open:
-        req->reply(IOSErr::OK);
+        req->reply(IOSError::OK);
         break;
 
     case IOS::Command::Close:
@@ -38,7 +38,7 @@ void IPCLog::handleRequest(IOS::Request* req)
         // better with a mutex maybe?
         usleep(10000);
         m_responseQueue.receive()->reply(2);
-        req->reply(IOSErr::OK);
+        req->reply(IOSError::OK);
         break;
 
     case IOS::Command::Ioctl:
@@ -46,7 +46,7 @@ void IPCLog::handleRequest(IOS::Request* req)
         case Log::IPCLogIoctl::RegisterPrintHook:
             // Read from console
             if (req->ioctl.io_len != printSize) {
-                req->reply(IOSErr::Invalid);
+                req->reply(IOSError::Invalid);
                 break;
             }
 
@@ -57,17 +57,17 @@ void IPCLog::handleRequest(IOS::Request* req)
         case Log::IPCLogIoctl::StartGameEvent:
             // Start game IOS command
             m_startRequestQueue.send(0);
-            req->reply(IOSErr::OK);
+            req->reply(IOSError::OK);
             break;
 
         default:
-            req->reply(IOSErr::Invalid);
+            req->reply(IOSError::Invalid);
             break;
         }
         break;
 
     default:
-        req->reply(IOSErr::Invalid);
+        req->reply(IOSError::Invalid);
         break;
     }
 }

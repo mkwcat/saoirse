@@ -12,11 +12,11 @@ s32 USB::ctrlMsg(s32 devId, u8 requestType, u8 request, u16 value, u16 index,
                  u16 length, void* data)
 {
     if (!aligned(data, 32))
-        return IOSErr::Invalid;
+        return IOSError::Invalid;
     if (length && !data)
-        return IOSErr::Invalid;
+        return IOSError::Invalid;
     if (!length && data)
-        return IOSErr::Invalid;
+        return IOSError::Invalid;
 
     Input msg ATTRIBUTE_ALIGN(32) = {
         .fd = devId,
@@ -53,11 +53,11 @@ s32 USB::intrBulkMsg(s32 devId, USBv5Ioctl ioctl, u8 endpoint, u16 length,
                      void* data)
 {
     if (!aligned(data, 32))
-        return IOSErr::Invalid;
+        return IOSError::Invalid;
     if (length && !data)
-        return IOSErr::Invalid;
+        return IOSError::Invalid;
     if (!length && data)
-        return IOSErr::Invalid;
+        return IOSError::Invalid;
 
     Input msg ATTRIBUTE_ALIGN(32) = {
         .fd = devId,
@@ -70,7 +70,7 @@ s32 USB::intrBulkMsg(s32 devId, USBv5Ioctl ioctl, u8 endpoint, u16 length,
     } else if (ioctl == USBv5Ioctl::BulkTransfer) {
         msg.intr = {data = data, length = length, endpoint = endpoint};
     } else {
-        return IOSErr::Invalid;
+        return IOSError::Invalid;
     }
 
     if (endpoint & DirEndpointIn) {

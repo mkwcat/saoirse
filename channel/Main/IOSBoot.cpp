@@ -177,14 +177,14 @@ s32 IOSBoot::IPCLog::threadEntry(void* userdata)
 
 IOSBoot::IPCLog::IPCLog()
 {
-    if (this->logRM.fd() == static_cast<s32>(IOSErr::NotFound)) {
+    if (this->logRM.fd() == static_cast<s32>(IOSError::NotFound)) {
         /* Unfortunately there isn't really a way to detect the moment the log
          * resource manager is created, so we just have to keep trying until it
          * succeeds. */
         for (s32 i = 0; i < 1000; i++) {
             usleep(1000);
             new (&this->logRM) IOS::ResourceCtrl<s32>("/dev/stdout");
-            if (this->logRM.fd() != static_cast<s32>(IOSErr::NotFound))
+            if (this->logRM.fd() != static_cast<s32>(IOSError::NotFound))
                 break;
         }
     }
