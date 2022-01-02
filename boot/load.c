@@ -108,7 +108,7 @@ __attribute__((noreturn)) void load()
         if (dol->dol_sect_size[i] != 0) {
             copyWords((u32*)dol->dol_sect_addr[i],
                       (u32*)(DECODE_ADDR + dol->dol_sect[i]),
-                      dol->dol_sect_size[i] / 4);
+                      (dol->dol_sect_size[i] / 4) / 8);
         }
     }
 
