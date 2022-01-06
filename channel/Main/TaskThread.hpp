@@ -65,7 +65,7 @@ private:
     }
 
     Thread m_thread;
-    bool m_cancelTask;
-    bool m_running;
-    Queue<int>* m_onDestroyQueue;
+    bool m_cancelTask = false;
+    bool m_running = false;
+    Queue<int>* m_onDestroyQueue = nullptr;
 };

@@ -1,5 +1,5 @@
 #pragma once
-#include "AppInfo.hpp"
+#include "ApploaderInfo.hpp"
 #include <assert.h>
 #include <optional>
 

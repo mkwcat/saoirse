@@ -1,6 +1,6 @@
 #include "AppPayload.hpp"
+#include <DVD/DI.hpp>
 #include <Debug/Log.hpp>
-#include <Main/DVD.hpp>
 #include <System/Types.hpp>
 #include <stdio.h>
 #include <stdlib.h>
@@ -45,13 +45,10 @@ ReadApploaderFromDisc(const ApploaderInfo& info)
 
     void* payload_addr = reinterpret_cast<void*>(0x81200000);
 
-    DVD::UniqueCommand cmd;
-    assert(cmd.cmd() != nullptr);
-    DVDLow::EncryptedReadAsync(*cmd.cmd(), payload_addr,
-                               round_up(info.payload_size, 32), 0x2460 / 4);
-    const auto result = cmd.cmd()->syncReply();
+    const auto result = DI::sInstance->Read(
+        payload_addr, round_up(info.payload_size, 32), 0x2460 / 4);
 
-    if (result != DiErr::OK) {
+    if (result != DI::DIError::OK) {
         PRINT(Loader, ERROR, "Failed to read info block");
         abort();
     }

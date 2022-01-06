@@ -2,8 +2,8 @@
 #include "AppPayload.hpp"
 #include "GlobalsConfig.hpp"
 #include "IOSBoot.hpp"
+#include <DVD/DI.hpp>
 #include <Debug/Log.hpp>
-#include <Main/DVD.hpp>
 #include <System/Util.hpp>
 #include <algorithm>
 #include <array>
@@ -39,52 +39,26 @@ static void DebugPause()
 }
 #endif
 
-enum class CachePolicy
+static void UnencryptedRead(void* dst, u32 len, u32 ofs)
 {
-    None,
-    InvalidateDC,
-    FlushDC
-};
+    const auto result = DI::sInstance->UnencryptedRead(dst, len, ofs);
 
-static void EnforceCachePolicy(void* dst, u32 len, CachePolicy policy)
-{
-    if (policy == CachePolicy::InvalidateDC) {
-        DCInvalidateRange(dst, len);
-    }
-    if (policy == CachePolicy::FlushDC) {
-        DCFlushRange(dst, len);
+    if (result != DI::DIError::OK) {
+        PRINT(Loader, ERROR, "Failed to execute unencrypted read: %s",
+              DI::PrintError(result));
+        return;
     }
 }
 
-static void UnencryptedRead(void* dst, u32 len, u32 ofs, CachePolicy invalidate)
+static void EncryptedRead(void* dst, u32 len, u32 ofs)
 {
-    DVD::UniqueCommand cmd;
-    assert(cmd.cmd() != nullptr);
-    DVDLow::UnencryptedReadAsync(*cmd.cmd(), dst, len, ofs);
-    const auto result = cmd.cmd()->syncReply();
+    const auto result = DI::sInstance->Read(dst, len, ofs);
 
-    if (result != DiErr::OK) {
-        PRINT(Loader, ERROR, "Failed to execute read: %s",
-              DVDLow::PrintErr(result));
+    if (result != DI::DIError::OK) {
+        PRINT(Loader, ERROR, "Failed to execute encrypted read: %s",
+              DI::PrintError(result));
         return;
     }
-
-    EnforceCachePolicy(dst, len, invalidate);
-}
-
-static void EncryptedRead(void* dst, u32 len, u32 ofs, CachePolicy invalidate)
-{
-    DVD::UniqueCommand cmd;
-    assert(cmd.cmd() != nullptr);
-    DVDLow::EncryptedReadAsync(*cmd.cmd(), dst, len, ofs);
-    const auto result = cmd.cmd()->syncReply();
-
-    if (result != DiErr::OK) {
-        PRINT(Loader, ERROR, "Failed to execute encrypted read");
-        return;
-    }
-
-    EnforceCachePolicy(dst, len, invalidate);
 }
 
 class PayloadManager
@@ -109,7 +83,7 @@ public:
                 breakThread->taskBreak();
 
             EncryptedRead(copy_cmd->dest, copy_cmd->length,
-                          round_down(copy_cmd->offset, 4), CachePolicy::None);
+                          round_down(copy_cmd->offset, 4));
         }
     }
 
@@ -191,7 +165,7 @@ ApploaderInfo Apploader::readAppInfo()
     static ApploaderInfo app_info ATTRIBUTE_ALIGN(32);
 
     PRINT(Loader, INFO, "Reading apploader info..");
-    EncryptedRead(&app_info, sizeof(app_info), 0x2440 / 4, CachePolicy::None);
+    EncryptedRead(&app_info, sizeof(app_info), 0x2440 / 4);
     DebugPause();
     return app_info;
 }
@@ -199,14 +173,11 @@ ApploaderInfo Apploader::readAppInfo()
 void Apploader::openPartition(const Partition& partition,
                               ES::TMDFixed<512>* outMeta)
 {
-    DVD::UniqueCommand cmd;
-    assert(cmd.cmd() != nullptr);
-    DVDLow::OpenPartitionAsync(*cmd.cmd(), partition.offset, outMeta);
-    const auto result = cmd.cmd()->syncReply();
+    const auto result = DI::sInstance->OpenPartition(partition.offset, outMeta);
 
-    if (result != DiErr::OK) {
+    if (result != DI::DIError::OK) {
         PRINT(Loader, ERROR, "Failed to open partition: %s",
-              DVDLow::PrintErr(result));
+              DI::PrintError(result));
         taskAbort();
     }
 }
@@ -248,7 +219,7 @@ std::array<Partition, 4> Apploader::readPartitions(const Volume& volume)
     memset(&partitions, 'F', sizeof(partitions));
 
     UnencryptedRead(partitions.data(), sizeof(partitions),
-                    volume.ofs_partition_info, CachePolicy::None);
+                    volume.ofs_partition_info);
 
     return partitions;
 }
@@ -259,8 +230,7 @@ std::array<Volume, 4> Apploader::readVolumes()
     PRINT(Loader, INFO, "Reading table of contents..");
 
     memset(&volumes, 0, sizeof(volumes));
-    UnencryptedRead(volumes.data(), sizeof(volumes), 0x00010000,
-                    CachePolicy::None);
+    UnencryptedRead(volumes.data(), sizeof(volumes), 0x00010000);
     for (auto& v : volumes) {
         PRINT(Loader, INFO, "| Volume %u %u", v.num_boot_info,
               v.ofs_partition_info);

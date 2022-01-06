@@ -1,10 +1,10 @@
 #include "Arch.hpp"
-#include "DVD.hpp"
 #include "GlobalsConfig.hpp"
 #include "IODeviceManager.hpp"
 #include "IOSBoot.hpp"
 #include "UIManager.hpp"
 #include <Apploader/Apploader.hpp>
+#include <DVD/DI.hpp>
 #include <Debug/Log.hpp>
 #include <Disk/SDCard.hpp>
 #include <System/Util.hpp>
@@ -24,22 +24,23 @@ static struct {
 static inline bool startupDrive()
 {
     // If ReadDiskID succeeds here, that means the drive is already started
-    DiErr ret = DVD::ReadDiskID(reinterpret_cast<DVD::DiskID*>(MEM1_BASE));
-    if (ret == DiErr::OK) {
+    DI::DIError ret =
+        DI::sInstance->ReadDiskID(reinterpret_cast<DI::DiskID*>(MEM1_BASE));
+    if (ret == DI::DIError::OK) {
         PRINT(Core, INFO, "Drive is already spinning");
         return true;
     }
-    if (ret != DiErr::DriveError)
+    if (ret != DI::DIError::Drive)
         return false;
 
     // Drive is not spinning
     PRINT(Core, INFO, "Spinning up drive...");
-    ret = DVD::ResetDrive(true);
-    if (ret != DiErr::OK)
+    ret = DI::sInstance->Reset(true);
+    if (ret != DI::DIError::OK)
         return false;
 
-    ret = DVD::ReadDiskID(reinterpret_cast<DVD::DiskID*>(MEM1_BASE));
-    return ret == DiErr::OK;
+    ret = DI::sInstance->ReadDiskID(reinterpret_cast<DI::DiskID*>(MEM1_BASE));
+    return ret == DI::DIError::OK;
 }
 
 s32 main([[maybe_unused]] s32 argc, [[maybe_unused]] char** argv)
@@ -76,7 +77,7 @@ s32 main([[maybe_unused]] s32 argc, [[maybe_unused]] char** argv)
     new Thread(IODeviceManager::threadEntry, nullptr, nullptr, 0x8000, 80);
 
     // TODO move this to like a page based UI system or something
-    DVD::Init();
+    DI::sInstance = new DI;
     if (!startupDrive()) {
         abort();
     }
@@ -94,7 +95,7 @@ s32 main([[maybe_unused]] s32 argc, [[maybe_unused]] char** argv)
     }
 
     SDCard::Shutdown();
-    DVD::Deinit();
+    delete DI::sInstance;
 
     PRINT(Core, INFO, "Send start game IOS request!");
     IOSBoot::IPCLog::sInstance->startGameIOS();
