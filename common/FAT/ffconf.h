@@ -113,7 +113,7 @@
 */
 
 
-#define FF_USE_LFN		1
+#define FF_USE_LFN		3
 #define FF_MAX_LFN		255
 /* The FF_USE_LFN switches the support for LFN (long file name).
 /
@@ -263,7 +263,7 @@
 */
 
 
-#define FF_FS_LOCK		0
+#define FF_FS_LOCK		1
 /* The option FF_FS_LOCK switches file lock function to control duplicated file open
 /  and illegal operation to open objects. This option must be 0 when FF_FS_READONLY
 /  is 1.
@@ -275,10 +275,9 @@
 /      lock control is independent of re-entrancy. */
 
 
-/* #include <somertos.h>	// O/S definitions */
-#define FF_FS_REENTRANT	0
+#define FF_FS_REENTRANT	1
 #define FF_FS_TIMEOUT	1000
-#define FF_SYNC_t		HANDLE
+#define FF_SYNC_t		void*
 /* The option FF_FS_REENTRANT switches the re-entrancy (thread safe) of the FatFs
 /  module itself. Note that regardless of this option, file access to different
 /  volume is always re-entrant and volume control functions, f_mount(), f_mkfs()

@@ -2,6 +2,8 @@
 #include <Debug/Log.hpp>
 #include <Disk/SDCard.hpp>
 #include <FAT/diskio.h>
+#include <FAT/ff.h>
+#include <System/OS.hpp>
 
 constexpr BYTE DRV_SDCARD = 0;
 
@@ -96,6 +98,54 @@ DWORD get_fattime()
 {
     return 0;
 }
+
+#if FF_USE_LFN == 3
+
+void* ff_memalloc(UINT msize)
+{
+    return new u8[msize];
+}
+
+void ff_memfree(void* mblock)
+{
+    u8* data = reinterpret_cast<u8*>(mblock);
+    delete data;
+}
+
+#endif
+
+#if FF_FS_REENTRANT
+
+int ff_cre_syncobj([[maybe_unused]] BYTE vol, FF_SYNC_t* sobj)
+{
+    Mutex* mutex = new Mutex;
+    *sobj = reinterpret_cast<FF_SYNC_t>(mutex);
+    return 1;
+}
+
+// Lock sync object
+int ff_req_grant(FF_SYNC_t sobj)
+{
+    Mutex* mutex = reinterpret_cast<Mutex*>(sobj);
+    mutex->lock();
+    return 1;
+}
+
+void ff_rel_grant(FF_SYNC_t sobj)
+{
+    Mutex* mutex = reinterpret_cast<Mutex*>(sobj);
+    mutex->unlock();
+}
+
+// Delete a sync object
+int ff_del_syncobj(FF_SYNC_t sobj)
+{
+    Mutex* mutex = reinterpret_cast<Mutex*>(sobj);
+    delete mutex;
+    return 1;
+}
+
+#endif
 
 FATFS fatfs;
 
