@@ -7,7 +7,7 @@
 #include <DVD/DI.hpp>
 #include <Debug/Log.hpp>
 #include <Disk/SDCard.hpp>
-#include <System/Util.hpp>
+#include <System/Util.h>
 #include <cstring>
 #include <stdio.h>
 #include <unistd.h>

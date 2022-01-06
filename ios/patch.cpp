@@ -1,7 +1,7 @@
 #include "patch.h"
 #include "main.h"
 #include <Debug/Log.hpp>
-#include <System/Util.hpp>
+#include <System/Util.h>
 #include <ios.h>
 #include <string.h>
 

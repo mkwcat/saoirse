@@ -4,7 +4,7 @@
 #include "IOSBoot.hpp"
 #include <DVD/DI.hpp>
 #include <Debug/Log.hpp>
-#include <System/Util.hpp>
+#include <System/Util.h>
 #include <algorithm>
 #include <array>
 #include <chrono>

@@ -31,7 +31,7 @@
 
 #include "SDCard.hpp"
 #include <System/OS.hpp>
-#include <System/Util.hpp>
+#include <System/Util.h>
 #include <string.h>
 #ifdef TARGET_IOS
 #include <ios.h>

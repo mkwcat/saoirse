@@ -1,6 +1,6 @@
 #pragma once
-#include <System/Types.hpp>
-#include <System/Util.hpp>
+#include <System/Types.h>
+#include <System/Util.h>
 #include <string.h>
 // saoirse implementation
 #include <Disk/USBStorage.hpp>

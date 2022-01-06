@@ -1,6 +1,6 @@
 #pragma once
-#include <System/Types.hpp>
-#include <System/Util.hpp>
+#include <System/Types.h>
+#include <System/Util.h>
 #ifdef TARGET_IOS
 #include <ios.h>
 #include <main.h>
@@ -167,22 +167,24 @@ class Mutex
 public:
     Mutex(const Mutex& from) = delete;
 
-    Mutex() : m_queue(1) {
+    Mutex() : m_queue(1)
+    {
         m_queue.send(0);
     }
 
-    void lock() {
+    void lock()
+    {
         m_queue.receive();
     }
 
-    void unlock() {
+    void unlock()
+    {
         m_queue.send(0);
     }
 
 protected:
     Queue<u32> m_queue;
 };
-
 
 #ifdef TARGET_IOS
 

@@ -7,8 +7,8 @@
 #include <FAT/ff.h>
 #include <System/Hollywood.hpp>
 #include <System/OS.hpp>
-#include <System/Types.hpp>
-#include <System/Util.hpp>
+#include <System/Types.h>
+#include <System/Util.h>
 #include <cstdio>
 #include <cstring>
 #include <ios.h>

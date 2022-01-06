@@ -1,12 +1,12 @@
 #pragma once
-#include <System/Types.hpp>
 #include <System/OS.hpp>
+#include <System/Types.h>
 
 class IPCLog
 {
 public:
     static IPCLog* sInstance;
-    
+
     static constexpr int printSize = 256;
 
     IPCLog();

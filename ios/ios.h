@@ -1,7 +1,7 @@
 /* IOS system call definitions */
 #pragma once
-#include <System/Types.hpp>
-#include <System/Util.hpp>
+#include <System/Types.h>
+#include <System/Util.h>
 
 #define IOS_SUCCESS 0
 #define IOS_EACCES -1

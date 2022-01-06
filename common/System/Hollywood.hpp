@@ -1,6 +1,6 @@
 #pragma once
-#include <System/Types.hpp>
-#include <System/Util.hpp>
+#include <System/Types.h>
+#include <System/Util.h>
 
 constexpr u32 HW_BASE = 0x0D000000;
 constexpr u32 HW_BASE_TRUSTED = 0x0D800000;

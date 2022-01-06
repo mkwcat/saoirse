@@ -1,6 +1,6 @@
 #pragma once
-#include <System/Types.hpp>
-#include <System/Util.hpp>
+#include <System/Types.h>
+#include <System/Util.h>
 
 namespace ES
 {

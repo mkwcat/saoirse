@@ -1,6 +1,6 @@
 #include "Log.hpp"
 #include <System/OS.hpp>
-#include <System/Types.hpp>
+#include <System/Types.h>
 #ifdef TARGET_IOS
 #include <IPCLog.hpp>
 #endif

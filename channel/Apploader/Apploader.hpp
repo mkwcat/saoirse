@@ -2,8 +2,8 @@
 #include "ApploaderInfo.hpp"
 #include <Main/TaskThread.hpp>
 #include <System/ES.hpp>
-#include <System/Types.hpp>
-#include <System/Util.hpp>
+#include <System/Types.h>
+#include <System/Util.h>
 #include <array>
 #include <optional>
 #include <span>

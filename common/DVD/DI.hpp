@@ -1,8 +1,8 @@
 #pragma once
 #include <System/ES.hpp>
 #include <System/OS.hpp>
-#include <System/Types.hpp>
-#include <System/Util.hpp>
+#include <System/Types.h>
+#include <System/Util.h>
 
 // Documentation of the drive used here is referenced from
 // - https://wiibrew.org/wiki//dev/di
