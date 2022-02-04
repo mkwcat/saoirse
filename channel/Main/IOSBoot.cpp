@@ -96,14 +96,30 @@ s32 IOSBoot::Entry(u32 entrypoint)
     return sha.ioctlv(0, vec);
 }
 
+void IOSBoot::SafeFlushRange(const void* data, u32 len)
+{
+    // The IPC function flushes the cache here on PPC, and then IOS invalidates
+    // its own cache.
+    // Note: Neither libogc or IOS check for the invalid fd before they do what
+    // we want, but libogc _could_ change. Keep an eye on this.
+    IOS_Write(-1, data, len);
+}
+
 /* Async ELF launch */
 s32 IOSBoot::Launch(const void* data, u32 len)
 {
     new (reinterpret_cast<void*>(VFILE_ADDR)) VFile<VFILE_SIZE>(data, len);
 
-    // FIXME: This might not guarantee proper 4 byte alignment.
-    return Entry(reinterpret_cast<u32>(Arch::getFileStatic("ios_loader.bin")) &
-                 ~0xC0000000);
+    u32 loaderSize;
+    const void* loader = Arch::getFileStatic("ios_loader.bin", &loaderSize);
+
+    // FIXME: This block of memory is never deleted. We need to find a place and
+    // time to free it.
+    u8* loaderMemory = new ((std::align_val_t)32) u8[round_up(loaderSize, 32)];
+    memcpy(loaderMemory, loader, loaderSize);
+    SafeFlushRange(loaderMemory, loaderSize);
+
+    return Entry(reinterpret_cast<u32>(loaderMemory) & ~0xC0000000);
 }
 
 void IOSBoot::LaunchSaoirseIOS()
@@ -116,7 +132,7 @@ void IOSBoot::LaunchSaoirseIOS()
     s32 ret = Launch(elf, elfSize);
     PRINT(Core, INFO, "IOSBoot::Launch result: %d", ret);
 
-    if (ret >= 0) {
+    if (ret == IOSError::OK) {
         IPCLog::sInstance = new IPCLog();
     }
 }
@@ -190,7 +206,8 @@ IOSBoot::IPCLog::IPCLog()
     }
     if (this->logRM.fd() < 0) {
         PRINT(Core, ERROR, "/dev/saoirse open error: %d", this->logRM.fd());
-        // [TODO] Maybe this could be handled better?
+        // [TODO] Maybe this could be handled better? Could reload IOS and try
+        // again.
         abort();
     }
 

@@ -9,6 +9,7 @@ namespace IOSBoot
 
 s32 Entry(u32 entrypoint);
 s32 Launch(const void* data, u32 len);
+void SafeFlushRange(const void* data, u32 len);
 void LaunchSaoirseIOS();
 s32 PatchNewCommonKey();
 

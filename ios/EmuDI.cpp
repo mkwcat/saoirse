@@ -17,8 +17,6 @@ typedef struct {
     u32 args[7];
 } DVDCommand;
 
-#define DI_PROXY_PATH "/dev/do"
-
 static s32 DiMsgQueue = -1;
 static u32 __diMsgData[8];
 static bool DiStarted = false;

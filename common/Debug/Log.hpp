@@ -47,6 +47,8 @@ extern bool fileLogEnabled;
 extern FIL logFile;
 #endif
 
+bool IsEnabled();
+
 void VPrint(LogSource src, const char* srcStr, LogLevel level,
             const char* format, va_list args);
 void Print(LogSource src, const char* srcStr, LogLevel level,

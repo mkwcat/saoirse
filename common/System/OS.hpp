@@ -13,6 +13,7 @@ LIBOGC_SUCKS_BEGIN
 LIBOGC_SUCKS_END
 #include <cassert>
 #endif
+#include <new>
 
 #define DASSERT assert
 #define ASSERT assert
@@ -236,7 +237,7 @@ public:
         m_arg = arg;
 
         if (stack == nullptr) {
-            stack = new u8[stackSize];
+            stack = new((std::align_val_t)32) u8[stackSize];
             m_ownedStack = stack;
         }
         u32* stackTop = reinterpret_cast<u32*>(stack + stackSize);

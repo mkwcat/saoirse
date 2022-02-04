@@ -25,6 +25,15 @@ static Mutex logMutex;
 constexpr u32 logMask = 0xFFFFFFFF;
 constexpr u32 logLevel = 0;
 
+bool Log::IsEnabled()
+{
+#ifdef TARGET_IOS
+    return ipcLogEnabled || fileLogEnabled;
+#else
+    return true;
+#endif
+}
+
 void Log::VPrint(LogSource src, const char* srcStr, LogLevel level,
                  const char* format, va_list args)
 {

@@ -68,6 +68,8 @@ s32 main([[maybe_unused]] s32 argc, [[maybe_unused]] char** argv)
     extern const char data_ar_end[];
     Arch::sInstance = new Arch(data_ar, data_ar_end - data_ar);
 
+    DI::sInstance = new DI;
+
     // Launch Saoirse IOS
     IOSBoot::LaunchSaoirseIOS();
 
@@ -77,7 +79,6 @@ s32 main([[maybe_unused]] s32 argc, [[maybe_unused]] char** argv)
     new Thread(IODeviceManager::threadEntry, nullptr, nullptr, 0x8000, 80);
 
     // TODO move this to like a page based UI system or something
-    DI::sInstance = new DI;
     if (!startupDrive()) {
         abort();
     }

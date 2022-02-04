@@ -15,10 +15,8 @@
 #include <stdarg.h>
 
 u8 mainThreadStack[0x400] ATTRIBUTE_ALIGN(32);
-u8 DI_RMStack[0x800] ATTRIBUTE_ALIGN(32);
-u8 FS_RMStack[0x800] ATTRIBUTE_ALIGN(32);
 
-u8 mainHeapData[0x1000] ATTRIBUTE_ALIGN(32);
+u8 mainHeapData[0x4000] ATTRIBUTE_ALIGN(32);
 s32 mainHeap = -1;
 
 extern "C" s32 DI_StartRM(void* arg);
@@ -104,34 +102,18 @@ s32 mainThreadProc(void* arg)
 
 #if 0
     PRINT(IOS, INFO, "Opening log file");
-    FRESULT fret = f_open(&logFile, "0:/saoirselog.txt", FA_CREATE_ALWAYS | FA_WRITE);
+    FRESULT fret = f_open(&Log::logFile, "0:/saoirse_log.txt",
+                          FA_CREATE_ALWAYS | FA_WRITE);
     if (fret != FR_OK) {
         PRINT(IOS, ERROR, "Failed to open log file! %d", fret);
         abort();
     }
-    logFileEnabled = true;
+    Log::fileLogEnabled = true;
     PRINT(IOS, INFO, "Log file opened");
 #endif
 
-    s32 efsTid = IOS_CreateThread(
-        FS_StartRM, nullptr,
-        reinterpret_cast<u32*>(FS_RMStack + sizeof(FS_RMStack)),
-        sizeof(FS_RMStack), 80, true);
-    if (efsTid < 0)
-        exitClr(YUV_DARK_BLUE);
-    efsTid = IOS_StartThread(efsTid);
-    if (efsTid < 0)
-        exitClr(YUV_DARK_BLUE);
-
-    s32 diTid = IOS_CreateThread(
-        DI_StartRM, nullptr,
-        reinterpret_cast<u32*>(DI_RMStack + sizeof(DI_RMStack)),
-        sizeof(DI_RMStack), 80, true);
-    if (diTid < 0)
-        exitClr(YUV_DARK_RED);
-    diTid = IOS_StartThread(diTid);
-    if (diTid < 0)
-        exitClr(YUV_DARK_RED);
+    new Thread(FS_StartRM, nullptr, nullptr, 0x800, 80);
+    new Thread(DI_StartRM, nullptr, nullptr, 0x800, 80);
 
     return 0;
 }
@@ -166,22 +148,30 @@ static void saoMain()
 
 void* operator new(std::size_t size)
 {
-    return IOS_Alloc(mainHeap, size);
+    void* block = IOS_Alloc(mainHeap, size);
+    assert(block != nullptr);
+    return block;
 }
 
 void* operator new[](std::size_t size)
 {
-    return IOS_Alloc(mainHeap, size);
+    void* block = IOS_Alloc(mainHeap, size);
+    assert(block != nullptr);
+    return block;
 }
 
 void* operator new(std::size_t size, std::align_val_t align)
 {
-    return IOS_AllocAligned(mainHeap, size, static_cast<u32>(align));
+    void* block = IOS_AllocAligned(mainHeap, size, static_cast<u32>(align));
+    assert(block != nullptr);
+    return block;
 }
 
 void* operator new[](std::size_t size, std::align_val_t align)
 {
-    return IOS_AllocAligned(mainHeap, size, static_cast<u32>(align));
+    void* block = IOS_AllocAligned(mainHeap, size, static_cast<u32>(align));
+    assert(block != nullptr);
+    return block;
 }
 
 void operator delete(void* ptr)
