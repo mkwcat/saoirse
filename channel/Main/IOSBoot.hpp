@@ -11,6 +11,7 @@ s32 Entry(u32 entrypoint);
 s32 Launch(const void* data, u32 len);
 void SafeFlushRange(const void* data, u32 len);
 void LaunchSaoirseIOS();
+void DebugLaunchReport();
 s32 PatchNewCommonKey();
 
 class IPCLog
@@ -49,10 +50,8 @@ protected:
     Thread m_thread;
 };
 
-#if 0
 void SetupPrintHook();
 void ReadPrintHook();
 void testIPCRightsPatch();
-#endif
 
 } // namespace IOSBoot

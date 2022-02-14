@@ -1,6 +1,7 @@
 #include "IOSBoot.hpp"
 #include "Arch.hpp"
 #include <Debug/Log.hpp>
+#include <System/Hollywood.hpp>
 #include <new>
 #include <ogc/cache.h>
 #include <stdio.h>
@@ -8,7 +9,7 @@
 #include <unistd.h>
 
 template <class T>
-constexpr T sramMirrToReal(T address)
+constexpr T SRAMMirrToReal(T address)
 {
     return reinterpret_cast<T>(reinterpret_cast<u32>(address) - 0xF2B00000);
 }
@@ -137,6 +138,165 @@ void IOSBoot::LaunchSaoirseIOS()
     }
 }
 
+static bool ValidIOSSPAddr(u32 sp)
+{
+    if ((sp >= 0x10000000 && (sp + 16) < 0x14000000) ||
+        (sp >= 0x0D4E0000 && (sp + 16) < 0x0D500000)) {
+        return true;
+    }
+    return false;
+}
+
+static bool ValidIOSPCAddr(u32 pc)
+{
+    if ((pc >= 0x13400000 && (pc + 16) < 0x14000000) ||
+        (pc >= 0x0D4E0000 && (pc + 16) < 0x0D500000)) {
+        return true;
+    }
+    return false;
+}
+
+static void DebugCodeDump(u32 pc)
+{
+    // If the PC is in SRAM, translate it.
+    if (pc >= 0xFFFE0000 && pc <= 0xFFFFFFFF) {
+        pc = SRAMMirrToReal(pc);
+    }
+
+    // Check if we're executing from an accessible memory address and then dump
+    // 6 words.
+    if (ValidIOSPCAddr(pc)) {
+        for (int i = 0; i < 24; i += 4) {
+            printf("%08X ", read32(pc + i));
+        }
+        printf("\n");
+    }
+}
+
+static void ReportIOSReceiveMessage([[maybe_unused]] u32 sp)
+{
+    // TODO: I need a more complete RAM dump to research this.
+}
+
+static void ReportIOSThread(int id)
+{
+    const u32 threadPtr = SRAMMirrToReal(0xFFFE0000 + 0xB0 * id);
+
+    PRINT(Core, INFO, "--- Thread %d (PID: %d) ---", id,
+          read32(threadPtr + 0x54));
+
+    PRINT(Core, INFO, "CPSR 0x%08X; State 0x%04X; PC 0x%08X; LR 0x%08X",
+          read32(threadPtr + 0x00), read32(threadPtr + 0x50),
+          read32(threadPtr + 0x40), read32(threadPtr + 0x3C));
+
+    // All addresses here should be physical (we don't map anything
+    // different from the physical address).
+    u32 pc = read32(threadPtr + 0x40);
+    u32 lr = read32(threadPtr + 0x3C);
+    u32 sp = read32(threadPtr + 0x38);
+
+    // Convert the values to readable addresses.
+    pc = (pc >= 0xFFFE0000 && pc <= 0xFFFFFFFF) ? SRAMMirrToReal(pc) : pc;
+    lr = (lr >= 0xFFFE0000 && lr <= 0xFFFFFFFF) ? SRAMMirrToReal(lr) : lr;
+    sp = (sp >= 0xFFFE0000 && sp <= 0xFFFFFFFF) ? SRAMMirrToReal(sp) : lr;
+    // Zero address if it is invalid
+    pc = ValidIOSPCAddr(pc) ? pc : 0;
+    lr = ValidIOSPCAddr(lr) ? lr : 0;
+    sp = ValidIOSSPAddr(sp) ? sp : 0;
+    // Align to word
+    pc &= ~3;
+    lr &= ~3;
+    sp &= ~3;
+
+    if (pc != 0) {
+        PRINT(Core, INFO, "PC Dump (-8):");
+        DebugCodeDump(pc - 8);
+    }
+
+    if (lr != 0) {
+        PRINT(Core, INFO, "LR Dump (-8):");
+        DebugCodeDump(lr - 8);
+    }
+
+    // Check for specific contexts and dump more information.
+
+    // Blocked in IOS_ReceiveMessage.
+    if (pc != 0 && read32(pc) == 0x1BFFFF2C && read32(pc + 4) == 0xEAFFFFD7) {
+        if (sp == 0) {
+            PRINT(Core, INFO,
+                  "Cannot give IOS_ReceiveMessage report: Invalid sp!");
+        } else {
+            // Valid sp, let's give report (TODO)
+            PRINT(Core, INFO, "Dumping IOS_ReceiveMessage context: TODO!");
+            ReportIOSReceiveMessage(sp);
+        }
+    }
+}
+
+void IOSBoot::DebugLaunchReport()
+{
+    // Warning: We should not go through IOS because if it's panicked, any IPC
+    // call will never return. Logging and interacting with memory and hardware
+    // will work regardless if whether or not IOS is currently functional.
+
+    // Check VFile status
+    auto vf = (VFile<VFILE_SIZE>*)VFILE_ADDR;
+    PRINT(Core, INFO, "VFile::m_length = 0x%08X", vf->m_length);
+    PRINT(Core, INFO, "VFile::m_pos = 0x%08X", vf->m_pos);
+
+    if (ACRReadFlag(ACRBUSPROTBit::PPCKERN) == false) {
+        PRINT(Core, WARN, "Cannot give detailed launch report: No bus access!");
+        return;
+    }
+
+    // Get access to SRAM. Should already be enabled if we have PPCKERN, but
+    // just to be sure.
+    ACRSetFlag(ACRSRNPROTBit::AHPEN, true);
+    // Disable MEM2 protection.
+    MEMCRWrite(MEMCRReg::MEM_PROT_DDR, 0);
+
+    PRINT(Core, INFO, "Idle thread state 0x%08X; PC 0x%08X; LR 0x%08X",
+          read32(SRAMMirrToReal(0xFFFE0050)),
+          read32(SRAMMirrToReal(0xFFFE0040)),
+          read32(SRAMMirrToReal(0xFFFE003C)));
+
+    // Our process is PID 1 (ES), so to find it we will search and report on
+    // every thread with PID 1. We will skip like the first 20 threads so we
+    // don't trigger on the normal ES process, and I don't actually know what
+    // the total thread count is, so we'll go until 80.
+    int foundcount = 0;
+    for (int i = 20; i < 80; i++) {
+        const u32 threadPtr = SRAMMirrToReal(0xFFFE0000 + 0xB0 * i);
+
+        // Check the CPSR to see if the thread realistically exists.
+        if (read32(threadPtr + 0) == 0) {
+            continue;
+        }
+
+        // Check if PID is ES.
+        if (read32(threadPtr + 0x54) != 1 && read32(threadPtr + 0x54) != 0) {
+            continue;
+        }
+
+        // This is our thread. Report some information on it.
+        foundcount++;
+        ReportIOSThread(i);
+    }
+
+    if (foundcount == 0) {
+        PRINT(Core, INFO, "The process was not started");
+    }
+
+    // Check if the module was successfully copied into memory. It's not
+    // reliable to just check for certain bytes because they could change, so
+    // we'll just print whatever bytes we read.
+    // Also, change this address if we ever move the memory bounds.
+    PRINT(Core, INFO, "Module dump:");
+    DebugCodeDump(0x13620000);
+}
+
+IOSBoot::IPCLog* IOSBoot::IPCLog::sInstance;
+
 void IOSBoot::IPCLog::startGameIOS()
 {
     Queue<u32> eventWaitQueue(1);
@@ -144,8 +304,6 @@ void IOSBoot::IPCLog::startGameIOS()
     logRM.ioctl(Log::IPCLogIoctl::StartGameEvent, nullptr, 0, nullptr, 0);
     eventWaitQueue.receive();
 }
-
-IOSBoot::IPCLog* IOSBoot::IPCLog::sInstance;
 
 bool IOSBoot::IPCLog::handleEvent(s32 result)
 {
@@ -199,9 +357,11 @@ IOSBoot::IPCLog::IPCLog()
         // succeeds.
         for (s32 i = 0; i < 1000; i++) {
             usleep(1000);
+            printf("attempt open\n");
             new (&this->logRM) IOS::ResourceCtrl<s32>("/dev/saoirse");
             if (this->logRM.fd() != IOSError::NotFound)
                 break;
+            printf("fail!\n");
         }
     }
     if (this->logRM.fd() < 0) {
@@ -215,31 +375,28 @@ IOSBoot::IPCLog::IPCLog()
         Thread(threadEntry, reinterpret_cast<void*>(this), nullptr, 0x800, 80);
 }
 
-#if 0
 /* don't judge this code; it's not meant to be seen by eyes */
 
 void IOSBoot::SetupPrintHook()
 {
     static const u8 hook_code[] = {
-        0x4A, 0x04, 0x68, 0x13, 0x18, 0xD0, 0x70, 0x01, 0x21, 0x00, 0x70,
-        0x41, 0x33, 0x01, 0x60, 0x13, 0x47, 0x70, 0x00, 0x00,
-        0x10, 0xC0, 0x00, 0x00 };
-    *(u32*) 0x90C00000 = 4;
-    DCFlushRange((void*) 0x90C00000, 0x10000);
+        0x4A, 0x04, 0x68, 0x13, 0x18, 0xD0, 0x70, 0x01, 0x21, 0x00, 0x70, 0x41,
+        0x33, 0x01, 0x60, 0x13, 0x47, 0x70, 0x00, 0x00, 0x10, 0xC0, 0x00, 0x00};
+    *(u32*)0x90C00000 = 4;
+    DCFlushRange((void*)0x90C00000, 0x10000);
 
-    *(u32*) 0xCD4F744C = ((u32) (&hook_code) & ~0xC0000000) | 1;
+    *(u32*)0xCD4F744C = ((u32)(&hook_code) & ~0xC0000000) | 1;
 }
 
 void IOSBoot::ReadPrintHook()
 {
-    DCInvalidateRange((void*) 0x90C00000, 0x10000);
-    printf("PRINT HOOK RESULT:\n%s", (char*) 0x90C00004);
+    DCInvalidateRange((void*)0x90C00000, 0x10000);
+    printf("PRINT HOOK RESULT:\n%s", (char*)0x90C00004);
 }
 
 void IOSBoot::testIPCRightsPatch()
 {
-    static constexpr u32 ios58BranchSrc = sramMirrToReal(0xFFFF3180);
+    static constexpr u32 ios58BranchSrc = SRAMMirrToReal(0xFFFF3180);
 
     mask32(ios58BranchSrc, 0xFFFF0000, 0xE79C0000);
 }
-#endif
