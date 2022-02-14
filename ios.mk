@@ -11,7 +11,7 @@
 #---------------------------------------------------------------------------------
 TARGET		:=	saoirse_ios
 BUILD		:=	build_ios
-SOURCES		:=	ios $(wildcard common/*)
+SOURCES		:=	$(wildcard ios/*) $(wildcard common/*)
 DATA		:=	data  
 INCLUDES	:=      ios common
 BIN			:=  bin

@@ -34,8 +34,8 @@
 #include <System/Util.h>
 #include <string.h>
 #ifdef TARGET_IOS
-#include <ios.h>
-#include <main.h>
+#include <IOS/Syscalls.h>
+#include <IOS/System.hpp>
 #else
 #include <ogc/ipc.h>
 #include <unistd.h>

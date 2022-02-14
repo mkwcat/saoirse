@@ -1,6 +1,6 @@
 #include "IPCLog.hpp"
-#include "main.h"
 #include <Debug/Log.hpp>
+#include <IOS/System.hpp>
 #include <cstring>
 
 IPCLog* IPCLog::sInstance;
@@ -9,23 +9,23 @@ IPCLog::IPCLog() : m_ipcQueue(8), m_responseQueue(1), m_startRequestQueue(1)
 {
     s32 ret = IOS_RegisterResourceManager("/dev/saoirse", m_ipcQueue.id());
     if (ret < 0)
-        exitClr(YUV_WHITE);
+        AbortColor(YUV_WHITE);
 }
 
-void IPCLog::print(const char* buffer)
+void IPCLog::Print(const char* buffer)
 {
     IOS::Request* req = m_responseQueue.receive();
     memcpy(req->ioctl.io, buffer, printSize);
     req->reply(0);
 }
 
-void IPCLog::notify()
+void IPCLog::Notify()
 {
     IOS::Request* req = m_responseQueue.receive();
     req->reply(1);
 }
 
-void IPCLog::handleRequest(IOS::Request* req)
+void IPCLog::HandleRequest(IOS::Request* req)
 {
     switch (req->cmd) {
     case IOS::Command::Open:
@@ -72,18 +72,18 @@ void IPCLog::handleRequest(IOS::Request* req)
     }
 }
 
-void IPCLog::run()
+void IPCLog::Run()
 {
     while (true) {
         IOS::Request* req = m_ipcQueue.receive();
-        handleRequest(req);
+        HandleRequest(req);
 
         if (req->cmd == IOS::Command::Close)
             break;
     }
 }
 
-void IPCLog::waitForStartRequest()
+void IPCLog::WaitForStartRequest()
 {
     m_startRequestQueue.receive();
 }

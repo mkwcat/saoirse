@@ -1,8 +1,11 @@
-#include "IPCLog.hpp"
+#include "EmuFS.hpp"
 #include <Debug/Log.hpp>
 #include <Disk/Disk.hpp>
 #include <Disk/SDCard.hpp>
 #include <FAT/ff.h>
+#include <IOS/IPCLog.hpp>
+#include <IOS/Syscalls.h>
+#include <IOS/System.hpp>
 #include <System/ISFS.hpp>
 #include <System/OS.hpp>
 #include <System/Types.h>
@@ -10,8 +13,6 @@
 #include <array>
 #include <cstdio>
 #include <cstring>
-#include <ios.h>
-#include <main.h>
 
 namespace EmuFS
 {
@@ -1187,7 +1188,7 @@ static s32 IPCRequest(IOS::Request* req)
     return ret;
 }
 
-extern "C" s32 FS_StartRM([[maybe_unused]] void* arg)
+s32 ThreadEntry([[maybe_unused]] void* arg)
 {
     PRINT(IOS_EmuFS, INFO, "Starting FS...");
 
@@ -1201,7 +1202,7 @@ extern "C" s32 FS_StartRM([[maybe_unused]] void* arg)
         abort();
     }
 
-    IPCLog::sInstance->notify();
+    IPCLog::sInstance->Notify();
     while (true) {
         IOS::Request* req = queue.receive();
         IOS_ResourceReply(reinterpret_cast<IOSRequest*>(req), IPCRequest(req));

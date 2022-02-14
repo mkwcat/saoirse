@@ -2,8 +2,8 @@
 #include <System/Types.h>
 #include <System/Util.h>
 #ifdef TARGET_IOS
-#include <ios.h>
-#include <main.h>
+#include <IOS/Syscalls.h>
+#include <IOS/System.hpp>
 #else
 LIBOGC_SUCKS_BEGIN
 #include <ogc/ipc.h>
@@ -237,7 +237,7 @@ public:
         m_arg = arg;
 
         if (stack == nullptr) {
-            stack = new((std::align_val_t)32) u8[stackSize];
+            stack = new ((std::align_val_t)32) u8[stackSize];
             m_ownedStack = stack;
         }
         u32* stackTop = reinterpret_cast<u32*>(stack + stackSize);
@@ -509,7 +509,7 @@ public:
     }
 
     static s32 ipcToCallbackThread(void* arg);
-    static void makeIpcToCallbackThread();
+    static void MakeIPCToCallbackThread();
 
     static s32 s_toCbQueue;
 

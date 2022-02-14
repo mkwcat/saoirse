@@ -38,7 +38,7 @@ distribution.
 #include <cstring>
 
 #ifdef TARGET_IOS
-#include <main.h>
+#include <IOS/System.hpp>
 #else
 #include <unistd.h>
 #endif

@@ -17,7 +17,7 @@ s32 IOS::Resource::ipcToCallbackThread(void* arg)
     }
 }
 
-void IOS::Resource::makeIpcToCallbackThread()
+void IOS::Resource::MakeIPCToCallbackThread()
 {
     Queue<Request*>* queue = new Queue<Request*>(16);
     s_toCbQueue = queue->id();

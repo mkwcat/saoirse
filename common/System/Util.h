@@ -13,6 +13,9 @@
 #ifndef ATTRIBUTE_SECTION
 #define ATTRIBUTE_SECTION(t) __attribute__((section(#t)))
 #endif
+#ifndef ATTRIBUTE_NOINLINE
+#define ATTRIBUTE_NOINLINE __attribute__((noinline))
+#endif
 
 #ifdef __cplusplus
 #define EXTERN_C_START extern "C" {
@@ -27,6 +30,14 @@
         _Pragma("GCC diagnostic ignored \"-Wpedantic\"")
 
 #define LIBOGC_SUCKS_END _Pragma("GCC diagnostic pop")
+
+#define ASM(...) asm volatile(#__VA_ARGS__)
+
+#define ASM_FUNCTION(_PROTOTYPE, ...)                                          \
+    __attribute__((naked)) _PROTOTYPE                                          \
+    {                                                                          \
+        ASM(__VA_ARGS__);                                                      \
+    }
 
 #ifdef __cplusplus
 template <typename T>
@@ -103,3 +114,9 @@ static inline u32 bswap32(u32 val)
 }
 
 #endif
+
+// libogc doesn't have this for some reason?
+static inline void mask16(u32 address, u16 clear, u16 set)
+{
+    *(vu16*)address = ((*(vu16*)address) & ~clear) | set;
+}

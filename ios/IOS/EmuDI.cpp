@@ -1,12 +1,13 @@
-#include "IPCLog.hpp"
+#include "EmuDI.hpp"
 #include <DVD/EmuDI.hpp>
 #include <Debug/Log.hpp>
 #include <Disk/Disk.hpp>
 #include <FAT/ff.h>
+#include <IOS/IPCLog.hpp>
+#include <IOS/Syscalls.h>
+#include <IOS/System.hpp>
 #include <System/Types.h>
 #include <cstring>
-#include <ios.h>
-#include <main.h>
 
 namespace EmuDI
 {
@@ -280,7 +281,7 @@ void HandleRequest(IOSRequest* req)
     }
 }
 
-extern "C" s32 DI_StartRM(void* arg)
+s32 ThreadEntry([[maybe_unused]] void* arg)
 {
     PRINT(IOS_EmuDI, INFO, "Starting DI...");
 
@@ -302,7 +303,7 @@ extern "C" s32 DI_StartRM(void* arg)
     PRINT(IOS_EmuDI, INFO, "DI started");
 
     DiStarted = true;
-    IPCLog::sInstance->notify();
+    IPCLog::sInstance->Notify();
     while (1) {
         IOSRequest* req;
         ret = IOS_ReceiveMessage(DiMsgQueue, (u32*)&req, 0);

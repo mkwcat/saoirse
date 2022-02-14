@@ -33,15 +33,14 @@ name:; \
 	.space sSize; \
 	.size name, sSize
 
-IOS_STACK(Log_RMStack, 0x400);
+IOS_STACK(EntryStack, 0x400);
 
 IOS_NOTE_START();
-/* Debug Log Process (/dev/stdout) */
 IOS_NOTE(
 	1,
-	Log_StartRM,
+	Entry,
 	127,
 	0x400,
-	Log_RMStack + 0x400
+	EntryStack + 0x400
 );
 IOS_NOTE_END();

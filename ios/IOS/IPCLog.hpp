@@ -11,14 +11,14 @@ public:
 
     IPCLog();
     ~IPCLog();
-    void run();
-    void print(const char* buffer);
-    void notify();
+    void Run();
+    void Print(const char* buffer);
+    void Notify();
 
-    void waitForStartRequest();
+    void WaitForStartRequest();
 
 protected:
-    void handleRequest(IOS::Request* req);
+    void HandleRequest(IOS::Request* req);
 
     Queue<IOS::Request*> m_ipcQueue;
     Queue<IOS::Request*> m_responseQueue;

@@ -2,8 +2,6 @@
 #include <System/Types.h>
 #include <System/Util.h>
 
-EXTERN_C_START
-
 #define YUV_RED ((84 << 24) | (255 << 16) | (76 << 8))
 #define YUV_DARK_RED ((106 << 24) | (192 << 16) | (38 << 8))
 #define YUV_GREEN ((43 << 24) | (21 << 16) | (149 << 8))
@@ -32,13 +30,15 @@ EXTERN_C_START
 #define YUV_11 YUV_WHITE
 #define YUV_12 YUV_GRAY
 
-void exitClr(u32 color);
-void __assert_fail(const char* expr, const char* file, s32 line);
+void AbortColor(u32 color);
+void AssertFail(const char* expr, const char* file, s32 line);
+void KernelWrite(u32 address, u32 value);
+
+EXTERN_C_START
 void abort();
 void usleep(u32 usec);
+EXTERN_C_END
 
 #define assert(expr)                                                           \
-    (((expr) ? (void)0 : __assert_fail(#expr, __FILE__, __LINE__)))
+    (((expr) ? (void)0 : AssertFail(#expr, __FILE__, __LINE__)))
 #define ASSERT assert
-
-EXTERN_C_END

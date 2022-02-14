@@ -2,7 +2,7 @@
 #include <System/OS.hpp>
 #include <System/Types.h>
 #ifdef TARGET_IOS
-#include <IPCLog.hpp>
+#include <IOS/IPCLog.hpp>
 #endif
 #include <array>
 #include <cstring>
@@ -21,7 +21,7 @@ static constexpr std::array<const char*, 3> logColors = {
     "\x1b[33;1m",
     "\x1b[31;1m",
 };
-static Mutex logMutex;
+static Mutex* logMutex;
 constexpr u32 logMask = 0xFFFFFFFF;
 constexpr u32 logLevel = 0;
 
@@ -41,6 +41,9 @@ void Log::VPrint(LogSource src, const char* srcStr, LogLevel level,
     if (!ipcLogEnabled && !fileLogEnabled)
         return;
 #endif
+    if (logMutex == nullptr) {
+        logMutex = new Mutex;
+    }
 
     u32 slvl = static_cast<u32>(level);
     u32 schan = static_cast<u32>(src);
@@ -53,7 +56,7 @@ void Log::VPrint(LogSource src, const char* srcStr, LogLevel level,
             return;
     }
     {
-        std::unique_lock<Mutex> lock(logMutex);
+        std::unique_lock<Mutex> lock(*logMutex);
 
         static std::array<char, 256> logBuffer;
         u32 len = vsnprintf(&logBuffer[0], logBuffer.size(), format, args);
@@ -72,7 +75,7 @@ void Log::VPrint(LogSource src, const char* srcStr, LogLevel level,
                  logColors[slvl], srcStr, logBuffer.data());
 
         if (ipcLogEnabled) {
-            IPCLog::sInstance->print(&printBuffer[0]);
+            IPCLog::sInstance->Print(&printBuffer[0]);
         }
 
         if (fileLogEnabled) {

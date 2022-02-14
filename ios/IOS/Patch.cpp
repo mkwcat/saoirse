@@ -1,11 +1,33 @@
-#include "patch.h"
-#include "main.h"
+#include "Patch.hpp"
 #include <Debug/Log.hpp>
+#include <IOS/Syscalls.h>
+#include <IOS/System.hpp>
+#include <System/Types.h>
 #include <System/Util.h>
-#include <ios.h>
-#include <string.h>
+#include <cstring>
 
-char* iosOpenStrncpy(char* dest, const char* src, u32 num, s32 pid)
+// clang-format off
+ATTRIBUTE_TARGET(arm)
+ATTRIBUTE_NOINLINE
+ASM_FUNCTION(void InvalidateICacheLine(u32 addr),
+    // r0 = addr
+    mcr     p15, 0, r0, c7, c5, 1;
+    bx      lr
+)
+
+ATTRIBUTE_TARGET(thumb)
+ATTRIBUTE_SECTION(".kernel")
+ASM_FUNCTION(static void IOSOpenStrncpyTrampoline(),
+    // Overwrite first parameter
+    str     r0, [sp, #0x14];
+    ldr     r3, =IOSOpenStrncpy;
+    mov     r12, r3;
+    mov     r3, r10; // pid
+    bx      r12;
+)
+// clang-format on
+
+extern "C" char* IOSOpenStrncpy(char* dest, const char* src, u32 num, s32 pid)
 {
     strncpy(dest, src, num);
 
@@ -43,67 +65,94 @@ char* iosOpenStrncpy(char* dest, const char* src, u32 num, s32 pid)
     return dest;
 }
 
-static u32 findSyscallTable()
+constexpr bool ValidJumptablePtr(u32 address)
+{
+    return address >= 0xFFFF0040 && !(address & 3);
+}
+
+constexpr bool ValidKernelCodePtr(u32 address)
+{
+    return address >= 0xFFFF0040 && (address & 2) != 2;
+}
+
+template <class T>
+static inline T* ToUncached(T* address)
+{
+    return reinterpret_cast<T*>(reinterpret_cast<u32>(address) | 0x80000000);
+}
+
+constexpr u16 ThumbBLHi(u32 src, u32 dest)
+{
+    s32 diff = dest - (src + 4);
+    return ((diff >> 12) & 0x7FF) | 0xF000;
+}
+
+constexpr u16 ThumbBLLo(u32 src, u32 dest)
+{
+    s32 diff = dest - (src + 4);
+    return ((diff >> 1) & 0x7FF) | 0xF800;
+}
+
+static inline bool IsPPCRegion(const void* ptr)
+{
+    const u32 address = reinterpret_cast<u32>(ptr);
+    return (address < 0x01800000) ||
+           (address >= 0x10000000 && address < 0x13400000);
+}
+
+static u32 FindSyscallTable()
 {
     u32 undefinedHandler = read32(0xFFFF0024);
     if (read32(0xFFFF0004) != 0xE59FF018 || undefinedHandler < 0xFFFF0040 ||
         undefinedHandler >= 0xFFFFF000 || (undefinedHandler & 3) ||
         read32(undefinedHandler) != 0xE9CD7FFF) {
-        PRINT(IOS, ERROR, "findSyscallTable: Invalid undefined handler");
+        PRINT(IOS, ERROR, "FindSyscallTable: Invalid undefined handler");
         abort();
     }
 
     for (s32 i = 0x300; i < 0x700; i += 4) {
         if (read32(undefinedHandler + i) == 0xE6000010 &&
-            validJumptablePtr(read32(undefinedHandler + i + 4)) &&
-            validJumptablePtr(read32(undefinedHandler + i + 8)))
+            ValidJumptablePtr(read32(undefinedHandler + i + 4)) &&
+            ValidJumptablePtr(read32(undefinedHandler + i + 8)))
             return read32(undefinedHandler + i + 8);
     }
 
     return 0;
 }
 
-ATTRIBUTE_TARGET(arm)
-__attribute__((noinline)) void invalidateICacheLine(u32 addr)
-{
-    asm volatile("\tmcr p15, 0, %0, c7, c5, 1\n" ::"r"(addr));
-}
-
-/* [TODO] Perhaps hardcode patches for specific IOS versions and use the search
- * as a fallback? */
-void patchIOSOpen()
+void PatchIOSOpen()
 {
     PRINT(IOS, WARN, "The search for IOS_Open syscall");
 
-    u32 jumptable = findSyscallTable();
+    u32 jumptable = FindSyscallTable();
     if (jumptable == 0) {
         PRINT(IOS, ERROR, "Could not find syscall table");
         abort();
     }
 
     u32 addr = jumptable + 0x1C * 4;
-    assert(validJumptablePtr(addr));
+    assert(ValidJumptablePtr(addr));
     addr = read32(addr);
-    assert(validKernelCodePtr(addr));
-    addr &= ~1; // remove thumb bit
+    assert(ValidKernelCodePtr(addr));
+    addr &= ~1; // Remove thumb bit
 
-    /* Search backwards */
+    // Search backwards for the bytes to patch
     for (int i = 0; i < 0x180; i += 2) {
         if (read16(addr - i) == 0x1C6A && read16(addr - i - 2) == 0x58D0) {
-            write16(
-                addr - i + 2,
-                thumbBLHi(addr - i + 2, (u32)toUncached(&iosOpenStrncpyHook)));
-            write16(
-                addr - i + 4,
-                thumbBLLo(addr - i + 2, (u32)toUncached(&iosOpenStrncpyHook)));
+            write16(addr - i + 2,
+                    ThumbBLHi(addr - i + 2,
+                              (u32)ToUncached(&IOSOpenStrncpyTrampoline)));
+            write16(addr - i + 4,
+                    ThumbBLLo(addr - i + 2,
+                              (u32)ToUncached(&IOSOpenStrncpyTrampoline)));
 
             PRINT(IOS, WARN, "Patched %08X = %04X%04X", addr - i + 2,
                   read16(addr - i + 2), read16(addr - i + 4));
 
             // IOS automatically aligns flush
             IOS_FlushDCache((void*)(addr - i + 2), 4);
-            invalidateICacheLine(round_down(addr - i + 2, 32));
-            invalidateICacheLine(round_down(addr - i + 2, 32) + 32);
+            InvalidateICacheLine(round_down(addr - i + 2, 32));
+            InvalidateICacheLine(round_down(addr - i + 2, 32) + 32);
             return;
         }
     }
@@ -111,7 +160,7 @@ void patchIOSOpen()
     PRINT(IOS, ERROR, "Could not find IOS_Open instruction to patch");
 }
 
-static bool checkImportKeyFunction(u32 addr)
+static bool CheckImportKeyFunction(u32 addr)
 {
     if (read16(addr) == 0xB5F0 && read16(addr + 0x12) == 0x2600 &&
         read16(addr + 0x14) == 0x281F && read16(addr + 0x16) == 0xD806) {
@@ -120,21 +169,21 @@ static bool checkImportKeyFunction(u32 addr)
     return false;
 }
 
-static u32 findImportKeyFunction()
+static u32 FindImportKeyFunction()
 {
     // Check known addresses
 
-    if (checkImportKeyFunction(0x13A79C58)) {
+    if (CheckImportKeyFunction(0x13A79C58)) {
         return 0x13A79C58 + 1;
     }
 
-    if (checkImportKeyFunction(0x13A79918)) {
+    if (CheckImportKeyFunction(0x13A79918)) {
         return 0x13A79918 + 1;
     }
 
     for (int i = 0; i < 0x1000; i += 2) {
         u32 addr = 0x13A79500 + i;
-        if (checkImportKeyFunction(addr)) {
+        if (CheckImportKeyFunction(addr)) {
             return addr + 1;
         }
     }
@@ -142,14 +191,14 @@ static u32 findImportKeyFunction()
     return 0;
 }
 
-const u8 koreanCommonKey[] = {
+const u8 KoreanCommonKey[] = {
     0x63, 0xb8, 0x2b, 0xb4, 0xf4, 0x61, 0x4e, 0x2e,
     0x13, 0xf2, 0xfe, 0xfb, 0xba, 0x4c, 0x9b, 0x7e,
 };
 
-void importKoreanCommonKey()
+void ImportKoreanCommonKey()
 {
-    u32 func = findImportKeyFunction();
+    u32 func = FindImportKeyFunction();
 
     if (func == 0) {
         PRINT(IOS, ERROR, "Could not find import key function");
@@ -160,5 +209,5 @@ void importKoreanCommonKey()
 
     // Call function by address
     (*(void (*)(int keyIndex, const u8* key, u32 keySize))func)(
-        11, koreanCommonKey, sizeof(koreanCommonKey));
+        11, KoreanCommonKey, sizeof(KoreanCommonKey));
 }
