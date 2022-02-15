@@ -80,7 +80,7 @@ void Log::VPrint(LogSource src, const char* srcStr, LogLevel level,
         if (fileLogEnabled) {
             UINT bw = 0;
             // Subtract 7 twice to remove the color codes on both sides
-            f_write(&logFile, &logBuffer[7], strlen(&logBuffer[7]) - 7, &bw);
+            f_write(&logFile, &logBuffer[0], strlen(&logBuffer[0]), &bw);
             static const char newline = '\n';
             f_write(&logFile, &newline, 1, &bw);
             f_sync(&logFile);

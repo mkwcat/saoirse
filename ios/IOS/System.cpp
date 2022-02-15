@@ -185,10 +185,7 @@ s32 SystemThreadEntry([[maybe_unused]] void* arg)
         PRINT(IOS, INFO, "SD card mounted");
     }
 
-    // TODO: Fix reentrant code so we can enable this
-    if (false) {
-        OpenLogFile();
-    }
+    OpenLogFile();
 
     new Thread(EmuFS::ThreadEntry, nullptr, nullptr, 0x800, 80);
     new Thread(EmuDI::ThreadEntry, nullptr, nullptr, 0x800, 80);
