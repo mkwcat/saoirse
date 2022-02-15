@@ -30,21 +30,29 @@ namespace EmuFS
  *
  * File descriptor: {
  * 0 .. 99: Reserved for proxy/replaced files
- * 100 .. 199: Reserved for real FS files
- * 200: Proxy /dev/fs
+ * 100 .. 199: Reserved for real FS files (not used)
+ * 200 .. 232: Proxy /dev/fs
  * }
  *
  * The manager is blocked from using read, write, seek automatically from the
  * IsFileDescriptorValid check.
  */
 
-constexpr s32 mgrHandle = 200;
+constexpr int REPLACED_HANDLE_BASE = 0;
+constexpr int REPLACED_HANDLE_NUM = NAND_MAX_FILE_DESCRIPTOR_AMOUNT;
+
+constexpr int REAL_HANDLE_BASE = 100;
+constexpr int REAL_HANDLE_MAX = NAND_MAX_FILE_DESCRIPTOR_AMOUNT;
+
+constexpr int MGR_HANDLE_BASE = 200;
+// Not sure the actual limit so we'll allow up to 32 (the actual limit will be
+// enforced by real FS after this check).
+constexpr int MGR_HANDLE_MAX = 32;
 
 #define EFS_DRIVE "0:"
 #define EFS_MAX_REPLACED_FILEPATH_LENGTH                                       \
     (sizeof(EFS_DRIVE) - 1) + NAND_MAX_FILEPATH_LENGTH
 
-IOS::ResourceCtrl<ISFSIoctl> realFsMgr("/dev/fs");
 struct ProxyFile {
     bool inUse;
     bool filOpened;
@@ -54,6 +62,8 @@ struct ProxyFile {
 };
 static std::array<ProxyFile, NAND_MAX_FILE_DESCRIPTOR_AMOUNT>
     spFileDescriptorArray;
+
+static std::array<IOS::ResourceCtrl<ISFSIoctl>, MGR_HANDLE_MAX> realFS;
 
 static s32 FResultToISFSError(FRESULT fret)
 {
@@ -99,6 +109,26 @@ static s32 FResultToISFSError(FRESULT fret)
     default:
         return ISFSError::Unknown;
     }
+}
+
+static bool IsManagerHandle(s32 fd)
+{
+    if (fd >= MGR_HANDLE_BASE && fd < (MGR_HANDLE_BASE + MGR_HANDLE_MAX))
+        return true;
+
+    return false;
+}
+
+static IOS::ResourceCtrl<ISFSIoctl>* GetManagerResource(s32 fd)
+{
+    if (!IsManagerHandle(fd)) {
+        return nullptr;
+    }
+
+    auto resource = &realFS[fd - MGR_HANDLE_BASE];
+    assert(resource->fd() >= 0);
+
+    return resource;
 }
 
 /*---------------------------------------------------------------------------*
@@ -435,8 +465,11 @@ static s32 ReqProxyOpen(const char* filepath, u32 mode)
  */
 static s32 ReqClose(s32 fd)
 {
-    if (fd == mgrHandle)
-        return ISFSError::OK;
+    if (IsManagerHandle(fd)) {
+        s32 ret = GetManagerResource(fd)->close();
+        assert(ret == IOSError::OK);
+        return IOSError::OK;
+    }
 
     if (!IsFileDescriptorValid(fd))
         return ISFSError::Invalid;
@@ -615,11 +648,13 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
         return ISFSError::Invalid;
     }
 
-    /* Manager commands! */
-    if (fd != mgrHandle) {
-        /* ...oh, nevermind :( */
+    // Manager commands!
+    if (!IsManagerHandle(fd)) {
+        // ...oh, nevermind :(
         return ISFSError::Invalid;
     }
+
+    auto mgrRes = GetManagerResource(fd);
 
     // TODO Add ISFS_Shutdown
     switch (cmd) {
@@ -654,8 +689,7 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
 
         // Check if the filepath should be replaced
         if (!IsReplacedFilepath(path))
-            return realFsMgr.ioctl(ISFSIoctl::CreateDir, in, in_len, io,
-                                   io_len);
+            return mgrRes->ioctl(ISFSIoctl::CreateDir, in, in_len, io, io_len);
 
         // Get the replaced filepath
         char efsFilepath[EFS_MAX_REPLACED_FILEPATH_LENGTH];
@@ -699,7 +733,7 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
 
         // Check if the filepath should be replaced
         if (!IsReplacedFilepath(path))
-            return realFsMgr.ioctl(ISFSIoctl::SetAttr, in, in_len, io, io_len);
+            return mgrRes->ioctl(ISFSIoctl::SetAttr, in, in_len, io, io_len);
 
         // Get the replaced filepath
         char efsFilepath[EFS_MAX_REPLACED_FILEPATH_LENGTH];
@@ -746,7 +780,7 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
 
         // Check if the filepath should be replaced
         if (!IsReplacedFilepath(filepath))
-            return realFsMgr.ioctl(ISFSIoctl::GetAttr, in, in_len, io, io_len);
+            return mgrRes->ioctl(ISFSIoctl::GetAttr, in, in_len, io, io_len);
 
         // Get the replaced filepath
         char efsFilepath[EFS_MAX_REPLACED_FILEPATH_LENGTH];
@@ -797,7 +831,7 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
 
         // Check if the filepath should be replaced
         if (!IsReplacedFilepath(filepath))
-            return realFsMgr.ioctl(ISFSIoctl::Delete, in, in_len, io, io_len);
+            return mgrRes->ioctl(ISFSIoctl::Delete, in, in_len, io, io_len);
 
         s32 ret = FindOpenFileDescriptor(filepath);
         if (ret < 0) {
@@ -857,7 +891,7 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
 
         // Neither of the filepaths are replaced
         if (!isOldFilepathReplaced && !isNewFilepathReplaced)
-            return realFsMgr.ioctl(ISFSIoctl::Rename, in, in_len, io, io_len);
+            return mgrRes->ioctl(ISFSIoctl::Rename, in, in_len, io, io_len);
 
         char efsOldFilepath[EFS_MAX_REPLACED_FILEPATH_LENGTH];
         char efsNewFilepath[EFS_MAX_REPLACED_FILEPATH_LENGTH];
@@ -871,8 +905,8 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
             if (ret != ISFSError::OK)
                 return ret;
 
-            ret = realFsMgr.ioctl(ISFSIoctl::Delete, const_cast<char*>(pathOld),
-                                  ISFSMaxPath, nullptr, 0);
+            ret = mgrRes->ioctl(ISFSIoctl::Delete, const_cast<char*>(pathOld),
+                                ISFSMaxPath, nullptr, 0);
             return ret;
         }
 
@@ -928,8 +962,7 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
 
         // Check if the filepath should be replaced
         if (!IsReplacedFilepath(path))
-            return realFsMgr.ioctl(ISFSIoctl::CreateFile, in, in_len, io,
-                                   io_len);
+            return mgrRes->ioctl(ISFSIoctl::CreateFile, in, in_len, io, io_len);
 
         // Get the replaced filepath
         char efsFilepath[EFS_MAX_REPLACED_FILEPATH_LENGTH];
@@ -975,16 +1008,19 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
 static s32 ReqIoctlv(s32 fd, ISFSIoctl cmd, u32 in_count, u32 out_count,
                      IOS::Vector* vec)
 {
-    if (fd != mgrHandle)
-        return ISFSError::Invalid;
-
     if (in_count >= 32 || out_count >= 32)
         return ISFSError::Invalid;
 
+    // NULL any zero length vectors to prevent any accidental writes.
     for (u32 i = 0; i < in_count + out_count; i++) {
         if (vec[i].len == 0)
             vec[i].data = nullptr;
     }
+
+    if (!IsManagerHandle(fd))
+        return ISFSError::Invalid;
+
+    auto mgrRes = GetManagerResource(fd);
 
     switch (cmd) {
     // [ISFS_ReadDir]
@@ -997,8 +1033,7 @@ static s32 ReqIoctlv(s32 fd, ISFSIoctl cmd, u32 in_count, u32 out_count,
 
         // Check if the filepath should be replaced
         if (!IsReplacedFilepath(path))
-            return realFsMgr.ioctlv(ISFSIoctl::ReadDir, in_count, out_count,
-                                    vec);
+            return mgrRes->ioctlv(ISFSIoctl::ReadDir, in_count, out_count, vec);
 
         // Get the replaced filepath
         char efsFilepath[EFS_MAX_REPLACED_FILEPATH_LENGTH];
@@ -1019,7 +1054,7 @@ static s32 ReqIoctlv(s32 fd, ISFSIoctl cmd, u32 in_count, u32 out_count,
     // documentation todo
     case ISFSIoctl::GetUsage: {
         // TODO
-        return realFsMgr.ioctlv(ISFSIoctl::GetUsage, in_count, out_count, vec);
+        return mgrRes->ioctlv(ISFSIoctl::GetUsage, in_count, out_count, vec);
     }
 
     default:
@@ -1031,20 +1066,14 @@ static s32 ReqIoctlv(s32 fd, ISFSIoctl cmd, u32 in_count, u32 out_count,
 
 static s32 ForwardRequest(IOS::Request* req)
 {
-    const s32 fd = req->fd - 100;
-    assert(req->cmd == IOS::Command::Open || (fd >= 0 && fd < 16));
+    const s32 fd = req->fd - REAL_HANDLE_BASE;
+    assert(req->cmd == IOS::Command::Open || (fd >= 0 && fd < REAL_HANDLE_MAX));
 
     switch (req->cmd) {
-    case IOS::Command::Open: {
-        /* [FIXME] UID and GID always 0 */
-        char path[64];
-        strncpy(path, req->open.path, 64);
-        path[0] = '/';
-        const s32 ret = IOS_Open(path, req->open.mode);
-        if (ret >= 0)
-            return ret + 100;
-        return ret;
-    }
+    case IOS::Command::Open:
+        // Should never reach here.
+        assert(0);
+        return IOSError::NotFound;
 
     case IOS::Command::Close:
         return IOS_Close(fd);
@@ -1078,7 +1107,8 @@ static s32 IPCRequest(IOS::Request* req)
     s32 ret = IOSError::Invalid;
 
     const s32 fd = req->fd;
-    if (req->cmd != IOS::Command::Open && fd >= 100 && fd < 200)
+    if (req->cmd != IOS::Command::Open && fd >= REAL_HANDLE_BASE &&
+        fd < REAL_HANDLE_BASE + REAL_HANDLE_MAX)
         return ForwardRequest(req);
 
     switch (req->cmd) {
@@ -1094,23 +1124,53 @@ static s32 IPCRequest(IOS::Request* req)
         PRINT(IOS_EmuFS, INFO, "[EmuFS::IPCRequest] IOS_Open(%s, 0x%X)", path,
               req->open.mode);
 
-        if (!strncmp(path, "/dev/", 5)) {
-            if (!strcmp(path, "/dev/flash")) {
-                /* No */
-                PRINT(
-                    IOS_EmuFS, WARN,
-                    "[EmuFS::IPCRequest] Attempt to open /dev/flash from PPC");
-                ret = ISFSError::NoAccess;
-                break;
+        if (!strcmp(path, "/dev/fs")) {
+            PRINT(IOS_EmuFS, INFO, "[EmuFS::IPCRequest] Open /dev/fs from PPC");
+
+            // Find open handle.
+            u32 i = 0;
+            for (; i < MGR_HANDLE_MAX; i++) {
+                if (realFS[i].fd() < 0)
+                    break;
             }
-            if (!strcmp(path, "/dev/fs")) {
+
+            // There should always be an open handle.
+            assert(i != MGR_HANDLE_MAX);
+
+            // Security note! Interrupts will be disabled at this point
+            // (IOS_Open always does), and the IPC thread can't do anything else
+            // while it's waiting for a response from us, so this should be safe
+            // to do to the ES process..?
+            s32 pid = IOS_GetProcessId();
+            assert(pid >= 0);
+
+            s32 ret2 = IOS_SetUid(pid, req->open.uid);
+            assert(ret2 == IOSError::OK);
+            ret2 = IOS_SetGid(pid, req->open.gid);
+            assert(ret2 == IOSError::OK);
+
+            new (&realFS[i]) IOS::ResourceCtrl<ISFSIoctl>("/dev/fs");
+
+            ret2 = IOS_SetUid(pid, 0);
+            assert(ret2 == IOSError::OK);
+            ret2 = IOS_SetGid(pid, 0);
+            assert(ret2 == IOSError::OK);
+
+            if (realFS[i].fd() < 0) {
                 PRINT(IOS_EmuFS, INFO,
-                      "[EmuFS::IPCRequest] Open /dev/fs from PPC");
-                ret = mgrHandle;
+                      "[EmuFS::IPCRequest] /dev/fs open error: %d",
+                      realFS[i].fd());
+                ret = realFS[i].fd();
                 break;
             }
 
-            /* Return IOSError::NotFound to skip the request */
+            PRINT(IOS_EmuFS, INFO, "[EmuFS::IPCRequest] /dev/fs open success");
+            ret = MGR_HANDLE_BASE + i;
+            break;
+        }
+
+        if (!strncmp(path, "/dev", 4)) {
+            // Fall through to next resource.
             ret = IOSError::NotFound;
             break;
         }
@@ -1151,16 +1211,21 @@ static s32 IPCRequest(IOS::Request* req)
         break;
 
     case IOS::Command::Ioctl:
-        PRINT(IOS_EmuFS, INFO, "[EmuFS::IPCRequest] Received ioctl %d",
-              req->ioctl.cmd);
+        PRINT(
+            IOS_EmuFS, INFO,
+            "[EmuFS::IPCRequest] IOS_Ioctl(%d, %d, 0x%08X, 0x%X, 0x%08X, 0x%X)",
+            req->fd, req->ioctl.cmd, req->ioctl.in, req->ioctl.in_len,
+            req->ioctl.io, req->ioctl.io_len);
         ret = ReqIoctl(req->fd, static_cast<ISFSIoctl>(req->ioctl.cmd),
                        req->ioctl.in, req->ioctl.in_len, req->ioctl.io,
                        req->ioctl.io_len);
         break;
 
     case IOS::Command::Ioctlv:
-        PRINT(IOS_EmuFS, INFO, "[EmuFS::IPCRequest] Received ioctlv %d",
-              req->ioctlv.cmd);
+        PRINT(IOS_EmuFS, INFO,
+              "[EmuFS::IPCRequest] IOS_Ioctlv(%d, %d, %d, %d, 0x%08X)", req->fd,
+              req->ioctlv.cmd, req->ioctlv.in_count, req->ioctlv.io_count,
+              req->ioctlv.vec);
         ret = ReqIoctlv(req->fd, static_cast<ISFSIoctl>(req->ioctlv.cmd),
                         req->ioctlv.in_count, req->ioctlv.io_count,
                         req->ioctlv.vec);
@@ -1181,13 +1246,12 @@ s32 ThreadEntry([[maybe_unused]] void* arg)
 {
     PRINT(IOS_EmuFS, INFO, "Starting FS...");
 
-    assert(realFsMgr.fd() >= 0);
-
     Queue<IOS::Request*> queue(8);
     const s32 ret = IOS_RegisterResourceManager("$", queue.id());
     if (ret != IOSError::OK) {
         PRINT(IOS_EmuFS, ERROR,
-              "FS_StartRM: IOS_RegisterResourceManager failed: %d", ret);
+              "[EmuFS::ThreadEntry] IOS_RegisterResourceManager failed: %d",
+              ret);
         abort();
     }
 
