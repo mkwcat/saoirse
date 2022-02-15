@@ -2,6 +2,7 @@
 #include <Debug/Log.hpp>
 #include <IOS/Syscalls.h>
 #include <IOS/System.hpp>
+#include <System/Config.hpp>
 #include <System/Types.h>
 #include <System/Util.h>
 #include <cstring>
@@ -61,7 +62,9 @@ extern "C" char* IOSOpenStrncpy(char* dest, const char* src, u32 num, s32 pid)
     }
 
     // ISFS path
-    dest[0] = '$';
+    if (Config::sInstance->IsISFSPathReplaced(src))
+        dest[0] = '$';
+
     return dest;
 }
 
