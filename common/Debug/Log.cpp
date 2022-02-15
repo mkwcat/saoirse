@@ -6,7 +6,6 @@
 #endif
 #include <array>
 #include <cstring>
-#include <mutex>
 #include <stdarg.h>
 #include <stdio.h>
 
@@ -21,7 +20,7 @@ static constexpr std::array<const char*, 3> logColors = {
     "\x1b[33;1m",
     "\x1b[31;1m",
 };
-//static Mutex* logMutex;
+static Mutex* logMutex;
 constexpr u32 logMask = 0xFFFFFFFF;
 constexpr u32 logLevel = 0;
 
@@ -41,11 +40,9 @@ void Log::VPrint(LogSource src, const char* srcStr, LogLevel level,
     if (!ipcLogEnabled && !fileLogEnabled)
         return;
 #endif
-#if 0
     if (logMutex == nullptr) {
         logMutex = new Mutex;
     }
-#endif
 
     u32 slvl = static_cast<u32>(level);
     u32 schan = static_cast<u32>(src);
@@ -58,9 +55,7 @@ void Log::VPrint(LogSource src, const char* srcStr, LogLevel level,
             return;
     }
     {
-#if 0
-        std::unique_lock<Mutex> lock(*logMutex);
-#endif
+        logMutex->lock();
 
         static std::array<char, 256> logBuffer;
         u32 len = vsnprintf(&logBuffer[0], logBuffer.size(), format, args);
@@ -94,6 +89,7 @@ void Log::VPrint(LogSource src, const char* srcStr, LogLevel level,
         printf("%s[%s] %s\n\x1b[37;1m", logColors[slvl], srcStr,
                logBuffer.data());
 #endif
+        logMutex->unlock();
     }
 }
 

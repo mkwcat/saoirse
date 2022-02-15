@@ -81,7 +81,7 @@ void abort()
 {
     PRINT(IOS, ERROR, "Abort was called!");
     // TODO: Application exit
-    //IOS_CancelThread(0, 0);
+    IOS_CancelThread(0, 0);
     while (true)
         ;
 }
@@ -90,7 +90,7 @@ void AbortColor(u32 color)
 {
     // Write to HW_VISOLID
     KernelWrite(static_cast<u32>(ACRReg::VISOLID) + HW_BASE_TRUSTED, color | 1);
-    //IOS_CancelThread(0, 0);
+    IOS_CancelThread(0, 0);
     while (true)
         ;
 }
@@ -166,13 +166,9 @@ bool OpenLogFile()
 
 s32 SystemThreadEntry([[maybe_unused]] void* arg)
 {
-    //KernelWrite(static_cast<u32>(ACRReg::VISOLID) + HW_BASE_TRUSTED, YUV_PINK | 1);
-
     ImportKoreanCommonKey();
     IOS::Resource::MakeIPCToCallbackThread();
     StaticInit();
-
-    //KernelWrite(static_cast<u32>(ACRReg::VISOLID) + HW_BASE_TRUSTED, YUV_DARK_RED | 1);
 
     PRINT(IOS, INFO, "Wait for start request...");
     IPCLog::sInstance->WaitForStartRequest();
@@ -202,8 +198,6 @@ s32 SystemThreadEntry([[maybe_unused]] void* arg)
 
 extern "C" void Entry([[maybe_unused]] void* arg)
 {
-    //KernelWrite(static_cast<u32>(ACRReg::VISOLID) + HW_BASE_TRUSTED, YUV_WHITE | 1);
-
     static u8 systemHeapData[SystemHeapSize] ATTRIBUTE_ALIGN(32);
 
     // Create system heap
@@ -214,8 +208,6 @@ extern "C" void Entry([[maybe_unused]] void* arg)
 
     IPCLog::sInstance = new IPCLog();
     Log::ipcLogEnabled = true;
-
-    //KernelWrite(static_cast<u32>(ACRReg::VISOLID) + HW_BASE_TRUSTED, YUV_YELLOW | 1);
 
     IOS_SetThreadPriority(0, 40);
 
