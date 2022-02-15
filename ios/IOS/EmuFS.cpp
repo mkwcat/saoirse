@@ -6,6 +6,7 @@
 #include <IOS/IPCLog.hpp>
 #include <IOS/Syscalls.h>
 #include <IOS/System.hpp>
+#include <System/Config.hpp>
 #include <System/ISFS.hpp>
 #include <System/OS.hpp>
 #include <System/Types.h>
@@ -262,19 +263,7 @@ static bool IsReplacedFilepath(const char* filepath)
     if (!IsFilepathValid(filepath))
         return false;
 
-    //! A list of filepaths to be replaced will be provided by the channel in
-    //! the future
-    if (strcmp(filepath, "/title/00010004/524d4345/data/" /* RMCE */) == 0)
-        return true;
-    if (strncmp(filepath, "/title/00010004/524d4350/data/" /* RMCP */,
-                sizeof("/title/00010004/524d4350/data/") - 1) == 0)
-        return true;
-    if (strcmp(filepath, "/title/00010004/524d434a/data/" /* RMCJ */) == 0)
-        return true;
-    if (strcmp(filepath, "/title/00010004/524d434b/data/" /* RMCK */) == 0)
-        return true;
-
-    return false;
+    return Config::sInstance->IsISFSPathReplaced(filepath);
 }
 
 /*---------------------------------------------------------------------------*

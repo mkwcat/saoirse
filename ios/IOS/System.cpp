@@ -8,6 +8,7 @@
 #include <IOS/IPCLog.hpp>
 #include <IOS/Patch.hpp>
 #include <IOS/Syscalls.h>
+#include <System/Config.hpp>
 #include <System/Hollywood.hpp>
 #include <System/OS.hpp>
 #include <System/Types.h>
@@ -185,7 +186,9 @@ s32 SystemThreadEntry([[maybe_unused]] void* arg)
         PRINT(IOS, INFO, "SD card mounted");
     }
 
-    OpenLogFile();
+    if (Config::sInstance->IsFileLogEnabled()) {
+        OpenLogFile();
+    }
 
     new Thread(EmuFS::ThreadEntry, nullptr, nullptr, 0x800, 80);
     new Thread(EmuDI::ThreadEntry, nullptr, nullptr, 0x800, 80);
@@ -203,6 +206,7 @@ extern "C" void Entry([[maybe_unused]] void* arg)
         AbortColor(YUV_YELLOW);
     systemHeap = ret;
 
+    Config::sInstance = new Config();
     IPCLog::sInstance = new IPCLog();
     Log::ipcLogEnabled = true;
 
