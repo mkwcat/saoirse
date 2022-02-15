@@ -357,11 +357,9 @@ IOSBoot::IPCLog::IPCLog()
         // succeeds.
         for (s32 i = 0; i < 1000; i++) {
             usleep(1000);
-            printf("attempt open\n");
             new (&this->logRM) IOS::ResourceCtrl<s32>("/dev/saoirse");
             if (this->logRM.fd() != IOSError::NotFound)
                 break;
-            printf("fail!\n");
         }
     }
     if (this->logRM.fd() < 0) {
