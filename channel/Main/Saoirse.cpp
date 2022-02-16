@@ -16,6 +16,7 @@
 #include <stdio.h>
 #include <unistd.h>
 LIBOGC_SUCKS_BEGIN
+#include <ogc/context.h>
 #include <ogc/machine/processor.h>
 #include <wiiuse/wpad.h>
 LIBOGC_SUCKS_END
@@ -24,6 +25,14 @@ static struct {
     void* xfb = NULL;
     GXRModeObj* rmode = NULL;
 } display;
+
+static void PIErrorHandler([[maybe_unused]] u32 nIrq, void* pCtx)
+{
+    u32 cause = read32(0x0C003000); // INTSR
+    write32(0x0C003000, 1); // Reset
+
+    PRINT(Core, ERROR, "PI error occurred!\n  Cause: 0x%04X", cause);
+}
 
 static inline bool startupDrive()
 {
@@ -49,7 +58,7 @@ static inline bool startupDrive()
 
 s32 main([[maybe_unused]] s32 argc, [[maybe_unused]] char** argv)
 {
-    /* Initialize video and the debug console */
+    // Initialize video and the debug console
     VIDEO_Init();
     display.rmode = VIDEO_GetPreferredMode(NULL);
     display.xfb = MEM_K0_TO_K1(SYS_AllocateFramebuffer(display.rmode));
@@ -67,6 +76,10 @@ s32 main([[maybe_unused]] s32 argc, [[maybe_unused]] char** argv)
 
     PRINT(Core, WARN, "Debug console initialized");
     VIDEO_WaitVSync();
+
+    // Properly handle PI errors
+    IRQ_Request(IRQ_PI_ERROR, PIErrorHandler, nullptr);
+    __UnmaskIrq(IM_PI_ERROR);
 
     extern const char data_ar[];
     extern const char data_ar_end[];
