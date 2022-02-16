@@ -8,6 +8,8 @@
 #include "GlobalsConfig.hpp"
 #include "IOSBoot.hpp"
 #include <Apploader/Apploader.hpp>
+#include <Patch/PatchList.hpp>
+#include <Patch/Codehandler.hpp>
 #include <DVD/DI.hpp>
 #include <Debug/Log.hpp>
 #include <Disk/SDCard.hpp>
@@ -26,7 +28,7 @@ static struct {
     GXRModeObj* rmode = NULL;
 } display;
 
-static void PIErrorHandler([[maybe_unused]] u32 nIrq, void* pCtx)
+static void PIErrorHandler([[maybe_unused]] u32 nIrq, [[maybe_unused]] void* pCtx)
 {
     u32 cause = read32(0x0C003000); // INTSR
     write32(0x0C003000, 1); // Reset
@@ -81,6 +83,7 @@ s32 main([[maybe_unused]] s32 argc, [[maybe_unused]] char** argv)
     IRQ_Request(IRQ_PI_ERROR, PIErrorHandler, nullptr);
     __UnmaskIrq(IM_PI_ERROR);
 
+    // Setup main data archive
     extern const char data_ar[];
     extern const char data_ar_end[];
     Arch::sInstance = new Arch(data_ar, data_ar_end - data_ar);
@@ -107,6 +110,15 @@ s32 main([[maybe_unused]] s32 argc, [[maybe_unused]] char** argv)
         abort();
     }
 
+    PatchList patchList;
+    Codehandler::ImportCodehandler(&patchList);
+
+    u32 gctSize;
+    const u8* gct = (u8*)Arch::getFileStatic("RMCP01.gct", &gctSize);
+
+    Codehandler::ImportGCT(&patchList, gct, gct + gctSize);
+    patchList.ImportPokeBranch(0x801AAAA0, 0x800018A8);
+
     SDCard::Shutdown();
     delete DI::sInstance;
 
@@ -119,6 +131,8 @@ s32 main([[maybe_unused]] s32 argc, [[maybe_unused]] char** argv)
     VIDEO_WaitVSync();
 
     SetupGlobals(0);
+
+    patchList.ApplyPatches();
 
     // TODO: Proper shutdown
     SYS_ResetSystem(SYS_SHUTDOWN, 0, 0);
