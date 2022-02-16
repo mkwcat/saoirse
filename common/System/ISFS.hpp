@@ -1,5 +1,5 @@
 // ISFS.hpp - ISFS types
-//   Written by StarMKWii
+//   Written by Star
 //   Written by Palapeli
 //
 // Copyright (C) 2022 Team Saoirse
