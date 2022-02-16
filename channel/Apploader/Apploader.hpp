@@ -1,3 +1,9 @@
+// Apploader.hpp - Wii disc apploader
+//   Written by riidefi
+//
+// Copyright (C) 2022 Team Saoirse
+// SPDX-License-Identifier: MIT
+
 #include "AppPayload.hpp"
 #include "ApploaderInfo.hpp"
 #include <Main/TaskThread.hpp>

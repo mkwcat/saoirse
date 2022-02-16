@@ -6,7 +6,7 @@
  *   Michael Wiedenbauer (shagkur)
  *   Dave Murphy (WinterMute)
  *   Sven Peter <svpe@gmx.net>
- *   modified by palapeli
+ *   Modified by Palapeli for Saoirse (2022)
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:

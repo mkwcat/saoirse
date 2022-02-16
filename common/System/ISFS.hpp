@@ -1,13 +1,13 @@
-/*---------------------------------------------------------------------------*
- * Author  : Star (and don't forget Palapeli)
- * Date    : 06 Sep 2021
- * File    : isfs.h
- * Version : 1.3.0.0
- *---------------------------------------------------------------------------*/
+// ISFS.hpp - ISFS types
+//   Written by StarMKWii
+//   Written by Palapeli
+//
+// Copyright (C) 2022 Team Saoirse
+// SPDX-License-Identifier: MIT
 
 #pragma once
 
-//! Definitions
+// Definitions
 #define NAND_DIRECTORY_SEPARATOR_CHAR '/'
 
 #define NAND_MAX_FILEPATH_LENGTH 64 // Including the NULL terminator

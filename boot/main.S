@@ -1,3 +1,9 @@
+// main.S - LZMA loader init
+//   Written by Palapeli
+//
+// Copyright (C) 2022 Team Saoirse
+// SPDX-License-Identifier: MIT
+
 #define	r0 0
 #define	r1 1
 #define	sp 1

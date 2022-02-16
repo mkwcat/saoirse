@@ -1,3 +1,9 @@
+// DI.cpp - DI types and I/O
+//   Written by Palapeli
+//
+// Copyright (C) 2022 Team Saoirse
+// SPDX-License-Identifier: MIT
+
 #include "DI.hpp"
 
 DI* DI::sInstance;

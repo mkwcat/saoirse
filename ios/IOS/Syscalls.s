@@ -1,3 +1,9 @@
+// Syscalls.s - IOS system calls
+//   Written by Palapeli
+//
+// Copyright (C) 2022 Team Saoirse
+// SPDX-License-Identifier: MIT
+
     .section ".text"
     .arm
     .align  2

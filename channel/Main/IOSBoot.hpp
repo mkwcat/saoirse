@@ -1,3 +1,9 @@
+// IOSBoot.hpp - IOS startup code
+//   Written by Palapeli
+//
+// Copyright (C) 2022 Team Saoirse
+// SPDX-License-Identifier: MIT
+
 #pragma once
 #include <Debug/Log.hpp>
 #include <System/OS.hpp>
@@ -12,7 +18,6 @@ s32 Launch(const void* data, u32 len);
 void SafeFlushRange(const void* data, u32 len);
 void LaunchSaoirseIOS();
 void DebugLaunchReport();
-s32 PatchNewCommonKey();
 
 class IPCLog
 {
@@ -52,6 +57,5 @@ protected:
 
 void SetupPrintHook();
 void ReadPrintHook();
-void testIPCRightsPatch();
 
 } // namespace IOSBoot

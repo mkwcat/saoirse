@@ -1,3 +1,9 @@
+// IOSBoot.cpp - IOS startup code
+//   Written by Palapeli
+//
+// Copyright (C) 2022 Team Saoirse
+// SPDX-License-Identifier: MIT
+
 #include "IOSBoot.hpp"
 #include "Arch.hpp"
 #include <Debug/Log.hpp>
@@ -390,11 +396,4 @@ void IOSBoot::ReadPrintHook()
 {
     DCInvalidateRange((void*)0x90C00000, 0x10000);
     printf("PRINT HOOK RESULT:\n%s", (char*)0x90C00004);
-}
-
-void IOSBoot::testIPCRightsPatch()
-{
-    static constexpr u32 ios58BranchSrc = SRAMMirrToReal(0xFFFF3180);
-
-    mask32(ios58BranchSrc, 0xFFFF0000, 0xE79C0000);
 }

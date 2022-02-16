@@ -1,3 +1,9 @@
+// Disk.cpp - SD Card/USB I/O
+//   Written by Palapeli
+//
+// Copyright (C) 2022 Team Saoirse
+// SPDX-License-Identifier: MIT
+
 #include "Disk.hpp"
 #include <Debug/Log.hpp>
 #include <Disk/SDCard.hpp>

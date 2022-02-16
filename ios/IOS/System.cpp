@@ -1,3 +1,9 @@
+// System.cpp - Saoirse IOS system
+//   Written by Palapeli
+//
+// Copyright (C) 2022 Team Saoirse
+// SPDX-License-Identifier: MIT
+
 #include "System.hpp"
 #include <Debug/Log.hpp>
 #include <Disk/Disk.hpp>

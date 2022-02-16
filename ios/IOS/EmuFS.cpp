@@ -1,3 +1,10 @@
+// EmuFS.cpp - Emulated IOS filesystem RM
+//   Written by StarMKWii
+//   Written by Palapeli
+//
+// Copyright (C) 2022 Team Saoirse
+// SPDX-License-Identifier: MIT
+
 #include "EmuFS.hpp"
 #include <Debug/Log.hpp>
 #include <Disk/Disk.hpp>
@@ -1170,7 +1177,7 @@ static s32 IPCRequest(IOS::Request* req)
         }
 
         if (!strncmp(path, "/dev", 4)) {
-            // Fall through to next resource.
+            // Fall through to the next resource.
             ret = IOSError::NotFound;
             break;
         }

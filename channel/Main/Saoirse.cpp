@@ -1,8 +1,12 @@
+// Saoirse.cpp
+//   Written by Palapeli
+//
+// Copyright (C) 2022 Team Saoirse
+// SPDX-License-Identifier: MIT
+
 #include "Arch.hpp"
 #include "GlobalsConfig.hpp"
-#include "IODeviceManager.hpp"
 #include "IOSBoot.hpp"
-#include "UIManager.hpp"
 #include <Apploader/Apploader.hpp>
 #include <DVD/DI.hpp>
 #include <Debug/Log.hpp>
@@ -72,11 +76,6 @@ s32 main([[maybe_unused]] s32 argc, [[maybe_unused]] char** argv)
 
     // Launch Saoirse IOS
     IOSBoot::LaunchSaoirseIOS();
-
-    // Start "UI" thread
-    new Thread(UIManager::threadEntry, nullptr, nullptr, 0x8000, 80);
-    // Start IODeviceManager thread
-    new Thread(IODeviceManager::threadEntry, nullptr, nullptr, 0x8000, 80);
 
     // TODO move this to like a page based UI system or something
     if (!startupDrive()) {

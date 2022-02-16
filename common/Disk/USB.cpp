@@ -1,3 +1,9 @@
+// USB.cpp - USB2 Device I/O
+//   Written by Palapeli
+//
+// Copyright (C) 2022 Team Saoirse
+// SPDX-License-Identifier: MIT
+
 #include "USB.hpp"
 #include <System/Types.h>
 #include <System/Util.h>

@@ -1,3 +1,10 @@
+// GlobalsConfig.hpp
+//   Written by riidefi
+//   Based on BrainSlug, by Chadderz
+//
+// Copyright (C) 2022 Team Saoirse
+// SPDX-License-Identifier: MIT
+
 #pragma once
 #include <stdint.h>
 

@@ -1,3 +1,9 @@
+// AppPayload.cpp - Apploader payload manager
+//   Written by riidefi
+//
+// Copyright (C) 2022 Team Saoirse
+// SPDX-License-Identifier: MIT
+
 #include "AppPayload.hpp"
 #include <DVD/DI.hpp>
 #include <Debug/Log.hpp>

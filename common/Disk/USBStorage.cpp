@@ -7,7 +7,7 @@ Sven Peter (svpe) <svpe@gmx.net>
 Copyright (C) 2009-2010
 tueidj, rodries, Tantric
 Stripped down nintendont port by FIX94
-Further modifications by palapeli for saoirse
+Modified by Palapeli for Saoirse (2022)
 
 This software is provided 'as-is', without any express or implied
 warranty.  In no event will the authors be held liable for any

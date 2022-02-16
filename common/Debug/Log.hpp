@@ -1,3 +1,9 @@
+// Log.hpp - Debug log
+//   Written by Palapeli
+//
+// Copyright (C) 2022 Team Saoirse
+// SPDX-License-Identifier: MIT
+
 #pragma once
 #include <stdarg.h>
 #ifdef TARGET_IOS

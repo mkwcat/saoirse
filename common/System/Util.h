@@ -1,3 +1,8 @@
+// Util.h - Common Saoirse utils
+//
+// Copyright (C) 2022 Team Saoirse
+// SPDX-License-Identifier: MIT
+
 #pragma once
 #include "Types.h"
 

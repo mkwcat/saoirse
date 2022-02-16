@@ -1,4 +1,9 @@
-// Based on BrainSlug, by Chadderz
+// GlobalsConfig.cpp
+//   Written by riidefi
+//   Based on BrainSlug, by Chadderz
+//
+// Copyright (C) 2022 Team Saoirse
+// SPDX-License-Identifier: MIT
 
 #include "GlobalsConfig.hpp"
 #include <ogc/cache.h>

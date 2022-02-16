@@ -1,3 +1,9 @@
+// Log.cpp - Debug log
+//   Written by Palapeli
+//
+// Copyright (C) 2022 Team Saoirse
+// SPDX-License-Identifier: MIT
+
 #include "Log.hpp"
 #include <System/OS.hpp>
 #include <System/Types.h>

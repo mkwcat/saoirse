@@ -1,3 +1,9 @@
+// Arch.cpp - Archive data reader
+//   Written by Palapeli
+//
+// Copyright (C) 2022 Team Saoirse
+// SPDX-License-Identifier: MIT
+
 #include "Arch.hpp"
 #include <stdio.h>
 #include <string.h>

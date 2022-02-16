@@ -1,3 +1,9 @@
+// OS.cpp - libogc-IOS compatible types and functions
+//   Written by Palapeli
+//
+// Copyright (C) 2022 Team Saoirse
+// SPDX-License-Identifier: MIT
+
 #include "OS.hpp"
 #include <System/Types.h>
 

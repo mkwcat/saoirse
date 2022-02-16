@@ -1,3 +1,9 @@
+// load.c - LZMA loader stub
+//   Written by Palapeli
+//
+// Copyright (C) 2022 Team Saoirse
+// SPDX-License-Identifier: MIT
+
 #include "LzmaDec.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -91,7 +97,8 @@ __attribute__((noreturn)) void load()
 {
     ELzmaStatus status;
 
-    u32 channel_dol_lzma_size = (const u8*)&channel_dol_lzma_end - channel_dol_lzma;
+    u32 channel_dol_lzma_size =
+        (const u8*)&channel_dol_lzma_end - channel_dol_lzma;
     size_t destLen = 0x700000;
     size_t inLen = channel_dol_lzma_size - 5;
     SRes ret = LzmaDecode(DECODE_ADDR, &destLen, channel_dol_lzma + 0xD, &inLen,

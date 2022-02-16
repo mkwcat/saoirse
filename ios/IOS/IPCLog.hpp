@@ -1,3 +1,9 @@
+// IPCLog.hpp - IOS to PowerPC logging through IPC
+//   Written by Palapeli
+//
+// Copyright (C) 2022 Team Saoirse
+// SPDX-License-Identifier: MIT
+
 #pragma once
 #include <System/OS.hpp>
 #include <System/Types.h>
