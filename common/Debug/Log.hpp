@@ -20,6 +20,7 @@ enum class LogSource
     Loader,
     Payload,
     FST,
+    PatchList,
     DiskIO,
     IOMgr,
     IOS,
