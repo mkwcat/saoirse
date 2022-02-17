@@ -8,11 +8,10 @@
 #include "GlobalsConfig.hpp"
 #include "IOSBoot.hpp"
 #include <Apploader/Apploader.hpp>
-#include <Patch/PatchList.hpp>
-#include <Patch/Codehandler.hpp>
 #include <DVD/DI.hpp>
 #include <Debug/Log.hpp>
-#include <Disk/SDCard.hpp>
+#include <Patch/Codehandler.hpp>
+#include <Patch/PatchList.hpp>
 #include <System/Util.h>
 #include <cstring>
 #include <stdio.h>
@@ -28,7 +27,8 @@ static struct {
     GXRModeObj* rmode = NULL;
 } display;
 
-static void PIErrorHandler([[maybe_unused]] u32 nIrq, [[maybe_unused]] void* pCtx)
+static void PIErrorHandler([[maybe_unused]] u32 nIrq,
+                           [[maybe_unused]] void* pCtx)
 {
     u32 cause = read32(0x0C003000); // INTSR
     write32(0x0C003000, 1); // Reset
@@ -119,7 +119,6 @@ s32 main([[maybe_unused]] s32 argc, [[maybe_unused]] char** argv)
     Codehandler::ImportGCT(&patchList, gct, gct + gctSize);
     patchList.ImportPokeBranch(0x801AAAA0, 0x800018A8);
 
-    SDCard::Shutdown();
     delete DI::sInstance;
 
     PRINT(Core, INFO, "Send start game IOS request!");
