@@ -16,7 +16,6 @@ public:
     static constexpr int printSize = 256;
 
     IPCLog();
-    ~IPCLog();
     void Run();
     void Print(const char* buffer);
     void Notify();

@@ -23,7 +23,6 @@ ASM_FUNCTION(void InvalidateICacheLine(u32 addr),
 )
 
 ATTRIBUTE_TARGET(thumb)
-ATTRIBUTE_SECTION(".kernel")
 ASM_FUNCTION(static void IOSOpenStrncpyTrampoline(),
     // Overwrite first parameter
     str     r0, [sp, #0x14];

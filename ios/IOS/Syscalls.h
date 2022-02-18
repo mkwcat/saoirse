@@ -176,5 +176,6 @@ s32 IOS_SetUid(u32 pid, u32 uid);
 u32 IOS_GetUid();
 s32 IOS_SetGid(u32 pid, u16 gid);
 u16 IOS_GetGid();
+s32 IOS_LaunchRM(const char* path);
 
 EXTERN_C_END

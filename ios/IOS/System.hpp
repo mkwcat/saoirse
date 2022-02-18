@@ -9,6 +9,23 @@
 #include <System/Types.h>
 #include <System/Util.h>
 
+class System
+{
+public:
+    static void SetHeap(s32 hid)
+    {
+        s_heapId = hid;
+    }
+
+    static s32 GetHeap()
+    {
+        return s_heapId;
+    }
+
+private:
+    static s32 s_heapId;
+};
+
 #define YUV_RED ((84 << 24) | (255 << 16) | (76 << 8))
 #define YUV_DARK_RED ((106 << 24) | (192 << 16) | (38 << 8))
 #define YUV_GREEN ((43 << 24) | (21 << 16) | (149 << 8))

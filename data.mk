@@ -27,9 +27,9 @@ DATAFILES := $(foreach dir,$(DATA),$(wildcard $(dir)/*))
 
 default: $(OUTPUT)
 
-$(OUTPUT): $(DATAFILES) $(BIN)/saoirse_ios.elf
+$(OUTPUT): $(DATAFILES) $(BIN)/saoirse_ios.elf $(BIN)/ios_loader.bin
 	@rm -rf $@
 	@echo packing ... $(notdir $@)
-	@$(AR) -r $@ $(DATAFILES) $(BIN)/saoirse_ios.elf
+	@$(AR) -r $@ $(DATAFILES) $(BIN)/saoirse_ios.elf $(BIN)/ios_loader.bin
 
 

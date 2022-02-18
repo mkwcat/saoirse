@@ -8,11 +8,20 @@
 #include "Arch.hpp"
 #include <Debug/Log.hpp>
 #include <System/Hollywood.hpp>
+#include <System/Util.h>
 #include <new>
 #include <ogc/cache.h>
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
+
+// #define IOS_LAUNCH_FAIL_DEBUG
+
+#ifdef IOS_LAUNCH_FAIL_DEBUG
+LIBOGC_SUCKS_BEGIN
+#include <ogc/pad.h>
+LIBOGC_SUCKS_END
+#endif
 
 template <class T>
 constexpr T SRAMMirrToReal(T address)
@@ -43,7 +52,7 @@ struct VFile {
         memcpy(m_data, data, len);
         m_data[7] = 0x61;
         m_data[8] = 1;
-        DCFlushRange(reinterpret_cast<void*>(this), 32 + len);
+        IOSBoot::SafeFlushRange(reinterpret_cast<void*>(this), 32 + len);
     }
 
     u32 m_magic;
@@ -120,9 +129,7 @@ s32 IOSBoot::Launch(const void* data, u32 len)
     u32 loaderSize;
     const void* loader = Arch::getFileStatic("ios_loader.bin", &loaderSize);
 
-    // FIXME: This block of memory is never deleted. We need to find a place and
-    // time to free it.
-    u8* loaderMemory = new ((std::align_val_t)32) u8[round_up(loaderSize, 32)];
+    u8* loaderMemory = reinterpret_cast<u8*>(0x90100000);
     memcpy(loaderMemory, loader, loaderSize);
     SafeFlushRange(loaderMemory, loaderSize);
 
@@ -135,6 +142,10 @@ void IOSBoot::LaunchSaoirseIOS()
     const void* elf = Arch::getFileStatic("saoirse_ios.elf", &elfSize);
     assert(elf != nullptr);
 
+#ifdef IOS_LAUNCH_FAIL_DEBUG
+    SetupPrintHook();
+#endif
+
     PRINT(Core, INFO, "Starting up Saoirse IOS...");
     s32 ret = Launch(elf, elfSize);
     PRINT(Core, INFO, "IOSBoot::Launch result: %d", ret);
@@ -142,6 +153,21 @@ void IOSBoot::LaunchSaoirseIOS()
     if (ret == IOSError::OK) {
         IPCLog::sInstance = new IPCLog();
     }
+
+#ifdef IOS_LAUNCH_FAIL_DEBUG
+    sleep(1);
+    ReadPrintHook();
+    DebugLaunchReport();
+
+    PAD_Init();
+
+    while (true) {
+        PAD_ScanPads();
+        int buttonsDown = PAD_ButtonsDown(0);
+        if (buttonsDown & PAD_BUTTON_A)
+            ACRMaskTrusted(ACRReg::RESETS, 1, 0);
+    }
+#endif
 }
 
 static bool ValidIOSSPAddr(u32 sp)
@@ -155,6 +181,9 @@ static bool ValidIOSSPAddr(u32 sp)
 
 static bool ValidIOSPCAddr(u32 pc)
 {
+    if ((pc + 16) < 0x01800000)
+        return true;
+
     if ((pc >= 0x13400000 && (pc + 16) < 0x14000000) ||
         (pc >= 0x0D4E0000 && (pc + 16) < 0x0D500000)) {
         return true;
@@ -177,6 +206,24 @@ static void DebugCodeDump(u32 pc)
         }
         printf("\n");
     }
+}
+
+static void DebugRegisterDump(u32 addr)
+{
+    u32 reg[16];
+
+    for (int i = 0; i < 16; i++) {
+        reg[i] = read32(addr + i * 4);
+    }
+
+    printf(
+        "R0       R1       R2       R3       R4       R5       R6       R7\n");
+    printf("%08X %08X %08X %08X %08X %08X %08X %08X\n", reg[0], reg[1], reg[2],
+           reg[3], reg[4], reg[5], reg[6], reg[7]);
+    printf(
+        "R8       R9       R10      R11      R12      R13      R14      R15\n");
+    printf("%08X %08X %08X %08X %08X %08X %08X %08X\n", reg[8], reg[9], reg[10],
+           reg[11], reg[12], reg[13], reg[14], reg[15]);
 }
 
 static void ReportIOSReceiveMessage([[maybe_unused]] u32 sp)
@@ -223,6 +270,8 @@ static void ReportIOSThread(int id)
         PRINT(Core, INFO, "LR Dump (-8):");
         DebugCodeDump(lr - 8);
     }
+
+    DebugRegisterDump(threadPtr + 4);
 
     // Check for specific contexts and dump more information.
 

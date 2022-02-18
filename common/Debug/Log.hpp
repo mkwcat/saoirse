@@ -24,6 +24,7 @@ enum class LogSource
     DiskIO,
     IOMgr,
     IOS,
+    IOS_Loader,
     IOS_EmuFS,
     IOS_EmuDI
 };

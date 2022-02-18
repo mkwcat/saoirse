@@ -35,8 +35,10 @@ AS			:= $(PREFIX)g++
 # linker script
 #---------------------------------------------------------------------------------
 LINKSCRIPT		:= ios.ld
+LINKSCRIPT_LOADER		:= ios_loader.ld
 
 TARGET := saoirse_ios
+LOADER_TARGET := ios_loader
 
 #---------------------------------------------------------------------------------
 # automatically build a list of object files for our project
@@ -44,6 +46,7 @@ TARGET := saoirse_ios
 DUMMY != mkdir -p $(BIN) $(BUILD) $(foreach dir,$(SOURCES),$(BUILD)/$(dir))
 
 OUTPUT		:=  $(BIN)/$(TARGET)
+LOADER_OUTPUT		:= $(BIN)/$(LOADER_TARGET)
 CFILES		:=	$(foreach dir,$(SOURCES),$(wildcard $(dir)/*.c))
 CPPFILES	:=	$(foreach dir,$(SOURCES),$(wildcard $(dir)/*.cpp))
 sFILES		:=	$(foreach dir,$(SOURCES),$(wildcard $(dir)/*.s))
@@ -77,10 +80,10 @@ CXXFLAGS = $(CFLAGS) -std=c++20 -fno-rtti -fno-builtin-memcpy -fno-builtin-memse
 
 AFLAGS	=	$(ARCH) -x assembler-with-cpp
 
-LDFLAGS	= $(ARCH) -T$(LINKSCRIPT) $(LIBPATHS) $(LIBS) -n -Wl,--gc-sections -Wl,-static -nostartfiles
+LDFLAGS	= $(ARCH) $(LIBPATHS) $(LIBS) -n -Wl,--gc-sections -Wl,-static -nostartfiles
 
 
-default: $(OUTPUT).elf
+default: $(OUTPUT).elf $(LOADER_OUTPUT).bin
 
 clean:
 	@echo cleaning...
@@ -88,11 +91,19 @@ clean:
 	
 $(OUTPUT).elf: $(OUTPUT)_dbg.elf
 	@echo output ... $(notdir $@)
-	@$(LD) -s -o $@ $(OFILES) $(LDFLAGS) -Wl,-Map,$(BIN)/$(TARGET).map
+	@$(LD) -s -o $@ $(OFILES) -T$(LINKSCRIPT) $(LDFLAGS) -Wl,-Map,$(BIN)/$(TARGET).map
 
-$(OUTPUT)_dbg.elf: $(OFILES)
+$(OUTPUT)_dbg.elf: $(OFILES) $(LINKSCRIPT)
 	@echo linking ... $(notdir $@)
-	@$(LD) -g -o $@ $(OFILES) $(LDFLAGS)
+	@$(LD) -g -o $@ $(OFILES) -T$(LINKSCRIPT) $(LDFLAGS)
+	
+$(LOADER_OUTPUT).bin: $(LOADER_OUTPUT).elf
+	@echo output ... $(notdir $@)
+	@$(OBJCOPY) $< $@ -O binary
+	
+$(LOADER_OUTPUT).elf: $(OFILES) $(LINKSCRIPT_LOADER)
+	@echo linking ... $(notdir $@)
+	@$(LD) -g -o $@ $(OFILES) -T$(LINKSCRIPT_LOADER) $(LDFLAGS)
 
 $(BUILD)/%_cpp.o : %.cpp
 	@echo $(notdir $<)

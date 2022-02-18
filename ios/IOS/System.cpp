@@ -23,7 +23,7 @@
 #include <cstring>
 
 constexpr u32 SystemHeapSize = 0x4000; // 16 KB
-s32 systemHeap = -1;
+s32 System::s_heapId = -1;
 
 // Common ARM C++ init
 void StaticInit()
@@ -38,50 +38,52 @@ void StaticInit()
 
 void* operator new(std::size_t size)
 {
-    void* block = IOS_Alloc(systemHeap, size);
+    void* block = IOS_Alloc(System::GetHeap(), size);
     assert(block != nullptr);
     return block;
 }
 
 void* operator new[](std::size_t size)
 {
-    void* block = IOS_Alloc(systemHeap, size);
+    void* block = IOS_Alloc(System::GetHeap(), size);
     assert(block != nullptr);
     return block;
 }
 
 void* operator new(std::size_t size, std::align_val_t align)
 {
-    void* block = IOS_AllocAligned(systemHeap, size, static_cast<u32>(align));
+    void* block =
+        IOS_AllocAligned(System::GetHeap(), size, static_cast<u32>(align));
     assert(block != nullptr);
     return block;
 }
 
 void* operator new[](std::size_t size, std::align_val_t align)
 {
-    void* block = IOS_AllocAligned(systemHeap, size, static_cast<u32>(align));
+    void* block =
+        IOS_AllocAligned(System::GetHeap(), size, static_cast<u32>(align));
     assert(block != nullptr);
     return block;
 }
 
 void operator delete(void* ptr)
 {
-    IOS_Free(systemHeap, ptr);
+    IOS_Free(System::GetHeap(), ptr);
 }
 
 void operator delete[](void* ptr)
 {
-    IOS_Free(systemHeap, ptr);
+    IOS_Free(System::GetHeap(), ptr);
 }
 
 void operator delete(void* ptr, std::size_t size)
 {
-    IOS_Free(systemHeap, ptr);
+    IOS_Free(System::GetHeap(), ptr);
 }
 
 void operator delete[](void* ptr, std::size_t size)
 {
-    IOS_Free(systemHeap, ptr);
+    IOS_Free(System::GetHeap(), ptr);
 }
 
 void abort()
@@ -210,7 +212,7 @@ extern "C" void Entry([[maybe_unused]] void* arg)
     s32 ret = IOS_CreateHeap(systemHeapData, sizeof(systemHeapData));
     if (ret < 0)
         AbortColor(YUV_YELLOW);
-    systemHeap = ret;
+    System::SetHeap(ret);
 
     Config::sInstance = new Config();
     IPCLog::sInstance = new IPCLog();
