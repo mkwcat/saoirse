@@ -58,6 +58,23 @@ static inline bool startupDrive()
     return ret == DI::DIError::OK;
 }
 
+void abort()
+{
+    LIBOGC_SUCKS_BEGIN
+    u32 lr = mfspr(8);
+    LIBOGC_SUCKS_END
+
+    PRINT(Core, ERROR, "Abort called. LR = 0x%08X\n", lr);
+
+    sleep(2);
+    exit(0);
+
+    // If this somehow returns then halt.
+    IRQ_Disable();
+    while (1) {
+    }
+}
+
 s32 main([[maybe_unused]] s32 argc, [[maybe_unused]] char** argv)
 {
     // Initialize video and the debug console
