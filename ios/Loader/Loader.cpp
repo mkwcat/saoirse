@@ -1,3 +1,9 @@
+// Loader.cpp - IOS module loader
+//   Written by Palapeli
+//
+// Copyright (C) 2022 Team Saoirse
+// SPDX-License-Identifier: MIT
+
 #include <IOS/Syscalls.h>
 #include <IOS/System.hpp>
 #include <System/Hollywood.hpp>
