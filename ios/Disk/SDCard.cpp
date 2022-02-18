@@ -168,6 +168,15 @@ static s32 __sdio_sendcommand(u32 cmd, u32 cmd_type, u32 rsp_type, u32 arg,
     struct _sdiorequest request ATTRIBUTE_ALIGN(32);
     struct _sdioresponse response ATTRIBUTE_ALIGN(32);
 
+#ifdef TARGET_IOS
+    // The SDIO resource manager is a bit dumb and does not translate virtual
+    // addresses to physical, so we have to do it for it. We must be in PID 0
+    // for this to work, as IOS will reject any buffer that's not mapped in
+    // virtual memory otherwise.
+    assert(IOS_GetProcessId() == 0);
+    buffer = IOS_VirtualToPhysical(buffer);
+#endif
+
     request.cmd = cmd;
     request.cmd_type = cmd_type;
     request.rsp_type = rsp_type;

@@ -1147,7 +1147,7 @@ static s32 IPCRequest(IOS::Request* req)
             // Security note! Interrupts will be disabled at this point
             // (IOS_Open always does), and the IPC thread can't do anything else
             // while it's waiting for a response from us, so this should be safe
-            // to do to the ES process..?
+            // to do to the root process..?
             s32 pid = IOS_GetProcessId();
             assert(pid >= 0);
 

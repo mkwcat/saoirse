@@ -43,7 +43,7 @@ IOS_STACK(EntryStack, 0x400);
 
 IOS_NOTE_START();
 IOS_NOTE(
-	1,
+	0,
 	Entry,
 	127,
 	0x400,
