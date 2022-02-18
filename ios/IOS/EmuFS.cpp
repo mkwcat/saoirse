@@ -17,7 +17,6 @@
 #include <System/ISFS.hpp>
 #include <System/OS.hpp>
 #include <System/Types.h>
-#include <algorithm>
 #include <array>
 #include <cstdio>
 #include <cstring>
@@ -57,8 +56,10 @@ constexpr int MGR_HANDLE_BASE = 200;
 constexpr int MGR_HANDLE_MAX = 32;
 
 #define EFS_DRIVE "0:"
-#define EFS_MAX_REPLACED_FILEPATH_LENGTH                                       \
-    (sizeof(EFS_DRIVE) - 1) + NAND_MAX_FILEPATH_LENGTH
+#define EFS_MAX_PATH_LEN 2048
+
+static char efsFilepath[EFS_MAX_PATH_LEN];
+static char efsFilepath2[EFS_MAX_PATH_LEN];
 
 struct ProxyFile {
     bool inUse;
@@ -320,12 +321,9 @@ static const char* GetReplacedFilepath(const char* filepath, char* out_buf,
     if (!out_buf)
         return nullptr;
 
-    if (out_len < EFS_MAX_REPLACED_FILEPATH_LENGTH)
-        return nullptr;
-
     // Create and write the replaced filepath
     filepath = strchr(filepath, NAND_DIRECTORY_SEPARATOR_CHAR);
-    if (snprintf(out_buf, EFS_MAX_REPLACED_FILEPATH_LENGTH, EFS_DRIVE "%s",
+    if (snprintf(out_buf, out_len, EFS_DRIVE "%s",
                  filepath + 1) <= 0) {
         PRINT(IOS_EmuFS, ERROR,
               "[EmuFS::GetReplacedFilepath] Failed to format "
@@ -423,7 +421,6 @@ static s32 ReqProxyOpen(const char* filepath, u32 mode)
         return ISFSError::Invalid;
 
     // Get the replaced filepath
-    char efsFilepath[EFS_MAX_REPLACED_FILEPATH_LENGTH];
     if (!GetReplacedFilepath(filepath, efsFilepath, sizeof(efsFilepath)))
         return ISFSError::Invalid;
 
@@ -699,7 +696,6 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
             return mgrRes->ioctl(ISFSIoctl::CreateDir, in, in_len, io, io_len);
 
         // Get the replaced filepath
-        char efsFilepath[EFS_MAX_REPLACED_FILEPATH_LENGTH];
         if (!GetReplacedFilepath(path, efsFilepath, sizeof(efsFilepath)))
             return ISFSError::Invalid;
 
@@ -743,7 +739,6 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
             return mgrRes->ioctl(ISFSIoctl::SetAttr, in, in_len, io, io_len);
 
         // Get the replaced filepath
-        char efsFilepath[EFS_MAX_REPLACED_FILEPATH_LENGTH];
         if (!GetReplacedFilepath(path, efsFilepath, sizeof(efsFilepath)))
             return ISFSError::Invalid;
 
@@ -790,7 +785,6 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
             return mgrRes->ioctl(ISFSIoctl::GetAttr, in, in_len, io, io_len);
 
         // Get the replaced filepath
-        char efsFilepath[EFS_MAX_REPLACED_FILEPATH_LENGTH];
         if (!GetReplacedFilepath(filepath, efsFilepath, sizeof(efsFilepath)))
             return ISFSError::Invalid;
 
@@ -853,7 +847,6 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
         }
 
         // Get the replaced filepath
-        char efsFilepath[EFS_MAX_REPLACED_FILEPATH_LENGTH];
         if (!GetReplacedFilepath(filepath, efsFilepath, sizeof(efsFilepath)))
             return ISFSError::Invalid;
 
@@ -900,13 +893,13 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
         if (!isOldFilepathReplaced && !isNewFilepathReplaced)
             return mgrRes->ioctl(ISFSIoctl::Rename, in, in_len, io, io_len);
 
-        char efsOldFilepath[EFS_MAX_REPLACED_FILEPATH_LENGTH];
-        char efsNewFilepath[EFS_MAX_REPLACED_FILEPATH_LENGTH];
+        char* efsOldFilepath = efsFilepath;
+        char* efsNewFilepath = efsFilepath2;
 
         // Rename from NAND to EFS file
         if (!isOldFilepathReplaced && isNewFilepathReplaced) {
             if (!GetReplacedFilepath(pathNew, efsNewFilepath,
-                                     sizeof(efsNewFilepath)))
+                                     EFS_MAX_PATH_LEN))
                 return ISFSError::Invalid;
             s32 ret = CopyFromNandToEFS(pathOld, efsNewFilepath);
             if (ret != ISFSError::OK)
@@ -926,9 +919,9 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
 
         // Get the replaced filepaths
         if (!GetReplacedFilepath(pathOld, efsOldFilepath,
-                                 sizeof(efsOldFilepath)) ||
+                                 EFS_MAX_PATH_LEN) ||
             !GetReplacedFilepath(pathNew, efsNewFilepath,
-                                 sizeof(efsNewFilepath)))
+                                 EFS_MAX_PATH_LEN))
             return ISFSError::Invalid;
 
         const FRESULT fresult = f_rename(efsOldFilepath, efsNewFilepath);
@@ -972,7 +965,6 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
             return mgrRes->ioctl(ISFSIoctl::CreateFile, in, in_len, io, io_len);
 
         // Get the replaced filepath
-        char efsFilepath[EFS_MAX_REPLACED_FILEPATH_LENGTH];
         if (!GetReplacedFilepath(path, efsFilepath, sizeof(efsFilepath)))
             return ISFSError::Invalid;
 
@@ -1043,7 +1035,6 @@ static s32 ReqIoctlv(s32 fd, ISFSIoctl cmd, u32 in_count, u32 out_count,
             return mgrRes->ioctlv(ISFSIoctl::ReadDir, in_count, out_count, vec);
 
         // Get the replaced filepath
-        char efsFilepath[EFS_MAX_REPLACED_FILEPATH_LENGTH];
         if (!GetReplacedFilepath(path, efsFilepath, sizeof(efsFilepath)))
             return ISFSError::Invalid;
 
