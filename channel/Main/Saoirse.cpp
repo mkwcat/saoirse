@@ -4,15 +4,19 @@
 // Copyright (C) 2022 Team Saoirse
 // SPDX-License-Identifier: MIT
 
+#include "Saoirse.hpp"
 #include "Arch.hpp"
 #include "GlobalsConfig.hpp"
 #include "IOSBoot.hpp"
 #include <Apploader/Apploader.hpp>
 #include <DVD/DI.hpp>
 #include <Debug/Log.hpp>
+#include <Main/LaunchState.hpp>
 #include <Patch/Codehandler.hpp>
 #include <Patch/PatchList.hpp>
 #include <System/Util.h>
+#include <UI/BasicUI.hpp>
+#include <UI/Input.hpp>
 #include <cstring>
 #include <stdio.h>
 #include <unistd.h>
@@ -22,18 +26,13 @@ LIBOGC_SUCKS_BEGIN
 #include <wiiuse/wpad.h>
 LIBOGC_SUCKS_END
 
-static struct {
-    void* xfb = NULL;
-    GXRModeObj* rmode = NULL;
-} display;
-
 static void PIErrorHandler([[maybe_unused]] u32 nIrq,
                            [[maybe_unused]] void* pCtx)
 {
-    u32 cause = read32(0x0C003000); // INTSR
+    // u32 cause = read32(0x0C003000); // INTSR
     write32(0x0C003000, 1); // Reset
 
-    PRINT(Core, ERROR, "PI error occurred!\n  Cause: 0x%04X", cause);
+    // PRINT(Core, ERROR, "PI error occurred!  Cause: 0x%04X", cause);
 }
 
 static inline bool startupDrive()
@@ -75,69 +74,17 @@ void abort()
     }
 }
 
-s32 main([[maybe_unused]] s32 argc, [[maybe_unused]] char** argv)
+static s32 UIThreadEntry([[maybe_unused]] void* arg)
 {
-    // Initialize video and the debug console
-    VIDEO_Init();
-    display.rmode = VIDEO_GetPreferredMode(NULL);
-    display.xfb = MEM_K0_TO_K1(SYS_AllocateFramebuffer(display.rmode));
-    console_init(display.xfb, 20, 20, display.rmode->fbWidth,
-                 display.rmode->xfbHeight,
-                 display.rmode->fbWidth * VI_DISPLAY_PIX_SZ);
-    VIDEO_Configure(display.rmode);
-    VIDEO_SetNextFramebuffer(display.xfb);
-    VIDEO_SetBlack(0);
-    VIDEO_Flush();
-    VIDEO_WaitVSync();
-    if (display.rmode->viTVMode & VI_NON_INTERLACE)
-        VIDEO_WaitVSync();
-    printf("\x1b[2;0H");
+    BasicUI::sInstance->Loop();
+    return 0;
+}
 
-    PRINT(Core, WARN, "Debug console initialized");
-    VIDEO_WaitVSync();
+PatchList patchList;
+EntryPoint entry;
 
-    // Properly handle PI errors
-    IRQ_Request(IRQ_PI_ERROR, PIErrorHandler, nullptr);
-    __UnmaskIrq(IM_PI_ERROR);
-
-    // Setup main data archive
-    extern const char data_ar[];
-    extern const char data_ar_end[];
-    Arch::sInstance = new Arch(data_ar, data_ar_end - data_ar);
-
-    DI::sInstance = new DI;
-
-    // Launch Saoirse IOS
-    IOSBoot::LaunchSaoirseIOS();
-
-    // TODO move this to like a page based UI system or something
-    if (!startupDrive()) {
-        abort();
-    }
-
-    Queue<int> waitDestroy(1);
-
-    EntryPoint entry;
-    Apploader* apploader = new Apploader(&entry);
-    apploader->start(&waitDestroy);
-
-    bool result = waitDestroy.receive();
-    if (result != 0) {
-        PRINT(Core, ERROR, "Apploader aborted");
-        abort();
-    }
-
-    PatchList patchList;
-    Codehandler::ImportCodehandler(&patchList);
-
-    u32 gctSize;
-    const u8* gct = (u8*)Arch::getFileStatic("RMCP01.gct", &gctSize);
-
-    Codehandler::ImportGCT(&patchList, gct, gct + gctSize);
-    patchList.ImportPokeBranch(0x801AAAA0, 0x800018A8);
-
-    delete DI::sInstance;
-
+void LaunchGame()
+{
     PRINT(Core, INFO, "Send start game IOS request!");
     IOSBoot::IPCLog::sInstance->startGameIOS();
     delete IOSBoot::IPCLog::sInstance;
@@ -158,4 +105,67 @@ s32 main([[maybe_unused]] s32 argc, [[maybe_unused]] char** argv)
     /* Unreachable! */
     abort();
     // LWP_SuspendThread(LWP_GetSelf());
+}
+
+s32 main([[maybe_unused]] s32 argc, [[maybe_unused]] char** argv)
+{
+    // Properly handle PI errors
+    IRQ_Request(IRQ_PI_ERROR, PIErrorHandler, nullptr);
+    __UnmaskIrq(IM_PI_ERROR);
+
+    Input::sInstance = new Input();
+    BasicUI::sInstance = new BasicUI();
+    BasicUI::sInstance->InitVideo();
+    new Thread(UIThreadEntry, nullptr, nullptr, 0x1000, 80);
+
+    PRINT(Core, WARN, "Debug console initialized");
+    VIDEO_WaitVSync();
+
+    // Setup main data archive
+    extern const char data_ar[];
+    extern const char data_ar_end[];
+    Arch::sInstance = new Arch(data_ar, data_ar_end - data_ar);
+
+    DI::sInstance = new DI;
+
+    // Launch Saoirse IOS
+    IOSBoot::LaunchSaoirseIOS();
+
+    // TODO move this to like a page based UI system or something
+    if (!startupDrive()) {
+        abort();
+    }
+
+    LaunchState::Get()->DiscInserted.state = true;
+    LaunchState::Get()->DiscInserted.available = true;
+    LaunchState::Get()->ReadDiscID.state = true;
+    LaunchState::Get()->ReadDiscID.available = true;
+
+    Queue<int> waitDestroy(1);
+
+    Apploader* apploader = new Apploader(&entry);
+    apploader->start(&waitDestroy);
+
+    bool result = waitDestroy.receive();
+    if (result != 0) {
+        PRINT(Core, ERROR, "Apploader aborted");
+        abort();
+    }
+
+    Codehandler::ImportCodehandler(&patchList);
+
+    u32 gctSize;
+    const u8* gct = (u8*)Arch::getFileStatic("RMCP01.gct", &gctSize);
+
+    Codehandler::ImportGCT(&patchList, gct, gct + gctSize);
+    patchList.ImportPokeBranch(0x801AAAA0, 0x800018A8);
+
+    delete DI::sInstance;
+
+    LaunchState::Get()->LaunchReady.state = true;
+    LaunchState::Get()->LaunchReady.available = true;
+
+    PRINT(Core, INFO, "Wait for UI start game request!");
+
+    LWP_SuspendThread(LWP_GetSelf());
 }
