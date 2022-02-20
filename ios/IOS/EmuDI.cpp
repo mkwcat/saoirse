@@ -7,8 +7,7 @@
 #include "EmuDI.hpp"
 #include <DVD/EmuDI.hpp>
 #include <Debug/Log.hpp>
-#include <Disk/Disk.hpp>
-#include <FAT/ff.h>
+#include <IOS/DeviceMgr.hpp>
 #include <IOS/IPCLog.hpp>
 #include <IOS/Syscalls.h>
 #include <IOS/System.hpp>
@@ -44,8 +43,13 @@ static u32 DiNumPatches = 0;
 static void OpenPatchFile(FIL* fp, DVDPatch* patch)
 {
     memset(fp, 0, sizeof(FIL));
-    fp->obj.fs = &fatfs; // automatically filled by FS
-    fp->obj.id = fatfs.id;
+
+    // Get FATFS object
+    auto device = DeviceMgr::DRVToDeviceKind(patch->drv);
+    auto fatfs = DeviceMgr::sInstance->GetFilesystem(device);
+
+    fp->obj.fs = fatfs;
+    fp->obj.id = fatfs->id;
     fp->obj.sclust = patch->start_cluster;
     fp->obj.objsize = 0xFFFFFFFF;
     fp->flag = FA_READ;
@@ -290,6 +294,7 @@ void HandleRequest(IOSRequest* req)
 s32 ThreadEntry([[maybe_unused]] void* arg)
 {
     PRINT(IOS_EmuDI, INFO, "Starting DI...");
+    PRINT(IOS_EmuDI, INFO, "EmuDI thread ID: %d", IOS_GetThreadId());
 
     s32 ret = IOS_CreateMessageQueue(__diMsgData, 8);
     if (ret < 0) {

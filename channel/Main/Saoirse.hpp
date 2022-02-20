@@ -7,3 +7,4 @@
 #pragma once
 
 void LaunchGame();
+void TestISFS();

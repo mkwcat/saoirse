@@ -22,8 +22,9 @@ public:
 
     enum class OptionType
     {
-        StartGame = 0,
-        Exit = 1,
+        StartGame,
+        TestFS,
+        Exit,
     };
 
 private:

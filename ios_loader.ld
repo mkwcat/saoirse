@@ -11,12 +11,14 @@ SECTIONS
 		*(.start*)
     	*(.text*)
 		*(.syscall*)
+		__data_start = .;
 		*(.data*)
 		*(.rodata*)
 		__bss_start = .;
 		*(.bss*)
 		*(.sbss*)
 		__bss_end = .;
+		__data_end = .;
 	} > ram = 0
 	
 	/DISCARD/ :

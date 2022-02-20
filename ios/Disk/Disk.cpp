@@ -4,7 +4,6 @@
 // Copyright (C) 2022 Team Saoirse
 // SPDX-License-Identifier: MIT
 
-#include "Disk.hpp"
 #include <Debug/Log.hpp>
 #include <Disk/SDCard.hpp>
 #include <FAT/diskio.h>
@@ -152,34 +151,3 @@ int ff_del_syncobj(FF_SYNC_t sobj)
 }
 
 #endif
-
-FATFS fatfs;
-
-namespace FSServ
-{
-
-bool MountSDCard()
-{
-    /* Mount SD Card */
-    FRESULT fret = f_mount(&fatfs, "0:", 0);
-    if (fret != FR_OK) {
-        PRINT(DiskIO, ERROR, "MountSDCard: f_mount SD Card failed: %d", fret);
-        return false;
-    }
-
-    fret = f_chdir("0:/saoirse");
-    if (fret != FR_OK) {
-        PRINT(DiskIO, ERROR, "MountSDCard: failed to change directory: %d",
-              fret);
-        return false;
-    }
-
-    return true;
-}
-
-bool UnmountSDCard()
-{
-    return f_unmount("0:") == FR_OK;
-}
-
-} // namespace FSServ

@@ -11,7 +11,6 @@ typedef u32 sec_t;
 namespace SDCard
 {
 
-bool Deinitialize(void);
 bool Open(void);
 bool Startup(void);
 bool Shutdown(void);

@@ -565,16 +565,6 @@ fail:
     return false;
 }
 
-bool SDCard::Deinitialize()
-{
-    if (__sd0_fd >= 0)
-        IOS_Close(__sd0_fd);
-
-    __sd0_fd = -1;
-    __sdio_initialized = 0;
-    return true;
-}
-
 bool SDCard::Open()
 {
     const s32 ret = IOS_Open(_sd0_fs, 1);
@@ -588,12 +578,11 @@ bool SDCard::Open()
 bool SDCard::Startup()
 {
     if (__sdio_initialized == 1)
-        return true;
+        Shutdown();
 
-    if (__sd0_initio() == false) {
-        Deinitialize();
+    if (__sd0_initio() == false)
         return false;
-    }
+
     __sdio_initialized = 1;
     return true;
 }
@@ -602,8 +591,6 @@ bool SDCard::Shutdown()
 {
     if (__sd0_initialized == 0)
         return false;
-
-    Deinitialize();
 
     __sd0_initialized = 0;
     return true;

@@ -22,9 +22,9 @@ enum class LogSource
     FST,
     PatchList,
     DiskIO,
-    IOMgr,
     IOS,
     IOS_Loader,
+    IOS_DevMgr,
     IOS_EmuFS,
     IOS_EmuDI
 };

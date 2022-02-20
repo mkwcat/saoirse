@@ -6,9 +6,9 @@
 
 #include "System.hpp"
 #include <Debug/Log.hpp>
-#include <Disk/Disk.hpp>
 #include <Disk/SDCard.hpp>
 #include <FAT/ff.h>
+#include <IOS/DeviceMgr.hpp>
 #include <IOS/EmuDI.hpp>
 #include <IOS/EmuFS.hpp>
 #include <IOS/IPCLog.hpp>
@@ -22,7 +22,7 @@
 #include <cstdio>
 #include <cstring>
 
-constexpr u32 SystemHeapSize = 0x4000; // 16 KB
+constexpr u32 SystemHeapSize = 0x8000; // 32 KB
 s32 System::s_heapId = -1;
 
 // Common ARM C++ init
@@ -88,7 +88,7 @@ void operator delete[](void* ptr, std::size_t size)
 
 void abort()
 {
-    PRINT(IOS, ERROR, "Abort was called!");
+    PRINT(IOS, ERROR, "Abort was called! Thread: %d", IOS_GetThreadId());
     // TODO: Application exit
     IOS_CancelThread(0, 0);
     while (true)
@@ -104,12 +104,21 @@ void AbortColor(u32 color)
         ;
 }
 
-void AssertFail(const char* expr, const char* file, s32 line)
+extern "C" void __AssertFail(const char* expr, const char* file, s32 line,
+                             u32 lr)
 {
-    PRINT(IOS, ERROR, "Assertion failed:\n\n%s\nfile %s, line %d", expr, file,
-          line);
+    PRINT(IOS, ERROR, "Assertion failed:\n\n%s\nfile %s, line %d, LR: %08X",
+          expr, file, line, lr);
     abort();
 }
+
+// clang-format off
+ATTRIBUTE_NOINLINE
+ASM_FUNCTION(void AssertFail(const char* expr, const char* file, s32 line),
+    mov     r3, lr;
+    b       __AssertFail;
+)
+// clang-format on
 
 void usleep(u32 usec)
 {
@@ -149,12 +158,17 @@ void KernelWrite(u32 address, u32 value)
     IOS_DestroyMessageQueue(queue);
 }
 
-static void OpenTestFile()
+void DumpRAMToLog()
 {
-    // We must attempt to open a file first for FatFS to function properly.
-    FIL testFile;
-    FRESULT fret = f_open(&testFile, "0:/", FA_READ);
-    PRINT(IOS, INFO, "[OpenTestFile] Test open result: %d", fret);
+    extern u8 __data_start[];
+    extern u8 __data_end[];
+
+    // These strings will be in the RAM dump but there's not much we can do
+    // about that. If you're searching, just add a \n to the end of it.
+    PRINT(IOS, INFO, "!!! RAM DUMP START !!!");
+    UINT bw;
+    f_write(&Log::logFile, __data_start, __data_end - __data_start, &bw);
+    PRINT(IOS, INFO, "!!! RAM DUMP END !!!");
 }
 
 bool OpenLogFile()
@@ -179,27 +193,20 @@ s32 SystemThreadEntry([[maybe_unused]] void* arg)
     IOS::Resource::MakeIPCToCallbackThread();
     StaticInit();
 
+    DeviceMgr::sInstance = new DeviceMgr();
+
     PRINT(IOS, INFO, "Wait for start request...");
     IPCLog::sInstance->WaitForStartRequest();
     PRINT(IOS, INFO, "Starting up game IOS...");
 
     PatchIOSOpen();
 
-    if (!SDCard::Open()) {
-        PRINT(IOS, ERROR, "SDCard::Open returned false");
-        abort();
-    }
-    if (FSServ::MountSDCard()) {
-        OpenTestFile();
-        PRINT(IOS, INFO, "SD card mounted");
-    }
-
     if (Config::sInstance->IsFileLogEnabled()) {
         OpenLogFile();
     }
 
-    new Thread(EmuFS::ThreadEntry, nullptr, nullptr, 0x800, 80);
-    new Thread(EmuDI::ThreadEntry, nullptr, nullptr, 0x800, 80);
+    new Thread(EmuFS::ThreadEntry, nullptr, nullptr, 0x2000, 80);
+    new Thread(EmuDI::ThreadEntry, nullptr, nullptr, 0x2000, 80);
 
     return 0;
 }

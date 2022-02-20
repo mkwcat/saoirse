@@ -7,7 +7,6 @@
 
 #include "EmuFS.hpp"
 #include <Debug/Log.hpp>
-#include <Disk/Disk.hpp>
 #include <Disk/SDCard.hpp>
 #include <FAT/ff.h>
 #include <IOS/IPCLog.hpp>
@@ -323,13 +322,15 @@ static const char* GetReplacedFilepath(const char* filepath, char* out_buf,
 
     // Create and write the replaced filepath
     filepath = strchr(filepath, NAND_DIRECTORY_SEPARATOR_CHAR);
-    if (snprintf(out_buf, out_len, EFS_DRIVE "%s",
-                 filepath + 1) <= 0) {
+    if (snprintf(out_buf, out_len, EFS_DRIVE "%s", filepath + 1) <= 0) {
         PRINT(IOS_EmuFS, ERROR,
               "[EmuFS::GetReplacedFilepath] Failed to format "
               "the replaced filepath !");
         return nullptr;
     }
+
+    PRINT(IOS_EmuFS, INFO,
+          "[EmuFS::GetReplacedFilepath] Replaced file path: \"%s\"", out_buf);
 
     return out_buf;
 }
@@ -431,14 +432,16 @@ static s32 ReqProxyOpen(const char* filepath, u32 mode)
               fd);
         return fd;
     }
-    PRINT(IOS_EmuFS, INFO, "Registered file descriptor %d", fd);
+    PRINT(IOS_EmuFS, INFO,
+          "[EmuFS::ReqProxyOpen] Registered file descriptor %d", fd);
 
     ASSERT(IsFileDescriptorValid(fd));
 
     spFileDescriptorArray[fd].mode = mode;
 
     if (spFileDescriptorArray[fd].filOpened) {
-        PRINT(IOS_EmuFS, INFO, "File already open, reusing descriptor");
+        PRINT(IOS_EmuFS, INFO,
+              "[EmuFS::ReqProxyOpen] File already open, reusing descriptor");
         return ReopenFile(fd);
     }
 
@@ -898,8 +901,7 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
 
         // Rename from NAND to EFS file
         if (!isOldFilepathReplaced && isNewFilepathReplaced) {
-            if (!GetReplacedFilepath(pathNew, efsNewFilepath,
-                                     EFS_MAX_PATH_LEN))
+            if (!GetReplacedFilepath(pathNew, efsNewFilepath, EFS_MAX_PATH_LEN))
                 return ISFSError::Invalid;
             s32 ret = CopyFromNandToEFS(pathOld, efsNewFilepath);
             if (ret != ISFSError::OK)
@@ -918,10 +920,8 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
         // Both of the filepaths are replaced
 
         // Get the replaced filepaths
-        if (!GetReplacedFilepath(pathOld, efsOldFilepath,
-                                 EFS_MAX_PATH_LEN) ||
-            !GetReplacedFilepath(pathNew, efsNewFilepath,
-                                 EFS_MAX_PATH_LEN))
+        if (!GetReplacedFilepath(pathOld, efsOldFilepath, EFS_MAX_PATH_LEN) ||
+            !GetReplacedFilepath(pathNew, efsNewFilepath, EFS_MAX_PATH_LEN))
             return ISFSError::Invalid;
 
         const FRESULT fresult = f_rename(efsOldFilepath, efsNewFilepath);
@@ -955,6 +955,9 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
         ISFSAttrBlock* isfsAttrBlock = (ISFSAttrBlock*)in;
 
         const char* path = isfsAttrBlock->path;
+
+        PRINT(IOS_EmuFS, INFO, "[EmuFS::ReqIoctl] ISFS_CreateFile(\"%s\")",
+              path);
 
         // Check if the filepath is valid
         if (!IsFilepathValid(path))
@@ -1027,6 +1030,8 @@ static s32 ReqIoctlv(s32 fd, ISFSIoctl cmd, u32 in_count, u32 out_count,
     // todo
     case ISFSIoctl::ReadDir: {
         const char* path = (const char*)vec[0].data;
+
+        PRINT(IOS_EmuFS, INFO, "[EmuFS::ReqIoctlv] ISFS_ReadDir(\"%s\")", path);
 
         // XXX actually implement this properly
 
@@ -1142,6 +1147,10 @@ static s32 IPCRequest(IOS::Request* req)
             s32 pid = IOS_GetProcessId();
             assert(pid >= 0);
 
+            PRINT(IOS_EmuFS, INFO,
+                  "[EmuFS::IPCRequest] Set PID %d to uid %08X gid %04X", pid,
+                  req->open.uid, req->open.gid);
+
             s32 ret2 = IOS_SetUid(pid, req->open.uid);
             assert(ret2 == IOSError::OK);
             ret2 = IOS_SetGid(pid, req->open.gid);
@@ -1243,6 +1252,7 @@ static s32 IPCRequest(IOS::Request* req)
 s32 ThreadEntry([[maybe_unused]] void* arg)
 {
     PRINT(IOS_EmuFS, INFO, "Starting FS...");
+    PRINT(IOS_EmuFS, INFO, "EmuFS thread ID: %d", IOS_GetThreadId());
 
     Queue<IOS::Request*> queue(8);
     const s32 ret = IOS_RegisterResourceManager("$", queue.id());

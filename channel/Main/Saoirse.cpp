@@ -85,10 +85,6 @@ EntryPoint entry;
 
 void LaunchGame()
 {
-    PRINT(Core, INFO, "Send start game IOS request!");
-    IOSBoot::IPCLog::sInstance->startGameIOS();
-    delete IOSBoot::IPCLog::sInstance;
-
     VIDEO_SetBlack(true);
     VIDEO_Flush();
     VIDEO_WaitVSync();
@@ -105,6 +101,28 @@ void LaunchGame()
     /* Unreachable! */
     abort();
     // LWP_SuspendThread(LWP_GetSelf());
+}
+
+void TestISFS()
+{
+    PRINT(Core, INFO, "Testing ISFS");
+
+    s32 ret = ISFS_Initialize();
+    ASSERT(ret >= 0);
+
+    PRINT(Core, INFO, "Opened /dev/fs");
+
+    ret = ISFS_CreateFile("/tmp/test.bin", 0, 3, 3, 0);
+    PRINT(Core, INFO, "ret: %d", ret);
+    sleep(2);
+    ASSERT(ret >= 0);
+
+    PRINT(Core, INFO, "Created file");
+
+    PRINT(Core, INFO, "Attempt open");
+    ret = IOS_Open("/tmp/test.bin", 2);
+    PRINT(Core, INFO, "Result: %d", ret);
+    IOS_Close(ret);
 }
 
 s32 main([[maybe_unused]] s32 argc, [[maybe_unused]] char** argv)
@@ -162,10 +180,13 @@ s32 main([[maybe_unused]] s32 argc, [[maybe_unused]] char** argv)
 
     delete DI::sInstance;
 
+    PRINT(Core, INFO, "Send start game IOS request!");
+    IOSBoot::IPCLog::sInstance->startGameIOS();
+    delete IOSBoot::IPCLog::sInstance;
+    PRINT(Core, INFO, "Wait for UI...");
+
     LaunchState::Get()->LaunchReady.state = true;
     LaunchState::Get()->LaunchReady.available = true;
-
-    PRINT(Core, INFO, "Wait for UI start game request!");
 
     LWP_SuspendThread(LWP_GetSelf());
 }

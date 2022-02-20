@@ -25,6 +25,7 @@ SECTIONS
 	} > virt_ram AT > phys_ram : text = 0
 
 	.data : ALIGN(0x1000) {
+		__data_start = .;
 		*(.data*)
 	} > virt_ram AT > phys_ram : data = 0
 
@@ -41,6 +42,7 @@ SECTIONS
 		*(.bss*)
 		*(.sbss*)
 		__bss_end = .;
+		__data_end = .;
 	} > virt_ram AT > phys_ram : data = 0
 	
 	/DISCARD/ :
