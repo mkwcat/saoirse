@@ -423,8 +423,6 @@ struct Request {
         struct {
             char* path;
             u32 mode;
-            s32 fd;
-            //! check these next two
             u32 uid;
             u16 gid;
         } open;

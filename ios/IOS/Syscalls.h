@@ -102,7 +102,6 @@ typedef struct {
         struct {
             char* path;
             u32 mode;
-            s32 fd;
             u32 uid;
             u16 gid;
         } open;
