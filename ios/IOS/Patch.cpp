@@ -51,6 +51,12 @@ extern "C" char* IOSOpenStrncpy(char* dest, const char* src, u32 num, s32 pid)
     }
 
     if (!strncmp(src, "/dev/", 5)) {
+        if (!strcmp(src, "/dev/sao_loader")) {
+            // Disallow opening the loader file RM
+            dest[0] = 0;
+            return dest;
+        }
+
         if (!strcmp(src, "/dev/flash") || !strcmp(src, "/dev/boot2")) {
             // No
             dest[0] = 0;
