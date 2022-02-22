@@ -33,4 +33,8 @@ void IOS::Resource::MakeIPCToCallbackThread()
 
 s32 IOS::Resource::s_toCbQueue = -1;
 
+#else
+
+s32 ipcHeap = iosCreateHeap(0x20000);
+
 #endif

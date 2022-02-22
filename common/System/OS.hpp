@@ -355,6 +355,48 @@ namespace IOS
 
 typedef s32 (*IPCCallback)(s32 result, void* userdata);
 
+// Allocate memory for IPC. Always 32-bit aligned.
+static inline void* Alloc(u32 size);
+
+// Free memory allocated using IOS::Alloc.
+static inline void Free(void* ptr);
+
+#ifdef TARGET_IOS
+
+constexpr s32 ipcHeap = 0;
+
+static inline void* Alloc(u32 size)
+{
+    void* ptr = IOS_AllocAligned(ipcHeap, round_up(size, 32), 32);
+    ASSERT(ptr);
+    return ptr;
+}
+
+static inline void Free(void* ptr)
+{
+    s32 ret = IOS_Free(ipcHeap, ptr);
+    ASSERT(ret == IOSError::OK);
+}
+
+#else
+
+// Created in OS.cpp
+extern s32 ipcHeap;
+
+static inline void* Alloc(u32 size)
+{
+    void* ptr = iosAlloc(ipcHeap, round_up(size, 32));
+    ASSERT(ptr);
+    return ptr;
+}
+
+static inline void Free(void* ptr)
+{
+    iosFree(ipcHeap, ptr);
+}
+
+#endif
+
 enum class Command : u32
 {
     Open = 1,
