@@ -9,6 +9,7 @@
 #include <IOS/Syscalls.h>
 #include <IOS/System.hpp>
 #include <System/Config.hpp>
+#include <System/OS.hpp>
 #include <System/Types.h>
 #include <System/Util.h>
 #include <cstring>
@@ -224,4 +225,74 @@ void ImportKoreanCommonKey()
     // Call function by address
     (*(void (*)(int keyIndex, const u8* key, u32 keySize))func)(
         11, KoreanCommonKey, sizeof(KoreanCommonKey));
+}
+
+constexpr u32 MakePPCBranch(u32 src, u32 dest)
+{
+    return ((dest - src) & 0x03FFFFFC) | 0x48000000;
+}
+
+bool IsWiiU()
+{
+    // Read LT_CHIPREVID; this will read zero on a normal Wii.
+    // Note: this _does_ work without system mode, since the hardware registers
+    // are mapped as read-only.
+    return (read32(0x0D8005A0) >> 16) == 0xCAFE;
+}
+
+// Credit: marcan
+// https://fail0verflow.com/blog/2013/espresso/
+bool ResetEspresso(u32 entry)
+{
+    PRINT(IOS, WARN, "Resetting Espresso...");
+
+    DASSERT(IsWiiU());
+    if (!IsWiiU()) {
+        PRINT(IOS, ERROR, "This reset can only be used on Wii U!");
+        return false;
+    }
+
+    DASSERT(in_mem1(entry));
+    if (!in_mem1(entry)) {
+        PRINT(IOS, ERROR, "Invalid entry point: 0x%08X! Must be in MEM1!",
+              entry);
+        return false;
+    }
+
+    // Disable this until the PPC has started up again.
+    bool ipcLogEnabledSave = Log::ipcLogEnabled;
+    Log::ipcLogEnabled = false;
+
+    // Reading the TMD for the boot index would be the proper way to get this
+    // path, but that's more work! I don't think this path has ever changed and
+    // I really doubt that it ever will.
+    // Regardless, this should be fixed at some point.
+    s32 ret = IOS_LaunchElf("/title/00000001/00000200/content/00000003.app");
+    if (ret != IOSError::OK) {
+        PRINT(IOS, ERROR, "IOS_LaunchElf fail: %d", ret);
+        return false;
+    }
+
+    PRINT(IOS, INFO, "Now watching for decryption...");
+
+    while (true) {
+        IOS_InvalidateDCache((void*)0x01330100, sizeof(u32));
+
+        // Check if the first instruction has been decrypted. The block has
+        // already been hashed by this point.
+        if (read32(0x01330100) == 0x7C9F42A6) {
+            PRINT(IOS, INFO, "Decrypted!");
+
+            write32(0x01330100, MakePPCBranch(0x01330100, entry));
+            IOS_FlushDCache((void*)0x01330100, sizeof(u32));
+
+            PRINT(IOS, WARN, "Patched %08X = %08X", 0x01330100,
+                  MakePPCBranch(0x01330100, entry));
+            break;
+        }
+    }
+
+    // PPC has started up again so reenable the IPC log.
+    Log::ipcLogEnabled = ipcLogEnabledSave;
+    return true;
 }
