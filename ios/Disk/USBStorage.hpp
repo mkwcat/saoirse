@@ -34,10 +34,17 @@ class USBStorage
     u32 s_cnt;
 
 private:
+    s32 send_cbw(u8 lun, u32 len, u8 flags, const u8* cb, u8 cbLen);
     s32 __send_cbw(u8 lun, u32 len, u8 flags, const u8* cb, u8 cbLen);
+
     s32 __read_csw(u8* status, u32* dataResidue);
+    s32 read_csw(u8* status, u32* dataResidue);
+
     s32 __cycle(u8 lun, u8* buffer, u32 len, u8* cb, u8 cbLen, u8 write,
                 u8* _status, u32* _dataResidue);
+    s32 cycle(u8 lun, u8* buffer, u32 len, u8* cb, u8 cbLen, u8 write,
+                u8* _status, u32* _dataResidue);
+    
     s32 __usbstorage_reset();
 
     bool __inited = false;

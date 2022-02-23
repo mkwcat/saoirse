@@ -91,8 +91,9 @@ distribution.
 
 #define DEVLIST_MAXSIZE 8
 
-static u8 cbw_buffer[32] ATTRIBUTE_ALIGN(32);
-static u8 transferbuffer[MAX_TRANSFER_SIZE_V5] ATTRIBUTE_ALIGN(32);
+Mutex transferMutex;
+static u8* cbw_buffer = (u8*)IOS::Alloc(32);
+static u8* transferbuffer = (u8*)IOS::Alloc(MAX_TRANSFER_SIZE_V5);
 
 s32 USBStorage::__send_cbw(u8 lun, u32 len, u8 flags, const u8* cb, u8 cbLen)
 {
@@ -110,7 +111,7 @@ s32 USBStorage::__send_cbw(u8 lun, u32 len, u8 flags, const u8* cb, u8 cbLen)
 
     memcpy(cbw_buffer + 15, cb, cbLen);
 
-    retval = USB::sInstance->writeBlkMsg(__usb_fd, __ep_out, CBW_SIZE,
+    retval = USB::sInstance->WriteBlkMsg(__usb_fd, __ep_out, CBW_SIZE,
                                          (void*)cbw_buffer);
 
     if (retval == CBW_SIZE)
@@ -121,13 +122,21 @@ s32 USBStorage::__send_cbw(u8 lun, u32 len, u8 flags, const u8* cb, u8 cbLen)
     return retval;
 }
 
+s32 USBStorage::send_cbw(u8 lun, u32 len, u8 flags, const u8* cb, u8 cbLen)
+{
+    transferMutex.lock();
+    auto ret = __send_cbw(lun, len, flags, cb, cbLen);
+    transferMutex.unlock();
+    return ret;
+}
+
 s32 USBStorage::__read_csw(u8* status, u32* dataResidue)
 {
     s32 retval = USBStorage::Error_OK;
     u32 signature, tag, _dataResidue, _status;
 
     retval =
-        USB::sInstance->writeBlkMsg(__usb_fd, __ep_in, CSW_SIZE, cbw_buffer);
+        USB::sInstance->WriteBlkMsg(__usb_fd, __ep_in, CSW_SIZE, cbw_buffer);
     if (retval > 0 && retval != CSW_SIZE)
         return USBStorage::Error_ShortRead;
     else if (retval < 0)
@@ -152,6 +161,14 @@ s32 USBStorage::__read_csw(u8* status, u32* dataResidue)
     return USBStorage::Error_OK;
 }
 
+s32 USBStorage::read_csw(u8* status, u32* dataResidue)
+{
+    transferMutex.lock();
+    auto ret = __read_csw(status, dataResidue);
+    transferMutex.unlock();
+    return ret;
+}
+
 s32 USBStorage::__cycle(u8 lun, u8* buffer, u32 len, u8* cb, u8 cbLen, u8 write,
                         u8* _status, u32* _dataResidue)
 {
@@ -171,21 +188,21 @@ s32 USBStorage::__cycle(u8 lun, u8* buffer, u32 len, u8* cb, u8 cbLen, u8 write,
         if (retval == USBStorage::Error_Timedout)
             break;
 
-        retval = __send_cbw(lun, len, (write ? CBW_OUT : CBW_IN), cb, cbLen);
+        retval = send_cbw(lun, len, (write ? CBW_OUT : CBW_IN), cb, cbLen);
 
         while (_len > 0 && retval >= 0) {
             u32 thisLen = _len > max_size ? max_size : _len;
 
-            if ((u32)_buffer & 0x1F || !((u32)_buffer & 0x10000000)) {
+            if (!aligned(buffer, 32) || !in_mem2(buffer)) {
                 if (write)
                     memcpy(transferbuffer, _buffer, thisLen);
-                retval = USB::sInstance->writeBlkMsg(__usb_fd, ep, thisLen,
+                retval = USB::sInstance->WriteBlkMsg(__usb_fd, ep, thisLen,
                                                      transferbuffer);
                 if (!write && retval > 0)
                     memcpy(_buffer, transferbuffer, retval);
             } else {
                 retval =
-                    USB::sInstance->writeBlkMsg(__usb_fd, ep, thisLen, _buffer);
+                    USB::sInstance->WriteBlkMsg(__usb_fd, ep, thisLen, _buffer);
             }
             if (static_cast<u32>(retval) == thisLen) {
                 _len -= retval;
@@ -196,7 +213,7 @@ s32 USBStorage::__cycle(u8 lun, u8* buffer, u32 len, u8* cb, u8 cbLen, u8 write,
         }
 
         if (retval >= 0) {
-            retval = __read_csw(&status, &dataResidue);
+            retval = read_csw(&status, &dataResidue);
         }
 
         if (retval < 0) {
@@ -213,9 +230,19 @@ s32 USBStorage::__cycle(u8 lun, u8* buffer, u32 len, u8* cb, u8 cbLen, u8 write,
     return retval;
 }
 
+s32 USBStorage::cycle(u8 lun, u8* buffer, u32 len, u8* cb, u8 cbLen, u8 write,
+                      u8* _status, u32* _dataResidue)
+{
+    transferMutex.lock();
+    auto ret =
+        __cycle(lun, buffer, len, cb, cbLen, write, _status, _dataResidue);
+    transferMutex.unlock();
+    return ret;
+}
+
 s32 USBStorage::__usbstorage_reset()
 {
-    s32 retval = USB::sInstance->writeCtrlMsg(
+    s32 retval = USB::sInstance->WriteCtrlMsg(
         __usb_fd,
         (USB::CtrlType::Dir_Host2Device | USB::CtrlType::Type_Class |
          USB::CtrlType::Rec_Interface),
@@ -223,9 +250,9 @@ s32 USBStorage::__usbstorage_reset()
 
     usleep(60 * 1000);
     // from http://www.usb.org/developers/devclass_docs/usbmassbulk_10.pdf
-    USB::sInstance->clearHalt(__usb_fd, __ep_in);
+    USB::sInstance->ClearHalt(__usb_fd, __ep_in);
     usleep(10000);
-    USB::sInstance->clearHalt(__usb_fd, __ep_out);
+    USB::sInstance->ClearHalt(__usb_fd, __ep_out);
     usleep(10000);
     return retval;
 }
@@ -241,8 +268,8 @@ bool USBStorage::ReadSectors(u32 sector, u32 numSectors, void* buffer)
         SCSI_READ_10, __lun << 5, sector >> 24,    sector >> 16, sector >> 8,
         sector,       0,          numSectors >> 8, numSectors,   0};
 
-    retval = __cycle(__lun, reinterpret_cast<u8*>(buffer), numSectors * s_size,
-                     cmd, sizeof(cmd), 0, &status, NULL);
+    retval = cycle(__lun, reinterpret_cast<u8*>(buffer), numSectors * s_size,
+                   cmd, sizeof(cmd), 0, &status, NULL);
     if (retval > 0 && status != 0)
         retval = USBStorage::Error_Status;
 
@@ -260,8 +287,8 @@ bool USBStorage::WriteSectors(u32 sector, u32 numSectors, const void* buffer)
         SCSI_WRITE_10, __lun << 5, sector >> 24,    sector >> 16, sector >> 8,
         sector,        0,          numSectors >> 8, numSectors,   0};
 
-    retval = __cycle(__lun, (u8*)buffer, numSectors * s_size, cmd, sizeof(cmd),
-                     1, &status, NULL);
+    retval = cycle(__lun, (u8*)buffer, numSectors * s_size, cmd, sizeof(cmd), 1,
+                   &status, NULL);
     if (retval > 0 && status != 0)
         retval = USBStorage::Error_Status;
 

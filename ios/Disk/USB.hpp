@@ -108,50 +108,57 @@ public:
 
     USB(s32 id);
 
-    bool isOpen() const
+    bool Init();
+
+    bool IsOpen() const
     {
         return ven.fd() >= 0;
     }
 
-    s32 readIntrMsg(s32 devId, u8 endpoint, u16 length, void* data)
+    s32 ReadIntrMsg(s32 devId, u8 endpoint, u16 length, void* data)
     {
-        return intrBulkMsg(devId, USBv5Ioctl::IntrTransfer, endpoint, length,
+        return IntrBulkMsg(devId, USBv5Ioctl::IntrTransfer, endpoint, length,
                            data);
     }
-    s32 readBlkMsg(s32 devId, u8 endpoint, u16 length, void* data)
+    s32 ReadBlkMsg(s32 devId, u8 endpoint, u16 length, void* data)
     {
-        return intrBulkMsg(devId, USBv5Ioctl::BulkTransfer, endpoint, length,
+        return IntrBulkMsg(devId, USBv5Ioctl::BulkTransfer, endpoint, length,
                            data);
     }
-    s32 readCtrlMsg(s32 devId, u8 requestType, u8 request, u16 value, u16 index,
+    s32 ReadCtrlMsg(s32 devId, u8 requestType, u8 request, u16 value, u16 index,
                     u16 length, void* data)
     {
-        return ctrlMsg(devId, requestType, request, value, index, length, data);
+        return CtrlMsg(devId, requestType, request, value, index, length, data);
     }
 
-    s32 writeIntrMsg(s32 devId, u8 endpoint, u16 length, void* data)
+    s32 WriteIntrMsg(s32 devId, u8 endpoint, u16 length, void* data)
     {
-        return intrBulkMsg(devId, USBv5Ioctl::IntrTransfer, endpoint, length,
+        return IntrBulkMsg(devId, USBv5Ioctl::IntrTransfer, endpoint, length,
                            data);
     }
-    s32 writeBlkMsg(s32 devId, u8 endpoint, u16 length, void* data)
+    s32 WriteBlkMsg(s32 devId, u8 endpoint, u16 length, void* data)
     {
-        return intrBulkMsg(devId, USBv5Ioctl::BulkTransfer, endpoint, length,
+        return IntrBulkMsg(devId, USBv5Ioctl::BulkTransfer, endpoint, length,
                            data);
     }
-    s32 writeCtrlMsg(s32 devId, u8 requestType, u8 request, u16 value,
+    s32 WriteCtrlMsg(s32 devId, u8 requestType, u8 request, u16 value,
                      u16 index, u16 length, void* data)
     {
-        return ctrlMsg(devId, requestType, request, value, index, length, data);
+        return CtrlMsg(devId, requestType, request, value, index, length, data);
     }
 
-    s32 clearHalt(s32 devId, u8 endpoint);
+    s32 ClearHalt(s32 devId, u8 endpoint);
 
 private:
-    s32 ctrlMsg(s32 devId, u8 requestType, u8 request, u16 value, u16 index,
+    static s32 ThreadEntry(void* arg);
+    void Run();
+
+    s32 CtrlMsg(s32 devId, u8 requestType, u8 request, u16 value, u16 index,
                 u16 length, void* data);
-    s32 intrBulkMsg(s32 devId, USBv5Ioctl ioctl, u8 endpoint, u16 length,
+
+    s32 IntrBulkMsg(s32 devId, USBv5Ioctl ioctl, u8 endpoint, u16 length,
                     void* data);
 
     IOS::ResourceCtrl<USBv5Ioctl> ven{-1};
+    Thread m_thread;
 };

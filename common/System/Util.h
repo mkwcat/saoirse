@@ -79,6 +79,13 @@ constexpr bool check_bounds(T1 bounds, size_t bound_len, T2 buffer, size_t len)
            (insidehi <= high);
 }
 
+template <class T>
+constexpr bool in_mem2(T addr)
+{
+    const u32 value = reinterpret_cast<unsigned int>(addr);
+    return (value >= 0x10000000) && (value < 0x14000000);
+}
+
 #endif
 
 #ifndef TARGET_IOS
