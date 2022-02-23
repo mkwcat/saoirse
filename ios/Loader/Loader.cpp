@@ -332,12 +332,15 @@ static void MakeIPCLog()
 #endif
 
 extern "C" {
-ATTRIBUTE_SECTION(".start")
+ATTRIBUTE_SECTION(.start)
 void LoaderEntry()
 {
     // The main IOS heap. Should be fine to use as long as we always free
     // everything we allocate.
     System::SetHeap(0);
+
+    // Clear VISOLID.
+    ACRWriteTrusted(ACRReg::VISOLID, 0);
 
     // Give the PPC full bus access.
     ACRMaskTrusted(ACRReg::BUSPROT, 0, 0x80000DFE);

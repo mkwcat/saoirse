@@ -23,6 +23,18 @@ LIBDIRS		:=
 #---------------------------------------------------------------------------------
 # the prefix on the compiler executables
 #---------------------------------------------------------------------------------
+ifeq ($(COMPILER),clang)
+
+PREFIX		:= $(DEVKITARM)/bin/arm-none-eabi-
+CC			:= clang
+CXX			:= clang++
+AR			:= $(PREFIX)ar
+OBJCOPY		:= $(PREFIX)objcopy
+LD			:= $(PREFIX)g++
+AS			:= $(PREFIX)g++
+
+else
+
 PREFIX		:= $(DEVKITARM)/bin/arm-none-eabi-
 CC			:= $(PREFIX)gcc
 CXX			:= $(PREFIX)g++
@@ -30,6 +42,8 @@ AR			:= $(PREFIX)ar
 OBJCOPY		:= $(PREFIX)objcopy
 LD			:= $(PREFIX)g++
 AS			:= $(PREFIX)g++
+
+endif
 
 #---------------------------------------------------------------------------------
 # linker script
@@ -65,22 +79,35 @@ VPATH		=  $(foreach dir,$(SOURCES),$(ROOT)/$(dir))
 # options for code generation
 #---------------------------------------------------------------------------------
 INCLUDE	:=			$(foreach dir,$(INCLUDES),-I$(dir))
+ifeq ($(COMPILER),clang)
+INCLUDE +=          -I$(DEVKITARM)/arm-none-eabi/include -I$(DEVKITARM)/arm-none-eabi/include/c++/10.2.0 -I$(DEVKITARM)/arm-none-eabi/include/c++/10.2.0/arm-none-eabi/be
+endif
 
 #---------------------------------------------------------------------------------
 # build a list of library paths
 #---------------------------------------------------------------------------------
-LIBPATHS	:=	$(foreach dir,$(LIBDIRS),-L$(dir)/lib) 
-LIBPATHS    :=  
+LIBPATHS	:=	$(foreach dir,$(LIBDIRS),-L$(dir)/lib)
 LIBS        :=  -lgcc
 
-ARCH	=	-march=armv5te -mtune=arm9tdmi -mthumb-interwork -mbig-endian
+CLANG_ARCH	:=	--target=arm-none-eabi -mcpu=arm926ej-s -mtune=arm9tdmi -mbig-endian
+GCC_ARCH	:=	-march=armv5te -mtune=arm9tdmi -mthumb-interwork -mbig-endian
 
-CFLAGS	=	$(ARCH) $(INCLUDE) -DTARGET_IOS -Wall -Wextra -Wpedantic -Werror -Wno-unused-parameter -Wno-format-truncation -O0 -fomit-frame-pointer -fverbose-asm -ffunction-sections -fdata-sections -fno-exceptions
-CXXFLAGS = $(CFLAGS) -std=c++20 -fno-rtti -fno-builtin-memcpy -fno-builtin-memset -Wno-narrowing
+ifeq ($(COMPILER),clang)
+CFLAGS	:= $(CLANG_ARCH)
+else
+CFLAGS	:= $(GCC_ARCH)
+endif
 
-AFLAGS	=	$(ARCH) -x assembler-with-cpp
+CFLAGS	+=	 $(INCLUDE) -DTARGET_IOS -Wall -Wextra -Wpedantic -Werror -Wno-unused-parameter -Wno-keyword-macro -Wno-nested-anon-types -Wno-unused-const-variable -Wno-unused-function -O0 -fshort-enums -fomit-frame-pointer -fverbose-asm -ffunction-sections -fdata-sections -fno-exceptions
+CXXFLAGS = $(CFLAGS) -std=c++20 -fno-rtti -fno-builtin-memcpy -fno-builtin-memset -Wno-narrowing 
 
-LDFLAGS	= $(ARCH) $(LIBPATHS) $(LIBS) -n -Wl,--gc-sections -Wl,-static -nostartfiles
+ifeq ($(COMPILER),clang)
+AFLAGS	=	$(CLANG_ARCH) -x assembler-with-cpp
+else
+AFLAGS	=	$(GCC_ARCH) -x assembler-with-cpp
+endif
+
+LDFLAGS	= $(GCC_ARCH) $(LIBPATHS) $(LIBS) -n -Wl,--gc-sections -Wl,-static
 
 
 default: $(OUTPUT).elf $(LOADER_OUTPUT).bin
@@ -107,7 +134,7 @@ $(LOADER_OUTPUT).elf: $(OFILES) $(LINKSCRIPT_LOADER)
 
 $(BUILD)/%_cpp.o : %.cpp
 	@echo $(notdir $<)
-	@$(CXX) -g -MMD -MF $(BUILD)/$*_cpp.d $(CXXFLAGS) -c $< -o$@
+	@$(CC) -g -MMD -MF $(BUILD)/$*_cpp.d $(CXXFLAGS) -c $< -o$@
 
 $(BUILD)/%_c.o : %.c
 	@echo $(notdir $<)
@@ -115,7 +142,7 @@ $(BUILD)/%_c.o : %.c
 
 $(BUILD)/%_s.o : %.s
 	@echo $(notdir $<)
-	@$(AS) -g -MMD -MF $(BUILD)/$*_s.d $(AFLAGS) -c $< -o$@
+	@$(CC) -g -MMD -MF $(BUILD)/$*_s.d $(AFLAGS) -c $< -o$@
 
 $(BUILD)/%_bin.o : %.bin
 	@echo $(notdir $<)
