@@ -35,6 +35,16 @@ void IPCLog::HandleRequest(IOS::Request* req)
 {
     switch (req->cmd) {
     case IOS::Command::Open:
+        if (strcmp(req->open.path, "/dev/saoirse") != 0) {
+            req->reply(IOSError::NotFound);
+            break;
+        }
+
+        if (!Log::ipcLogEnabled) {
+            req->reply(IOSError::NotFound);
+            break;
+        }
+
         req->reply(IOSError::OK);
         break;
 
@@ -83,9 +93,6 @@ void IPCLog::Run()
     while (true) {
         IOS::Request* req = m_ipcQueue.receive();
         HandleRequest(req);
-
-        if (req->cmd == IOS::Command::Close)
-            break;
     }
 }
 

@@ -286,7 +286,7 @@ void BasicUI::OnSelect(OptionType opt)
 
     case OptionType::TestFS:
         VIDEO_WaitVSync();
-        TestISFS();
+        TestDirectOpen();
         break;
 
     case OptionType::Exit:

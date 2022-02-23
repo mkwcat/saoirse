@@ -16,6 +16,7 @@
 #include <Patch/PatchList.hpp>
 #include <System/Util.h>
 #include <UI/BasicUI.hpp>
+#include <System/ISFS.hpp>
 #include <UI/Input.hpp>
 #include <cstring>
 #include <stdio.h>
@@ -123,6 +124,37 @@ void TestISFS()
     ret = IOS_Open("/tmp/test.bin", 2);
     PRINT(Core, INFO, "Result: %d", ret);
     IOS_Close(ret);
+}
+
+void TestDirectOpen()
+{
+    s32 fd = IOS_Open("/dev/saoirse/file", 0);
+    printf("fd: %d\n", fd);
+    ASSERT(fd >= 0);
+    
+    PRINT(Core, INFO, "Open success!");
+
+    IOS::Vector vec[2];
+    u32 mode = 2;
+
+    char path[] = "0:/open_test.txt";
+
+    vec[0].data = reinterpret_cast<void*>(path);
+    vec[0].len = sizeof("0:/open_test.txt");
+    vec[1].data = (void*)&mode;
+    vec[1].len = sizeof(mode);
+
+    s32 ret = IOS_Ioctlv(fd, static_cast<u32>(ISFSIoctl::OpenDirect), 2, 0, vec);
+    ASSERT(ret >= 0);
+
+    PRINT(Core, INFO, "Open direct success!");
+
+    ret = IOS_Write(fd, (const void*)"test write", sizeof("test write") - 1);
+    ASSERT(ret >= 0);
+
+    PRINT(Core, INFO, "Write success!");
+
+    IOS_Close(fd);
 }
 
 s32 main([[maybe_unused]] s32 argc, [[maybe_unused]] char** argv)

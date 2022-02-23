@@ -8,3 +8,4 @@
 
 void LaunchGame();
 void TestISFS();
+void TestDirectOpen();

@@ -37,6 +37,7 @@ namespace EmuFS
  * 0 .. 99: Reserved for proxy/replaced files
  * 100 .. 199: Reserved for real FS files (not used)
  * 200 .. 232: Proxy /dev/fs
+ * 300 .. 399: Reserved for direct file access
  * }
  *
  * The manager is blocked from using read, write, seek automatically from the
@@ -54,6 +55,9 @@ constexpr int MGR_HANDLE_BASE = 200;
 // enforced by real FS after this check).
 constexpr int MGR_HANDLE_MAX = 32;
 
+constexpr int DIRECT_HANDLE_BASE = 300;
+constexpr int DIRECT_HANDLE_MAX = NAND_MAX_FILE_DESCRIPTOR_AMOUNT;
+
 #define EFS_DRIVE "0:"
 #define EFS_MAX_PATH_LEN 2048
 
@@ -61,16 +65,51 @@ static char efsFilepath[EFS_MAX_PATH_LEN];
 static char efsFilepath2[EFS_MAX_PATH_LEN];
 
 struct ProxyFile {
+    bool ipcFile;
     bool inUse;
     bool filOpened;
     char path[64];
     u32 mode;
     FIL fil;
 };
-static std::array<ProxyFile, NAND_MAX_FILE_DESCRIPTOR_AMOUNT>
-    spFileDescriptorArray;
+
+static std::array<ProxyFile, NAND_MAX_FILE_DESCRIPTOR_AMOUNT> sFileArray;
+
+struct DirectFile {
+    bool inUse;
+    int fd;
+};
+
+static std::array<DirectFile, DIRECT_HANDLE_MAX> sDirectFileArray;
 
 static std::array<IOS::ResourceCtrl<ISFSIoctl>, MGR_HANDLE_MAX> realFS;
+
+enum class DescType
+{
+    Replaced,
+    Real,
+    Manager,
+    Direct,
+    Unknown,
+};
+
+static DescType GetDescriptorType(s32 fd)
+{
+    if (fd >= REPLACED_HANDLE_BASE &&
+        fd < REPLACED_HANDLE_BASE + REPLACED_HANDLE_NUM)
+        return DescType::Replaced;
+
+    if (fd >= REAL_HANDLE_BASE && fd < REAL_HANDLE_BASE + REAL_HANDLE_MAX)
+        return DescType::Real;
+
+    if (fd >= MGR_HANDLE_BASE && fd < MGR_HANDLE_BASE + MGR_HANDLE_MAX)
+        return DescType::Manager;
+
+    if (fd >= DIRECT_HANDLE_BASE && fd < DIRECT_HANDLE_BASE + DIRECT_HANDLE_MAX)
+        return DescType::Direct;
+
+    return DescType::Unknown;
+}
 
 static s32 FResultToISFSError(FRESULT fret)
 {
@@ -146,10 +185,10 @@ static IOS::ResourceCtrl<ISFSIoctl>* GetManagerResource(s32 fd)
  *---------------------------------------------------------------------------*/
 static bool IsFileDescriptorValid(int fd)
 {
-    if (fd < 0 || fd >= static_cast<int>(spFileDescriptorArray.size()))
+    if (fd < 0 || fd >= static_cast<int>(sFileArray.size()))
         return false;
 
-    if (!spFileDescriptorArray[fd].inUse)
+    if (!sFileArray[fd].inUse)
         return false;
 
     return true;
@@ -161,36 +200,35 @@ static int RegisterFileDescriptor(const char* path)
 
     for (int i = 0; i < NAND_MAX_FILE_DESCRIPTOR_AMOUNT; i++) {
         // If the file was already opened, reuse the descriptor
-        if (spFileDescriptorArray[i].filOpened &&
-            !strcmp(spFileDescriptorArray[i].path, path)) {
+        if (sFileArray[i].filOpened && sFileArray[i].ipcFile &&
+            !strcmp(sFileArray[i].path, path)) {
 
-            if (spFileDescriptorArray[i].inUse)
+            if (sFileArray[i].inUse)
                 return ISFSError::Locked;
 
-            spFileDescriptorArray[i].inUse = true;
+            sFileArray[i].inUse = true;
             return i;
         }
 
-        if (!spFileDescriptorArray[i].inUse &&
-            spFileDescriptorArray[match].inUse)
+        if (!sFileArray[i].inUse && sFileArray[match].inUse)
             match = i;
 
-        if (!spFileDescriptorArray[i].filOpened &&
-            spFileDescriptorArray[match].filOpened)
+        if (!sFileArray[i].filOpened && sFileArray[match].filOpened)
             match = i;
     }
 
-    if (spFileDescriptorArray[match].inUse)
+    if (sFileArray[match].inUse)
         return ISFSError::MaxOpen;
 
     // Close and use the file descriptor
 
-    if (spFileDescriptorArray[match].filOpened)
-        f_close(&spFileDescriptorArray[match].fil);
+    if (sFileArray[match].filOpened)
+        f_close(&sFileArray[match].fil);
 
-    spFileDescriptorArray[match].filOpened = false;
-    spFileDescriptorArray[match].inUse = true;
-    strncpy(spFileDescriptorArray[match].path, path, 64);
+    sFileArray[match].filOpened = false;
+    sFileArray[match].inUse = true;
+    sFileArray[match].ipcFile = true;
+    strncpy(sFileArray[match].path, path, 64);
 
     return match;
 }
@@ -200,14 +238,13 @@ static void FreeFileDescriptor(int fd)
     if (!IsFileDescriptorValid(fd))
         return;
 
-    spFileDescriptorArray[fd].inUse = false;
+    sFileArray[fd].inUse = false;
 }
 
 static int FindOpenFileDescriptor(const char* path)
 {
     for (int i = 0; i < NAND_MAX_FILE_DESCRIPTOR_AMOUNT; i++) {
-        if (spFileDescriptorArray[i].filOpened &&
-            !strcmp(path, spFileDescriptorArray[i].path))
+        if (sFileArray[i].filOpened && !strcmp(path, sFileArray[i].path))
             return i;
     }
 
@@ -219,16 +256,14 @@ static int FindAvailableFileDescriptor()
     int match = 0;
 
     for (int i = 0; i < NAND_MAX_FILE_DESCRIPTOR_AMOUNT; i++) {
-        if (!spFileDescriptorArray[i].inUse &&
-            spFileDescriptorArray[match].inUse)
+        if (!sFileArray[i].inUse && sFileArray[match].inUse)
             match = i;
 
-        if (!spFileDescriptorArray[i].filOpened &&
-            spFileDescriptorArray[match].filOpened)
+        if (!sFileArray[i].filOpened && sFileArray[match].filOpened)
             match = i;
     }
 
-    if (spFileDescriptorArray[match].inUse)
+    if (sFileArray[match].inUse)
         return ISFSError::MaxOpen;
 
     return match;
@@ -236,13 +271,13 @@ static int FindAvailableFileDescriptor()
 
 static s32 TryCloseFileDescriptor(int fd)
 {
-    if (spFileDescriptorArray[fd].inUse)
+    if (sFileArray[fd].inUse)
         return ISFSError::Locked;
 
-    if (!spFileDescriptorArray[fd].filOpened)
+    if (!sFileArray[fd].filOpened)
         return ISFSError::OK;
 
-    const FRESULT fret = f_close(&spFileDescriptorArray[fd].fil);
+    const FRESULT fret = f_close(&sFileArray[fd].fil);
     if (fret != FR_OK) {
         PRINT(IOS_EmuFS, ERROR,
               "[EmuFS::TryCloseFileDescriptor] Failed to close file, error: %d",
@@ -250,7 +285,7 @@ static s32 TryCloseFileDescriptor(int fd)
         return FResultToISFSError(fret);
     }
 
-    spFileDescriptorArray[fd].filOpened = false;
+    sFileArray[fd].filOpened = false;
     return FR_OK;
 }
 
@@ -399,7 +434,7 @@ static s32 CopyFromNandToEFS(const char* nandPath, const char* efsPath)
 
 static s32 ReopenFile(s32 fd)
 {
-    const FRESULT fret = f_lseek(&spFileDescriptorArray[fd].fil, 0);
+    const FRESULT fret = f_lseek(&sFileArray[fd].fil, 0);
     if (fret != FR_OK) {
         PRINT(IOS_EmuFS, ERROR,
               "[EmuFS::ReqProxyOpen] Failed to seek to position 0x%08X "
@@ -437,16 +472,16 @@ static s32 ReqProxyOpen(const char* filepath, u32 mode)
 
     ASSERT(IsFileDescriptorValid(fd));
 
-    spFileDescriptorArray[fd].mode = mode;
+    sFileArray[fd].mode = mode;
 
-    if (spFileDescriptorArray[fd].filOpened) {
+    if (sFileArray[fd].filOpened) {
         PRINT(IOS_EmuFS, INFO,
               "[EmuFS::ReqProxyOpen] File already open, reusing descriptor");
         return ReopenFile(fd);
     }
 
     const FRESULT fret =
-        f_open(&spFileDescriptorArray[fd].fil, efsFilepath, FA_READ | FA_WRITE);
+        f_open(&sFileArray[fd].fil, efsFilepath, FA_READ | FA_WRITE);
     if (fret != FR_OK) {
         PRINT(IOS_EmuFS, ERROR,
               "[EmuFS::ReqProxyOpen] Failed to open file '%s', error: %d",
@@ -456,12 +491,49 @@ static s32 ReqProxyOpen(const char* filepath, u32 mode)
         return FResultToISFSError(fret);
     }
 
-    spFileDescriptorArray[fd].filOpened = true;
+    sFileArray[fd].filOpened = true;
 
     PRINT(IOS_EmuFS, INFO,
           "[EmuFS::ReqProxyOpen] Successfully opened file '%s' (fd=%d, "
           "mode=%u) !",
           efsFilepath, fd, mode);
+
+    return fd;
+}
+
+/*
+ * Handles direct open file requests.
+ * Returns: File descriptor, or ISFS error code.
+ */
+static s32 ReqDirectOpen(const char* filepath, u32 mode)
+{
+    int fd = FindAvailableFileDescriptor();
+    if (fd < 0) {
+        PRINT(IOS_EmuFS, ERROR,
+              "[EmuFS::ReqDirectOpen] Could not find an open file descriptor!");
+        return fd;
+    }
+
+    sFileArray[fd].mode = mode;
+    sFileArray[fd].inUse = false;
+    sFileArray[fd].filOpened = false;
+
+    const FRESULT fret = f_open(&sFileArray[fd].fil, filepath, mode);
+    if (fret != FR_OK) {
+        PRINT(IOS_EmuFS, ERROR,
+              "[EmuFS::ReqDirectOpen] Failed to open file '%s', mode: %X, "
+              "error: %d",
+              filepath, mode, fret);
+        return FResultToISFSError(fret);
+    }
+
+    sFileArray[fd].inUse = true;
+    sFileArray[fd].filOpened = true;
+
+    PRINT(IOS_EmuFS, INFO,
+          "[EmuFS::ReqDirectOpen] Successfully opened file '%s' (fd=%d, "
+          "mode=%u) !",
+          filepath, fd, mode);
 
     return fd;
 }
@@ -481,7 +553,7 @@ static s32 ReqClose(s32 fd)
     if (!IsFileDescriptorValid(fd))
         return ISFSError::Invalid;
 
-    if (f_sync(&spFileDescriptorArray[fd].fil) != FR_OK) {
+    if (f_sync(&sFileArray[fd].fil) != FR_OK) {
         PRINT(IOS_EmuFS, ERROR,
               "[EmuFS::ReqClose] Failed to sync file descriptor %d !", fd);
         return ISFSError::Unknown;
@@ -507,12 +579,11 @@ static s32 ReqRead(s32 fd, void* data, u32 len)
     if (len == 0)
         return ISFSError::OK;
 
-    if (!(spFileDescriptorArray[fd].mode & IOS::Mode::Read))
+    if (!(sFileArray[fd].mode & IOS::Mode::Read))
         return ISFSError::NoAccess;
 
     unsigned int bytesRead;
-    const FRESULT fret =
-        f_read(&spFileDescriptorArray[fd].fil, data, len, &bytesRead);
+    const FRESULT fret = f_read(&sFileArray[fd].fil, data, len, &bytesRead);
     if (fret != FR_OK) {
         PRINT(IOS_EmuFS, ERROR,
               "[EmuFS::ReqRead] Failed to read %u bytes from file descriptor "
@@ -541,12 +612,11 @@ static s32 ReqWrite(s32 fd, const void* data, u32 len)
     if (len == 0)
         return ISFSError::OK;
 
-    if (!(spFileDescriptorArray[fd].mode & IOS::Mode::Write))
+    if (!(sFileArray[fd].mode & IOS::Mode::Write))
         return ISFSError::NoAccess;
 
     unsigned int bytesWrote;
-    const FRESULT fret =
-        f_write(&spFileDescriptorArray[fd].fil, data, len, &bytesWrote);
+    const FRESULT fret = f_write(&sFileArray[fd].fil, data, len, &bytesWrote);
     if (fret != FR_OK) {
         PRINT(IOS_EmuFS, ERROR,
               "[EmuFS::ReqWrite] Failed to write %u bytes to file descriptor "
@@ -575,7 +645,7 @@ static s32 ReqSeek(s32 fd, s32 where, s32 whence)
     if (whence < NAND_SEEK_SET || whence > NAND_SEEK_END)
         return ISFSError::Invalid;
 
-    FIL* fil = &spFileDescriptorArray[fd].fil;
+    FIL* fil = &sFileArray[fd].fil;
     FSIZE_t offset = f_tell(fil);
     FSIZE_t endPosition = f_size(fil);
 
@@ -636,17 +706,17 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
         if (cmd == ISFSIoctl::GetFileStats) {
             if (io_len < sizeof(IOS::File::Stat))
                 return ISFSError::Invalid;
-            /* Real FS doesn't seem to even check alignment before writing, but
-             * I'd rather not have the whole of IOS panic over an alignment
-             * exception */
+            // Real FS doesn't seem to even check alignment before writing, but
+            // I'd rather not have the whole of IOS panic over an alignment
+            // exception.
             if (!aligned(io, 4)) {
                 PRINT(IOS_EmuFS, ERROR,
                       "[EmuFS::ReqIoctl] Invalid GetFileStats input alignment");
                 return ISFSError::Invalid;
             }
             IOS::File::Stat* stat = reinterpret_cast<IOS::File::Stat*>(io);
-            stat->size = f_size(&spFileDescriptorArray[fd].fil);
-            stat->pos = f_tell(&spFileDescriptorArray[fd].fil);
+            stat->size = f_size(&sFileArray[fd].fil);
+            stat->pos = f_tell(&sFileArray[fd].fil);
             return ISFSError::OK;
         }
 
@@ -985,8 +1055,8 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
 
         s32 ret = FindAvailableFileDescriptor();
         if (ret >= 0 && ret < NAND_MAX_FILE_DESCRIPTOR_AMOUNT) {
-            spFileDescriptorArray[ret].filOpened = true;
-            spFileDescriptorArray[ret].fil = fil; // Copy
+            sFileArray[ret].filOpened = true;
+            sFileArray[ret].fil = fil; // Copy
         }
 
         PRINT(IOS_EmuFS, INFO,
@@ -1017,6 +1087,61 @@ static s32 ReqIoctlv(s32 fd, ISFSIoctl cmd, u32 in_count, u32 out_count,
     for (u32 i = 0; i < in_count + out_count; i++) {
         if (vec[i].len == 0)
             vec[i].data = nullptr;
+    }
+
+    // Open a direct file
+    if (GetDescriptorType(fd) == DescType::Direct) {
+        if (cmd != ISFSIoctl::OpenDirect) {
+            PRINT(IOS_EmuFS, ERROR,
+                  "[EmuFS::ReqIoctlv] Unknown direct ioctl: %u",
+                  static_cast<s32>(cmd));
+            return ISFSError::Invalid;
+        }
+
+        if (in_count != 2 || out_count != 0) {
+            PRINT(IOS_EmuFS, ERROR,
+                  "[EmuFS::ReqIoctlv] Direct ioctl: wrong vector count!");
+            return ISFSError::Invalid;
+        }
+
+        if (vec[0].len < 1 || vec[0].len > EFS_MAX_PATH_LEN) {
+            PRINT(IOS_EmuFS, ERROR,
+                  "[EmuFS::ReqIoctlv] Direct ioctl: invalid path length: %d",
+                  vec[0].len);
+            return ISFSError::Invalid;
+        }
+
+        if (vec[1].len != sizeof(u32)) {
+            PRINT(
+                IOS_EmuFS, ERROR,
+                "[EmuFS::ReqIoctlv] Direct ioctl: invalid open mode length: %d",
+                vec[1].len);
+            return ISFSError::Invalid;
+        }
+
+        if (!aligned(vec[1].data, 4)) {
+            PRINT(IOS_EmuFS, ERROR,
+                  "[EmuFS::ReqIoctlv] Direct ioctl: invalid open mode "
+                  "alignment!");
+            return ISFSError::Invalid;
+        }
+
+        // Check if the supplied file path length is valid.
+        if (strnlen(reinterpret_cast<const char*>(vec[0].data), vec[0].len) ==
+            vec[0].len) {
+            PRINT(IOS_EmuFS, ERROR,
+                  "[EmuFS::ReqIoctlv] Direct ioctl: path does not terminate!");
+            return ISFSError::Invalid;
+        }
+
+        s32 realFd = ReqDirectOpen(reinterpret_cast<const char*>(vec[0].data),
+                                   *reinterpret_cast<u32*>(vec[1].data));
+        if (realFd < 0)
+            return realFd;
+
+        sDirectFileArray[fd - DIRECT_HANDLE_BASE].inUse = true;
+        sDirectFileArray[fd - DIRECT_HANDLE_BASE].fd = realFd;
+        return ISFSError::OK;
     }
 
     if (!IsManagerHandle(fd))
@@ -1105,135 +1230,180 @@ static s32 ForwardRequest(IOS::Request* req)
     }
 }
 
+static s32 OpenReplaced(IOS::Request* req)
+{
+    char path[64];
+    strncpy(path, req->open.path, 64);
+    path[0] = '/';
+
+    PRINT(IOS_EmuFS, INFO, "[EmuFS::IPCRequest] IOS_Open(%s, 0x%X)", path,
+          req->open.mode);
+
+    if (!strcmp(path, "/dev/fs")) {
+        PRINT(IOS_EmuFS, INFO, "[EmuFS::IPCRequest] Open /dev/fs from PPC");
+
+        // Find open handle.
+        u32 i = 0;
+        for (; i < MGR_HANDLE_MAX; i++) {
+            if (realFS[i].fd() < 0)
+                break;
+        }
+
+        // There should always be an open handle.
+        assert(i != MGR_HANDLE_MAX);
+
+        // Security note! Interrupts will be disabled at this point
+        // (IOS_Open always does), and the IPC thread can't do anything else
+        // while it's waiting for a response from us, so this should be safe
+        // to do to the root process..?
+        s32 pid = IOS_GetProcessId();
+        assert(pid >= 0);
+
+        PRINT(IOS_EmuFS, INFO,
+              "[EmuFS::IPCRequest] Set PID %d to uid %08X gid %04X", pid,
+              req->open.uid, req->open.gid);
+
+        s32 ret2 = IOS_SetUid(pid, req->open.uid);
+        assert(ret2 == IOSError::OK);
+        ret2 = IOS_SetGid(pid, req->open.gid);
+        assert(ret2 == IOSError::OK);
+
+        new (&realFS[i]) IOS::ResourceCtrl<ISFSIoctl>("/dev/fs");
+
+        ret2 = IOS_SetUid(pid, 0);
+        assert(ret2 == IOSError::OK);
+        ret2 = IOS_SetGid(pid, 0);
+        assert(ret2 == IOSError::OK);
+
+        if (realFS[i].fd() < 0) {
+            PRINT(IOS_EmuFS, INFO, "[EmuFS::IPCRequest] /dev/fs open error: %d",
+                  realFS[i].fd());
+            return realFS[i].fd();
+        }
+
+        PRINT(IOS_EmuFS, INFO, "[EmuFS::IPCRequest] /dev/fs open success");
+        return MGR_HANDLE_BASE + i;
+    }
+
+    if (!strncmp(path, "/dev", 4)) {
+        // Fall through to the next resource.
+        return IOSError::NotFound;
+    }
+
+    if (IsReplacedFilepath(path)) {
+        return ReqProxyOpen(path, req->open.mode);
+    }
+
+    PRINT(IOS_EmuFS, INFO, "[EmuFS::IPCRequest] Forwarding open to real FS");
+    return ForwardRequest(req);
+}
+
 static s32 IPCRequest(IOS::Request* req)
 {
     s32 ret = IOSError::Invalid;
 
-    const s32 fd = req->fd;
-    if (req->cmd != IOS::Command::Open && fd >= REAL_HANDLE_BASE &&
-        fd < REAL_HANDLE_BASE + REAL_HANDLE_MAX)
+    s32 fd = req->fd;
+    if (req->cmd != IOS::Command::Open &&
+        GetDescriptorType(fd) == DescType::Real)
         return ForwardRequest(req);
+
+    if (req->cmd != IOS::Command::Open &&
+        GetDescriptorType(fd) == DescType::Direct) {
+        ASSERT(sDirectFileArray[fd - DIRECT_HANDLE_BASE].inUse);
+        s32 realFd = sDirectFileArray[fd - DIRECT_HANDLE_BASE].fd;
+
+        // Switch to replaced file fd for future commands.
+        if (IsFileDescriptorValid(realFd))
+            fd = realFd;
+    }
 
     switch (req->cmd) {
     case IOS::Command::Open: {
-        if (req->open.path[0] != '$') {
+        if (req->open.path[0] == '$') {
+            // Replaced ISFS path.
+            ret = OpenReplaced(req);
+            break;
+        }
+
+        if (strcmp(req->open.path, "/dev/saoirse/file") != 0) {
             ret = IOSError::NotFound;
             break;
         }
-        char path[64];
-        strncpy(path, req->open.path, 64);
-        path[0] = '/';
 
-        PRINT(IOS_EmuFS, INFO, "[EmuFS::IPCRequest] IOS_Open(%s, 0x%X)", path,
-              req->open.mode);
-
-        if (!strcmp(path, "/dev/fs")) {
-            PRINT(IOS_EmuFS, INFO, "[EmuFS::IPCRequest] Open /dev/fs from PPC");
-
-            // Find open handle.
-            u32 i = 0;
-            for (; i < MGR_HANDLE_MAX; i++) {
-                if (realFS[i].fd() < 0)
-                    break;
-            }
-
-            // There should always be an open handle.
-            assert(i != MGR_HANDLE_MAX);
-
-            // Security note! Interrupts will be disabled at this point
-            // (IOS_Open always does), and the IPC thread can't do anything else
-            // while it's waiting for a response from us, so this should be safe
-            // to do to the root process..?
-            s32 pid = IOS_GetProcessId();
-            assert(pid >= 0);
-
-            PRINT(IOS_EmuFS, INFO,
-                  "[EmuFS::IPCRequest] Set PID %d to uid %08X gid %04X", pid,
-                  req->open.uid, req->open.gid);
-
-            s32 ret2 = IOS_SetUid(pid, req->open.uid);
-            assert(ret2 == IOSError::OK);
-            ret2 = IOS_SetGid(pid, req->open.gid);
-            assert(ret2 == IOSError::OK);
-
-            new (&realFS[i]) IOS::ResourceCtrl<ISFSIoctl>("/dev/fs");
-
-            ret2 = IOS_SetUid(pid, 0);
-            assert(ret2 == IOSError::OK);
-            ret2 = IOS_SetGid(pid, 0);
-            assert(ret2 == IOSError::OK);
-
-            if (realFS[i].fd() < 0) {
-                PRINT(IOS_EmuFS, INFO,
-                      "[EmuFS::IPCRequest] /dev/fs open error: %d",
-                      realFS[i].fd());
-                ret = realFS[i].fd();
+        // Direct file open.
+        // Find available direct file index.
+        int i = 0;
+        for (; i < DIRECT_HANDLE_MAX; i++) {
+            if (!sDirectFileArray[i].inUse)
                 break;
-            }
+        }
 
-            PRINT(IOS_EmuFS, INFO, "[EmuFS::IPCRequest] /dev/fs open success");
-            ret = MGR_HANDLE_BASE + i;
+        if (i == DIRECT_HANDLE_MAX) {
+            PRINT(IOS_EmuFS, ERROR,
+                  "[EmuFS::IPCRequest] No direct file handles available!");
+            ret = ISFSError::MaxOpen;
             break;
         }
 
-        if (!strncmp(path, "/dev", 4)) {
-            // Fall through to the next resource.
-            ret = IOSError::NotFound;
-            break;
-        }
-
-        if (IsReplacedFilepath(path)) {
-            ret = ReqProxyOpen(path, req->open.mode);
-            break;
-        }
-
-        PRINT(IOS_EmuFS, INFO,
-              "[EmuFS::IPCRequest] Forwarding open to real FS");
-        ret = ForwardRequest(req);
+        sDirectFileArray[i].inUse = true;
+        sDirectFileArray[i].fd = ISFSError::NotFound;
+        ret = DIRECT_HANDLE_BASE + i;
         break;
     }
 
     case IOS::Command::Close:
-        PRINT(IOS_EmuFS, INFO, "[EmuFS::IPCRequest] IOS_Close(%d)", req->fd);
-        ret = ReqClose(req->fd);
+        PRINT(IOS_EmuFS, INFO, "[EmuFS::IPCRequest] IOS_Close(%d)", fd);
+        ret = ISFSError::OK;
+
+        // If the fd is Direct, this means the file hasn't been opened and this
+        // will error. We probably need a much more clear "has this been opened"
+        // flag.
+        if (GetDescriptorType(fd) != DescType::Direct)
+            ret = ReqClose(fd);
+
+        if (ret >= 0 && GetDescriptorType(req->fd) == DescType::Direct) {
+            sDirectFileArray[req->fd - DIRECT_HANDLE_BASE].inUse = false;
+            sDirectFileArray[req->fd - DIRECT_HANDLE_BASE].fd =
+                ISFSError::NotFound;
+        }
         break;
 
     case IOS::Command::Read:
         PRINT(IOS_EmuFS, INFO, "[EmuFS::IPCRequest] IOS_Read(%d, 0x%08X, 0x%X)",
-              req->fd, req->read.data, req->read.len);
-        ret = ReqRead(req->fd, req->read.data, req->read.len);
+              fd, req->read.data, req->read.len);
+        ret = ReqRead(fd, req->read.data, req->read.len);
         break;
 
     case IOS::Command::Write:
         PRINT(IOS_EmuFS, INFO,
-              "[EmuFS::IPCRequest] IOS_Write(%d, 0x%08X, 0x%X)", req->fd,
+              "[EmuFS::IPCRequest] IOS_Write(%d, 0x%08X, 0x%X)", fd,
               req->write.data, req->write.len);
-        ret = ReqWrite(req->fd, req->write.data, req->write.len);
+        ret = ReqWrite(fd, req->write.data, req->write.len);
         break;
 
     case IOS::Command::Seek:
-        PRINT(IOS_EmuFS, INFO, "[EmuFS::IPCRequest] IOS_Seek(%d, %d, %d)",
-              req->fd, req->seek.where, req->seek.whence);
-        ret = ReqSeek(req->fd, req->seek.where, req->seek.whence);
+        PRINT(IOS_EmuFS, INFO, "[EmuFS::IPCRequest] IOS_Seek(%d, %d, %d)", fd,
+              req->seek.where, req->seek.whence);
+        ret = ReqSeek(fd, req->seek.where, req->seek.whence);
         break;
 
     case IOS::Command::Ioctl:
-        PRINT(
-            IOS_EmuFS, INFO,
-            "[EmuFS::IPCRequest] IOS_Ioctl(%d, %d, 0x%08X, 0x%X, 0x%08X, 0x%X)",
-            req->fd, req->ioctl.cmd, req->ioctl.in, req->ioctl.in_len,
-            req->ioctl.io, req->ioctl.io_len);
-        ret = ReqIoctl(req->fd, static_cast<ISFSIoctl>(req->ioctl.cmd),
-                       req->ioctl.in, req->ioctl.in_len, req->ioctl.io,
-                       req->ioctl.io_len);
+        PRINT(IOS_EmuFS, INFO,
+              "[EmuFS::IPCRequest] IOS_Ioctl(%d, %d, 0x%08X, 0x%X, 0x%08X, "
+              "0x%X)",
+              fd, req->ioctl.cmd, req->ioctl.in, req->ioctl.in_len,
+              req->ioctl.io, req->ioctl.io_len);
+        ret =
+            ReqIoctl(fd, static_cast<ISFSIoctl>(req->ioctl.cmd), req->ioctl.in,
+                     req->ioctl.in_len, req->ioctl.io, req->ioctl.io_len);
         break;
 
     case IOS::Command::Ioctlv:
         PRINT(IOS_EmuFS, INFO,
-              "[EmuFS::IPCRequest] IOS_Ioctlv(%d, %d, %d, %d, 0x%08X)", req->fd,
+              "[EmuFS::IPCRequest] IOS_Ioctlv(%d, %d, %d, %d, 0x%08X)", fd,
               req->ioctlv.cmd, req->ioctlv.in_count, req->ioctlv.io_count,
               req->ioctlv.vec);
-        ret = ReqIoctlv(req->fd, static_cast<ISFSIoctl>(req->ioctlv.cmd),
+        ret = ReqIoctlv(fd, static_cast<ISFSIoctl>(req->ioctlv.cmd),
                         req->ioctlv.in_count, req->ioctlv.io_count,
                         req->ioctlv.vec);
         break;
@@ -1254,8 +1424,27 @@ s32 ThreadEntry([[maybe_unused]] void* arg)
     PRINT(IOS_EmuFS, INFO, "Starting FS...");
     PRINT(IOS_EmuFS, INFO, "EmuFS thread ID: %d", IOS_GetThreadId());
 
+    // Reset files
+    for (int i = 0; i < REPLACED_HANDLE_NUM; i++) {
+        sFileArray[REPLACED_HANDLE_BASE + i].inUse = false;
+        sFileArray[REPLACED_HANDLE_BASE + i].filOpened = false;
+    }
+
+    for (int i = 0; i < DIRECT_HANDLE_MAX; i++) {
+        sDirectFileArray[DIRECT_HANDLE_BASE + i].inUse = false;
+        sDirectFileArray[DIRECT_HANDLE_BASE + i].fd = ISFSError::NotFound;
+    }
+
     Queue<IOS::Request*> queue(8);
-    const s32 ret = IOS_RegisterResourceManager("$", queue.id());
+    s32 ret = IOS_RegisterResourceManager("$", queue.id());
+    if (ret != IOSError::OK) {
+        PRINT(IOS_EmuFS, ERROR,
+              "[EmuFS::ThreadEntry] IOS_RegisterResourceManager failed: %d",
+              ret);
+        abort();
+    }
+
+    ret = IOS_RegisterResourceManager("/dev/saoirse/file", queue.id());
     if (ret != IOSError::OK) {
         PRINT(IOS_EmuFS, ERROR,
               "[EmuFS::ThreadEntry] IOS_RegisterResourceManager failed: %d",

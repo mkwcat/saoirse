@@ -32,7 +32,9 @@ enum class ISFSIoctl
     CreateFile = 0x9,
     GetFileStats = 0xB,
     GetUsage = 0xC,
-    Shutdown = 0xD
+    Shutdown = 0xD,
+
+    OpenDirect = 0x1000,
 };
 
 struct ISFSRenameBlock {
