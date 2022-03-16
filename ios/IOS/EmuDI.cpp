@@ -95,12 +95,9 @@ static inline bool IsPatchedOffset(u32 wordOffset)
 
 static s32 Read(s32 handle, u8* outbuf, u32 offset, u32 length)
 {
-    PRINT(IOS_EmuDI, INFO, "Read!");
-
     if (!IsPatchedOffset(offset)) {
         if (!IsPatchedOffset(offset + (length >> 2) - 1)) {
             /* Not patched read, forward to real DI */
-            PRINT(IOS_EmuDI, INFO, "Forwarding read to real DI");
             return RealRead(handle, outbuf, offset, length);
         }
         /*
