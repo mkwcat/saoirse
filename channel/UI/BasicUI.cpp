@@ -15,6 +15,7 @@ LIBOGC_SUCKS_BEGIN
 #include <ogc/consol.h>
 #include <ogc/machine/processor.h>
 #include <ogc/system.h>
+#include <wiiuse/wpad.h>
 LIBOGC_SUCKS_END
 
 BasicUI* BasicUI::sInstance;
@@ -281,6 +282,7 @@ void BasicUI::OnSelect(OptionType opt)
     switch (opt) {
     case OptionType::StartGame:
         VIDEO_WaitVSync();
+        WPAD_Shutdown();
         LaunchGame();
         break;
 
