@@ -14,18 +14,89 @@
 #include <Main/LaunchState.hpp>
 #include <Patch/Codehandler.hpp>
 #include <Patch/PatchList.hpp>
+#include <System/ISFS.hpp>
 #include <System/Util.h>
 #include <UI/BasicUI.hpp>
-#include <System/ISFS.hpp>
 #include <UI/Input.hpp>
 #include <cstring>
 #include <stdio.h>
 #include <unistd.h>
 LIBOGC_SUCKS_BEGIN
 #include <ogc/context.h>
+#include <ogc/exi.h>
 #include <ogc/machine/processor.h>
 #include <wiiuse/wpad.h>
 LIBOGC_SUCKS_END
+
+bool RTCRead(u32 offset, u32* value)
+{
+    if (EXI_Lock(EXI_CHANNEL_0, EXI_DEVICE_1, NULL) == 0)
+        return false;
+    if (EXI_Select(EXI_CHANNEL_0, EXI_DEVICE_1, EXI_SPEED8MHZ) == 0) {
+        EXI_Unlock(EXI_CHANNEL_0);
+        return false;
+    }
+
+    bool ret = true;
+    if (EXI_Imm(EXI_CHANNEL_0, &offset, 4, EXI_WRITE, NULL) == 0)
+        ret = false;
+    if (EXI_Sync(EXI_CHANNEL_0) == 0)
+        ret = false;
+    if (EXI_Imm(EXI_CHANNEL_0, value, 4, EXI_READ, NULL) == 0)
+        ret = false;
+    if (EXI_Sync(EXI_CHANNEL_0) == 0)
+        ret = false;
+    if (EXI_Deselect(EXI_CHANNEL_0) == 0)
+        ret = false;
+    EXI_Unlock(EXI_CHANNEL_0);
+
+    return ret;
+}
+
+bool RTCWrite(u32 offset, u32 value)
+{
+    if (EXI_Lock(EXI_CHANNEL_0, EXI_DEVICE_1, NULL) == 0)
+        return false;
+    if (EXI_Select(EXI_CHANNEL_0, EXI_DEVICE_1, EXI_SPEED8MHZ) == 0) {
+        EXI_Unlock(EXI_CHANNEL_0);
+        return false;
+    }
+
+    // Enable write mode
+    offset |= 0x80000000;
+
+    bool ret = true;
+    if (EXI_Imm(EXI_CHANNEL_0, &offset, 4, EXI_WRITE, NULL) == 0)
+        ret = false;
+    if (EXI_Sync(EXI_CHANNEL_0) == 0)
+        ret = false;
+    if (EXI_Imm(EXI_CHANNEL_0, &value, 4, EXI_WRITE, NULL) == 0)
+        ret = false;
+    if (EXI_Sync(EXI_CHANNEL_0) == 0)
+        ret = false;
+    if (EXI_Deselect(EXI_CHANNEL_0) == 0)
+        ret = false;
+    EXI_Unlock(EXI_CHANNEL_0);
+
+    return ret;
+}
+
+// Re-enables holding the power button to turn off the console on vWii
+bool WiiUEnableHoldPower()
+{
+    // RTC_CONTROL1 |= 4COUNT_EN
+
+    u32 flags = 0;
+    bool ret = RTCRead(0x21000D00, &flags);
+    if (!ret)
+        return false;
+
+    ret = RTCWrite(0x21000D00, flags | 1);
+    if (!ret)
+        return false;
+
+    return true;
+}
 
 static void PIErrorHandler([[maybe_unused]] u32 nIrq,
                            [[maybe_unused]] void* pCtx)
@@ -131,7 +202,7 @@ void TestDirectOpen()
     s32 fd = IOS_Open("/dev/saoirse/file", 0);
     printf("fd: %d\n", fd);
     ASSERT(fd >= 0);
-    
+
     PRINT(Core, INFO, "Open success!");
 
     IOS::Vector vec[2];
@@ -144,7 +215,8 @@ void TestDirectOpen()
     vec[1].data = (void*)&mode;
     vec[1].len = sizeof(mode);
 
-    s32 ret = IOS_Ioctlv(fd, static_cast<u32>(ISFSIoctl::OpenDirect), 2, 0, vec);
+    s32 ret =
+        IOS_Ioctlv(fd, static_cast<u32>(ISFSIoctl::OpenDirect), 2, 0, vec);
     ASSERT(ret >= 0);
 
     PRINT(Core, INFO, "Open direct success!");
@@ -162,6 +234,11 @@ s32 main([[maybe_unused]] s32 argc, [[maybe_unused]] char** argv)
     // Properly handle PI errors
     IRQ_Request(IRQ_PI_ERROR, PIErrorHandler, nullptr);
     __UnmaskIrq(IM_PI_ERROR);
+
+    // This is a nice thing to enable for development, but we should probably
+    // leave it disabled for the end user, unless we can figure out why it was
+    // disabled in the first place.
+    WiiUEnableHoldPower();
 
     Input::sInstance = new Input();
     BasicUI::sInstance = new BasicUI();
