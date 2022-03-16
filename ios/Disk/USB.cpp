@@ -4,6 +4,8 @@
 // Copyright (C) 2022 Team Saoirse
 // SPDX-License-Identifier: MIT
 
+#if 0
+
 #include "USB.hpp"
 #include <Debug/Log.hpp>
 #include <IOS/Syscalls.h>
@@ -171,3 +173,5 @@ s32 USB::ClearHalt(s32 devId, u8 endpoint)
     return ven.ioctl(USBv5Ioctl::CancelEndpoint, reinterpret_cast<void*>(msg),
                      sizeof(msg), nullptr, 0);
 }
+
+#endif
