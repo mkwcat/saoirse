@@ -25,7 +25,7 @@ INCLUDES	:=
 # options for code generation
 #---------------------------------------------------------------------------------
 
-CFLAGS	= -g -O4 -Wall $(MACHDEP) $(INCLUDE) -ffreestanding
+CFLAGS	= -g -Os -Wall $(MACHDEP) $(INCLUDE) -ffreestanding
 CXXFLAGS	=	$(CFLAGS)
 
 LDFLAGS	=	-g -T../boot.ld -Wl,--gc-sections -Wl,-Map,$(notdir $@).map -ffreestanding -nodefaultlibs -nostdlib
@@ -33,7 +33,7 @@ LDFLAGS	=	-g -T../boot.ld -Wl,--gc-sections -Wl,-Map,$(notdir $@).map -ffreestan
 #---------------------------------------------------------------------------------
 # any extra libraries we wish to link with the project
 #---------------------------------------------------------------------------------
-LIBS	:=
+LIBS	:= -lgcc
 
 #---------------------------------------------------------------------------------
 # list of directories containing libraries, this must be the top level containing

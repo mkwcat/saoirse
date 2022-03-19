@@ -14,7 +14,7 @@ typedef unsigned int u32;
 extern const u8 channel_dol_lzma[];
 extern u32 channel_dol_lzma_end;
 
-static inline void loaderAbort()
+void loaderAbort()
 {
     // Do something
     int* i = (int*)0x90000000;
@@ -24,7 +24,7 @@ static inline void loaderAbort()
     }
 }
 
-#define DECODE_ADDR ((u8*)(0x81100000))
+#define DECODE_ADDR ((u8*)(0x81200000))
 
 typedef struct {
     union {
