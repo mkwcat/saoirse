@@ -152,7 +152,7 @@ static s32 UIThreadEntry([[maybe_unused]] void* arg)
     return 0;
 }
 
-PatchList patchList;
+// PatchList patchList;
 EntryPoint entry;
 
 void LaunchGame()
@@ -163,7 +163,7 @@ void LaunchGame()
 
     SetupGlobals(0);
 
-    patchList.ApplyPatches();
+    // patchList.ApplyPatches();
 
     // TODO: Proper shutdown
     SYS_ResetSystem(SYS_SHUTDOWN, 0, 0);
@@ -278,7 +278,7 @@ s32 main([[maybe_unused]] s32 argc, [[maybe_unused]] char** argv)
         PRINT(Core, ERROR, "Apploader aborted");
         abort();
     }
-
+#if 0
     Codehandler::ImportCodehandler(&patchList);
 
     u32 gctSize;
@@ -286,6 +286,7 @@ s32 main([[maybe_unused]] s32 argc, [[maybe_unused]] char** argv)
 
     Codehandler::ImportGCT(&patchList, gct, gct + gctSize);
     patchList.ImportPokeBranch(0x801AAAA0, 0x800018A8);
+#endif
 
     delete DI::sInstance;
 
