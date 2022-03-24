@@ -5,6 +5,7 @@
 // SPDX-License-Identifier: MIT
 
 #include "LzmaDec.h"
+#include <ogc/cache.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -14,7 +15,7 @@ typedef unsigned int u32;
 extern const u8 channel_dol_lzma[];
 extern u32 channel_dol_lzma_end;
 
-void loaderAbort()
+void LoaderAbort()
 {
     // Do something
     int* i = (int*)0x90000000;
@@ -95,6 +96,11 @@ static inline void copyWords(u32* dest, u32* src, u32 count)
 
 __attribute__((noreturn)) void load()
 {
+    // From libogc, this will initialize the L2 cache.
+    extern void __InitCache();
+    __InitCache();
+    ICFlashInvalidate();
+
     ELzmaStatus status;
 
     u32 channel_dol_lzma_size =
@@ -106,7 +112,7 @@ __attribute__((noreturn)) void load()
                           &status, 0);
 
     if (ret != SZ_OK)
-        loaderAbort();
+        LoaderAbort();
 
     DOL* dol = (DOL*)DECODE_ADDR;
     clearWords((u32*)dol->dol_bss_addr, dol->dol_bss_size / 4);

@@ -39,8 +39,6 @@
 #define	r30 30
 #define	r31 31
 
-
-
 #define SRR0 26
 #define SRR1 27
 #define PVR 287
@@ -86,11 +84,13 @@
 	.section .stub
 	.global _start
 _start:
+	// Check if we're in Wii U mode
 	mfspr   r4, PVR
 	rlwinm  r4, r4, 16, 16, 31
 	cmplwi  r4, 0x7001
 	bne-    callRvlStartup
 
+	// If Wii U, then enter Wii compatibility mode
 	mfspr   r3, L2CR
 	rlwinm  r3, r3, 0, 0, 31
 	mtspr   L2CR, r3
@@ -115,8 +115,10 @@ L2:
 	rlwinm  r3, r3, 0, 31, 31
 	cmpwi   r3, 0
 	bne+    L2
-	b       L3
 
+#if 0
+	// Disable Wii U specific registers
+	b       L3
 	.balign 32
 L3:
 	mfspr   r3, HID5
@@ -139,6 +141,7 @@ L4:
 	cmpwi   r4, 0
 	bne+    L4
 	nop
+#endif
 
 callRvlStartup:
 	lis     r3, rvlStartup@h
