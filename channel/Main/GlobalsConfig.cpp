@@ -147,6 +147,7 @@ void SetupGlobals(int fst_expand)
     switch (os0->disc.gamename[3]) {
     case 'E':
     case 'J':
+    case 'K':
         os0->threads.tv_mode = OS_TV_MODE_NTSC;
         break;
     case 'P':
