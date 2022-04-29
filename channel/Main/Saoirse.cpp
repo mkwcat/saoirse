@@ -253,10 +253,16 @@ s32 main([[maybe_unused]] s32 argc, [[maybe_unused]] char** argv)
     extern const char data_ar_end[];
     Arch::sInstance = new Arch(data_ar, data_ar_end - data_ar);
 
-    DI::sInstance = new DI;
-
     // Launch Saoirse IOS
     IOSBoot::LaunchSaoirseIOS();
+
+    // hack to give IOS time to mount the SD Card
+    sleep(1);
+
+    PRINT(Core, INFO, "Send start game IOS request!");
+    IOSBoot::IPCLog::sInstance->startGameIOS();
+
+    DI::sInstance = new DI;
 
     // TODO move this to like a page based UI system or something
     if (!startupDrive()) {
@@ -267,6 +273,8 @@ s32 main([[maybe_unused]] s32 argc, [[maybe_unused]] char** argv)
     LaunchState::Get()->DiscInserted.available = true;
     LaunchState::Get()->ReadDiscID.state = true;
     LaunchState::Get()->ReadDiscID.available = true;
+
+    usleep(32000);
 
     Queue<int> waitDestroy(1);
 
@@ -290,8 +298,6 @@ s32 main([[maybe_unused]] s32 argc, [[maybe_unused]] char** argv)
 
     delete DI::sInstance;
 
-    PRINT(Core, INFO, "Send start game IOS request!");
-    IOSBoot::IPCLog::sInstance->startGameIOS();
     delete IOSBoot::IPCLog::sInstance;
     PRINT(Core, INFO, "Wait for UI...");
 

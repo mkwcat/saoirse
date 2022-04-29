@@ -110,6 +110,18 @@ public:
     };
     static_assert(sizeof(DICommand) == 0x20);
 
+    struct Partition {
+        ES::Ticket ticket;
+        u32 tmdByteLength;
+        u32 tmdWordOffset;
+        u32 certChainByteLength;
+        u32 certChainWordOffset;
+        u32 h3TableWordOffset;
+        u32 dataWordOffset;
+        u32 dataWordLength;
+    };
+    static_assert(sizeof(DICommand) == 0x20);
+
     // DVDLowInquiry; Retrieves information about the drive version.
     DIError Inquiry(DriveInfo* info);
 
@@ -189,6 +201,11 @@ public:
 
     // DVDLowReadDiskBca; Reads the last 64 bytes of the burst cutting area.
     DIError ReadDiskBca(u8* out);
+
+    s32 GetFd() const
+    {
+        return di.fd();
+    }
 
 private:
     DIError CallIoctl(DICommand& block, DIIoctl cmd, void* out = nullptr,

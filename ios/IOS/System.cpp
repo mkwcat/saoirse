@@ -5,24 +5,27 @@
 // SPDX-License-Identifier: MIT
 
 #include "System.hpp"
+#include <DVD/DI.hpp>
 #include <Debug/Log.hpp>
 #include <Disk/SDCard.hpp>
+#include <EmuDI/EmuDI.hpp>
 #include <FAT/ff.h>
 #include <IOS/DeviceMgr.hpp>
-#include <IOS/EmuDI.hpp>
 #include <IOS/EmuFS.hpp>
 #include <IOS/IPCLog.hpp>
 #include <IOS/Patch.hpp>
 #include <IOS/Syscalls.h>
+#include <System/AES.hpp>
 #include <System/Config.hpp>
 #include <System/Hollywood.hpp>
 #include <System/OS.hpp>
+#include <System/SHA.hpp>
 #include <System/Types.h>
 #include <System/Util.h>
 #include <cstdio>
 #include <cstring>
 
-constexpr u32 SystemHeapSize = 0x8000; // 32 KB
+constexpr u32 SystemHeapSize = 0x40000; // 256 KB
 s32 System::s_heapId = -1;
 
 // Common ARM C++ init
@@ -189,6 +192,10 @@ bool OpenLogFile()
 
 s32 SystemThreadEntry([[maybe_unused]] void* arg)
 {
+    SHA::sInstance = new SHA();
+    AES::sInstance = new AES();
+    DI::sInstance = new DI();
+
     ImportKoreanCommonKey();
     IOS::Resource::MakeIPCToCallbackThread();
     StaticInit();
