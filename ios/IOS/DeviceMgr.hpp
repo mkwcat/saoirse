@@ -8,6 +8,7 @@
 
 #include <FAT/ff.h>
 #include <System/OS.hpp>
+#include <cstring>
 
 class DeviceMgr
 {
@@ -29,13 +30,19 @@ public:
         Dev_USB6,
         Dev_USB7,
         DEVICE_COUNT,
+        Dev_None = -1,
     };
 
     bool IsInserted(DeviceKind device);
     bool IsMounted(DeviceKind device);
+    void SetError(DeviceKind device);
     static int DeviceKindToDRV(DeviceKind device);
     static DeviceKind DRVToDeviceKind(int drv);
     FATFS* GetFilesystem(DeviceKind device);
+    void ForceUpdate();
+
+    bool IsLogEnabled();
+    void WriteToLog(const char* str, u32 len);
 
 private:
     void Run();
@@ -50,6 +57,7 @@ private:
 
     void InitHandle(DeviceKind id);
     void UpdateHandle(DeviceKind id);
+    bool OpenLogFile();
 
 private:
     DeviceHandle m_devices[DEVICE_COUNT];
@@ -57,4 +65,8 @@ private:
     Thread m_thread;
     Queue<int> m_timerQueue;
     s32 m_timer;
+
+    bool m_logEnabled;
+    DeviceKind m_logDevice = Dev_SDCard;
+    FIL m_logFile;
 };

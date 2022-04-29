@@ -7,6 +7,7 @@
 #include "DeviceMgr.hpp"
 #include <Debug/Log.hpp>
 #include <Disk/SDCard.hpp>
+#include <System/Config.hpp>
 #include <System/Types.h>
 
 DeviceMgr* DeviceMgr::sInstance;
@@ -40,7 +41,14 @@ bool DeviceMgr::IsMounted(DeviceKind device)
 {
     ASSERT((u32)device < DEVICE_COUNT);
 
-    return m_devices[device].mounted;
+    return m_devices[device].mounted & !m_devices[device].error;
+}
+
+void DeviceMgr::SetError(DeviceKind device)
+{
+    ASSERT((u32)device < DEVICE_COUNT);
+
+    m_devices[device].error = true;
 }
 
 int DeviceMgr::DeviceKindToDRV(DeviceKind device)
@@ -62,6 +70,31 @@ FATFS* DeviceMgr::GetFilesystem(DeviceKind device)
     ASSERT((u32)device < DEVICE_COUNT);
 
     return &m_devices[device].fs;
+}
+
+void DeviceMgr::ForceUpdate()
+{
+    m_timerQueue.send(0);
+}
+
+bool DeviceMgr::IsLogEnabled()
+{
+    if (!m_logEnabled || !IsMounted(m_logDevice))
+        return false;
+
+    return true;
+}
+
+void DeviceMgr::WriteToLog(const char* str, u32 len)
+{
+    if (!IsLogEnabled())
+        return;
+
+    UINT bw = 0;
+    f_write(&m_logFile, str, len, &bw);
+    static const char newline = '\n';
+    f_write(&m_logFile, &newline, 1, &bw);
+    f_sync(&m_logFile);
 }
 
 void DeviceMgr::Run()
@@ -111,6 +144,11 @@ void DeviceMgr::UpdateHandle(DeviceKind id)
         dev->error = false;
 
     if (!dev->inserted && dev->mounted) {
+        // Disable file log if it was writing to this device
+        if (m_logEnabled && id == m_logDevice) {
+            m_logEnabled = false;
+        }
+
         PRINT(IOS_DevMgr, INFO, "Unmount device %d", id);
 
         // If we don't finish then it's an error.
@@ -148,7 +186,7 @@ void DeviceMgr::UpdateHandle(DeviceKind id)
 
         // Create default path str.
         char str2[16] = "0:/saoirse";
-        str2[0] = DeviceKindToDRV(id) + '\0';
+        str2[0] = DeviceKindToDRV(id) + '0';
 
         fret = f_chdir(str2);
         if (fret != FR_OK) {
@@ -161,5 +199,29 @@ void DeviceMgr::UpdateHandle(DeviceKind id)
 
         dev->mounted = true;
         dev->error = false;
+
+        // Open log file if it's enabled
+        if (!m_logEnabled && Config::sInstance->IsFileLogEnabled() &&
+            id == m_logDevice) {
+            OpenLogFile();
+        }
     }
+}
+
+bool DeviceMgr::OpenLogFile()
+{
+    PRINT(IOS_DevMgr, INFO, "Opening log file");
+
+    char path[16] = "0:log.txt";
+    path[0] = DeviceKindToDRV(m_logDevice) + '0';
+
+    auto fret = f_open(&m_logFile, path, FA_CREATE_ALWAYS | FA_WRITE);
+    if (fret != FR_OK) {
+        PRINT(IOS_DevMgr, ERROR, "Failed to open log file: %d", fret);
+        return false;
+    }
+
+    m_logEnabled = true;
+    PRINT(IOS_DevMgr, INFO, "Log file opened");
+    return true;
 }

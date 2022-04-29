@@ -8,6 +8,7 @@
 #include <System/OS.hpp>
 #include <System/Types.h>
 #ifdef TARGET_IOS
+#include <IOS/DeviceMgr.hpp>
 #include <IOS/IPCLog.hpp>
 #endif
 #include <array>
@@ -17,8 +18,6 @@
 
 #ifdef TARGET_IOS
 bool Log::ipcLogEnabled = false;
-bool Log::fileLogEnabled = false;
-FIL Log::logFile;
 #endif
 
 static constexpr std::array<const char*, 3> logColors = {
@@ -33,7 +32,7 @@ constexpr u32 logLevel = 0;
 bool Log::IsEnabled()
 {
 #ifdef TARGET_IOS
-    return ipcLogEnabled || fileLogEnabled;
+    return ipcLogEnabled || DeviceMgr::sInstance->IsLogEnabled();
 #else
     return true;
 #endif
@@ -42,10 +41,9 @@ bool Log::IsEnabled()
 void Log::VPrint(LogSource src, const char* srcStr, const char* funcStr,
                  LogLevel level, const char* format, va_list args)
 {
-#ifdef TARGET_IOS
-    if (!ipcLogEnabled && !fileLogEnabled)
+    if (!IsEnabled())
         return;
-#endif
+
     if (logMutex == nullptr) {
         logMutex = new Mutex;
     }
@@ -83,14 +81,8 @@ void Log::VPrint(LogSource src, const char* srcStr, const char* funcStr,
             IPCLog::sInstance->Print(&printBuffer[0]);
         }
 
-        if (fileLogEnabled) {
-            UINT bw = 0;
-            // Subtract 7 twice to remove the color codes on both sides
-            f_write(&logFile, &logBuffer[0], strlen(&logBuffer[0]), &bw);
-            static const char newline = '\n';
-            f_write(&logFile, &newline, 1, &bw);
-            f_sync(&logFile);
-        }
+        DeviceMgr::sInstance->WriteToLog(&logBuffer[0], len);
+
 #else
         printf("%s[%s %s] %s\n\x1b[37;1m", logColors[slvl], srcStr, funcStr,
                logBuffer.data());

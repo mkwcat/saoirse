@@ -52,8 +52,6 @@ enum class IPCLogReply
 
 #ifdef TARGET_IOS
 extern bool ipcLogEnabled;
-extern bool fileLogEnabled;
-extern FIL logFile;
 #endif
 
 bool IsEnabled();

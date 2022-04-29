@@ -161,35 +161,6 @@ void KernelWrite(u32 address, u32 value)
     IOS_DestroyMessageQueue(queue);
 }
 
-void DumpRAMToLog()
-{
-    extern u8 __data_start[];
-    extern u8 __data_end[];
-
-    // These strings will be in the RAM dump but there's not much we can do
-    // about that. If you're searching, just add a \n to the end of it.
-    PRINT(IOS, INFO, "!!! RAM DUMP START !!!");
-    UINT bw;
-    f_write(&Log::logFile, __data_start, __data_end - __data_start, &bw);
-    PRINT(IOS, INFO, "!!! RAM DUMP END !!!");
-}
-
-bool OpenLogFile()
-{
-    PRINT(IOS, INFO, "Opening log file");
-
-    FRESULT fret = f_open(&Log::logFile, "0:/saoirse_log.txt",
-                          FA_CREATE_ALWAYS | FA_WRITE);
-    if (fret != FR_OK) {
-        PRINT(IOS, ERROR, "Failed to open log file! %d", fret);
-        return false;
-    }
-
-    Log::fileLogEnabled = true;
-    PRINT(IOS, INFO, "Log file opened");
-    return true;
-}
-
 s32 SystemThreadEntry([[maybe_unused]] void* arg)
 {
     SHA::sInstance = new SHA();
@@ -207,10 +178,6 @@ s32 SystemThreadEntry([[maybe_unused]] void* arg)
     PRINT(IOS, INFO, "Starting up game IOS...");
 
     PatchIOSOpen();
-
-    if (Config::sInstance->IsFileLogEnabled()) {
-        OpenLogFile();
-    }
 
     new Thread(EmuFS::ThreadEntry, nullptr, nullptr, 0x2000, 80);
     new Thread(EmuDI::ThreadEntry, nullptr, nullptr, 0x2000, 80);

@@ -8,6 +8,7 @@
 #include <Disk/SDCard.hpp>
 #include <FAT/diskio.h>
 #include <FAT/ff.h>
+#include <IOS/DeviceMgr.hpp>
 #include <System/OS.hpp>
 
 constexpr BYTE DRV_SDCARD = 0;
@@ -17,6 +18,8 @@ DSTATUS disk_status(BYTE pdrv)
     // PRINT(DiskIO, INFO, "disk_status: drv: %d", pdrv);
     if (pdrv == DRV_SDCARD) {
         if (!SDCard::IsInitialized() || !SDCard::IsInserted()) {
+            DeviceMgr::sInstance->SetError(DeviceMgr::DRVToDeviceKind(pdrv));
+            DeviceMgr::sInstance->ForceUpdate();
             PRINT(DiskIO, WARN, "disk_status returning STA_NODISK");
             return STA_NODISK;
         }
@@ -31,6 +34,8 @@ DSTATUS disk_initialize(BYTE pdrv)
     if (pdrv == DRV_SDCARD) {
         if (!SDCard::Startup()) {
             /* No way to differentiate between error and not inserted */
+            DeviceMgr::sInstance->SetError(DeviceMgr::DRVToDeviceKind(pdrv));
+            DeviceMgr::sInstance->ForceUpdate();
             PRINT(DiskIO, WARN,
                   "disk_initialize: SDCard::Startup returned false");
             return STA_NODISK;
@@ -50,6 +55,8 @@ DRESULT disk_read(BYTE pdrv, BYTE* buff, LBA_t sector, UINT count)
 
         s32 ret = SDCard::ReadSectors(sector, count, buff);
         if (ret < 0) {
+            DeviceMgr::sInstance->SetError(DeviceMgr::DRVToDeviceKind(pdrv));
+            DeviceMgr::sInstance->ForceUpdate();
             PRINT(DiskIO, ERROR, "disk_read: SDCard::ReadSectors failed: %d",
                   ret);
             return RES_ERROR;
@@ -67,6 +74,8 @@ DRESULT disk_write(BYTE pdrv, const BYTE* buff, LBA_t sector, UINT count)
 
         s32 ret = SDCard::WriteSectors(sector, count, buff);
         if (ret < 0) {
+            DeviceMgr::sInstance->SetError(DeviceMgr::DRVToDeviceKind(pdrv));
+            DeviceMgr::sInstance->ForceUpdate();
             PRINT(DiskIO, ERROR, "disk_write: SDCard::WriteSectors failed: %d",
                   ret);
             return RES_ERROR;

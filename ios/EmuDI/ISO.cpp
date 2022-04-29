@@ -106,10 +106,12 @@ bool ISO::ReadRaw(void* buffer, u32 wordOffset, u32 byteLen)
         }
 
         auto fret = f_lseek(fp, partOffset);
-        assert(fret == FR_OK);
+        if (fret != FR_OK)
+            return false;
         UINT br;
         fret = f_read(fp, buffer, lengthToRead, &br);
-        assert(fret == FR_OK);
+        if (fret != FR_OK)
+            return false;
 
         partOffset = 0;
         byteLen -= lengthToRead;
