@@ -26,6 +26,33 @@ ISO::ISO(const char* path, const char* path2)
         m_lastPartSize = f_size(&m_isoFile2);
     }
 
+    // Use FatFS fast seek function to speed up long backwards seeks
+    // Distribute cluster map equally across the two parts
+    const u32 clmtSize = sizeof(m_isoClmt) / sizeof(DWORD);
+
+    if (m_numParts == 1) {
+        m_isoFile.cltbl = m_isoClmt;
+        m_isoClmt[0] = clmtSize;
+
+        fret = f_lseek(&m_isoFile, CREATE_LINKMAP);
+        assert(fret == FR_OK);
+    } else {
+        u32 dist = ((u64)m_partSize + (u64)m_lastPartSize) / clmtSize;
+        u32 clmt1stSize = m_partSize / dist;
+
+        m_isoFile.cltbl = m_isoClmt;
+        m_isoClmt[0] = clmt1stSize;
+
+        m_isoFile2.cltbl = &m_isoClmt[clmt1stSize];
+        m_isoClmt[clmt1stSize] = clmtSize - clmt1stSize;
+
+        fret = f_lseek(&m_isoFile, CREATE_LINKMAP);
+        assert(fret == FR_OK);
+
+        fret = f_lseek(&m_isoFile2, CREATE_LINKMAP);
+        assert(fret == FR_OK);
+    }
+
     PRINT(IOS_EmuDI, INFO, "Successfully opened ISO file");
     PRINT(IOS_EmuDI, INFO, "Part size: %08X", m_partSize);
     PRINT(IOS_EmuDI, INFO, "Num parts: %08X", m_numParts);

@@ -36,6 +36,9 @@ private:
 
     FIL m_isoFile2;
 
+    // FatFS fast seek feature
+    DWORD m_isoClmt[0x1000] = {0};
+
     DI::DiskID m_diskID;
     bool m_readDiskIDCalled = false;
     DI::Partition m_partition;

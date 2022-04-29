@@ -480,7 +480,6 @@ static inline void ReqIoctl(IOSRequest* req)
         auto reply = EmuIoctl(reinterpret_cast<DVDCommand*>(req->ioctl.in),
                               static_cast<DI::DIIoctl>(req->ioctl.cmd),
                               req->ioctl.io, req->ioctl.io_len);
-        PRINT(IOS_EmuDI, INFO, "Ioctl %d reply 0x%X", req->ioctl.cmd, reply);
         IOS_ResourceReply(req, static_cast<s32>(reply));
         return;
     }
