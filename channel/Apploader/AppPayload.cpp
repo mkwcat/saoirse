@@ -98,8 +98,8 @@ static s32 AppPayload_Printf(const char* format, ...)
 
     va_list args;
     va_start(args, format);
-    Log::VPrint(Log::LogSource::Payload, "Payload", Log::LogLevel::INFO, format,
-                args);
+    Log::VPrint(Log::LogSource::Payload, "Payload", "AppPayload_Printf",
+                Log::LogLevel::INFO, format, args);
     va_end(args);
     return 0;
 }

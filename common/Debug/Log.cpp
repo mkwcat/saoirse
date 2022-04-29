@@ -39,8 +39,8 @@ bool Log::IsEnabled()
 #endif
 }
 
-void Log::VPrint(LogSource src, const char* srcStr, LogLevel level,
-                 const char* format, va_list args)
+void Log::VPrint(LogSource src, const char* srcStr, const char* funcStr,
+                 LogLevel level, const char* format, va_list args)
 {
 #ifdef TARGET_IOS
     if (!ipcLogEnabled && !fileLogEnabled)
@@ -76,8 +76,8 @@ void Log::VPrint(LogSource src, const char* srcStr, LogLevel level,
 
 #ifdef TARGET_IOS
         static std::array<char, 256> printBuffer;
-        snprintf(&printBuffer[0], printBuffer.size(), "%s[%s] %s\x1b[37;1m",
-                 logColors[slvl], srcStr, logBuffer.data());
+        snprintf(&printBuffer[0], printBuffer.size(), "%s[%s %s] %s\x1b[37;1m",
+                 logColors[slvl], srcStr, funcStr, logBuffer.data());
 
         if (ipcLogEnabled) {
             IPCLog::sInstance->Print(&printBuffer[0]);
@@ -92,18 +92,18 @@ void Log::VPrint(LogSource src, const char* srcStr, LogLevel level,
             f_sync(&logFile);
         }
 #else
-        printf("%s[%s] %s\n\x1b[37;1m", logColors[slvl], srcStr,
+        printf("%s[%s %s] %s\n\x1b[37;1m", logColors[slvl], srcStr, funcStr,
                logBuffer.data());
 #endif
         logMutex->unlock();
     }
 }
 
-void Log::Print(LogSource src, const char* srcStr, LogLevel level,
-                const char* format, ...)
+void Log::Print(LogSource src, const char* srcStr, const char* funcStr,
+                LogLevel level, const char* format, ...)
 {
     va_list args;
     va_start(args, format);
-    VPrint(src, srcStr, level, format, args);
+    VPrint(src, srcStr, funcStr, level, format, args);
     va_end(args);
 }

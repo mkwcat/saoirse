@@ -58,13 +58,15 @@ extern FIL logFile;
 
 bool IsEnabled();
 
-void VPrint(LogSource src, const char* srcStr, LogLevel level,
-            const char* format, va_list args);
-void Print(LogSource src, const char* srcStr, LogLevel level,
-           const char* format, ...);
+void VPrint(LogSource src, const char* srcStr, const char* funcStr,
+            LogLevel level, const char* format, va_list args);
+void Print(LogSource src, const char* srcStr, const char* funcStr,
+           LogLevel level, const char* format, ...);
+
+#define STR(f) #f
 
 #define PRINT(CHANNEL, LEVEL, ...)                                             \
-    Log::Print(Log::LogSource::CHANNEL, #CHANNEL, Log::LogLevel::LEVEL,        \
-               __VA_ARGS__)
+    Log::Print(Log::LogSource::CHANNEL, #CHANNEL, __FUNCTION__,                \
+               Log::LogLevel::LEVEL, __VA_ARGS__)
 
 } // namespace Log
