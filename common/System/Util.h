@@ -22,6 +22,12 @@
 #define ATTRIBUTE_NOINLINE __attribute__((noinline))
 #endif
 
+#ifndef TARGET_IOS
+#define PPC_ALIGN ATTRIBUTE_ALIGN(32)
+#else
+#define PPC_ALIGN
+#endif
+
 #ifdef __cplusplus
 #define EXTERN_C_START extern "C" {
 #define EXTERN_C_END }
@@ -62,7 +68,7 @@ constexpr T round_down(T num, unsigned int align)
 template <class T>
 constexpr bool aligned(T addr, unsigned int align)
 {
-    return !(reinterpret_cast<unsigned int>(addr) & (align - 1));
+    return !((u32)addr & (align - 1));
 }
 
 #include <cstddef>
