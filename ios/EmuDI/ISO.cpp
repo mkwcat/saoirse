@@ -1,3 +1,9 @@
+// ISO.cpp - ISO virtual disc
+//   Written by Palapeli
+//
+// Copyright (C) 2022 Team Saoirse
+// SPDX-License-Identifier: MIT
+
 #include "ISO.hpp"
 #include <Debug/Log.hpp>
 #include <IOS/EmuES.hpp>

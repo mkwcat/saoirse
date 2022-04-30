@@ -1,3 +1,9 @@
+// ISO.hpp - ISO virtual disc
+//   Written by Palapeli
+//
+// Copyright (C) 2022 Team Saoirse
+// SPDX-License-Identifier: MIT
+
 #pragma once
 
 #include "VirtualDisc.hpp"

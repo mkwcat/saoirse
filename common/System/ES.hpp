@@ -1,4 +1,4 @@
-// ES.hpp - ES types
+// ES.hpp - ES interface
 //   Written by Palapeli
 //
 // Copyright (C) 2022 Team Saoirse

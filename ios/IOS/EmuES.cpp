@@ -1,3 +1,9 @@
+// EmuFS.cpp - Proxy ES RM
+//   Written by Palapeli
+//
+// Copyright (C) 2022 Team Saoirse
+// SPDX-License-Identifier: MIT
+
 #include "EmuES.hpp"
 #include <Debug/Log.hpp>
 #include <IOS/IPCLog.hpp>

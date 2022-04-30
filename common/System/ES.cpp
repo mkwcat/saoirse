@@ -1,3 +1,9 @@
+// ES.cpp - ES interface
+//   Written by Palapeli
+//
+// Copyright (C) 2022 Team Saoirse
+// SPDX-License-Identifier: MIT
+
 #include "ES.hpp"
 
 ES* ES::sInstance = nullptr;
