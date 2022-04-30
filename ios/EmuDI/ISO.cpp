@@ -1,5 +1,6 @@
 #include "ISO.hpp"
 #include <Debug/Log.hpp>
+#include <IOS/EmuES.hpp>
 #include <IOS/System.hpp>
 #include <System/AES.hpp>
 #include <algorithm>
@@ -267,6 +268,13 @@ DI::DIError ISO::OpenPartition(u32 wordOffset, ES::TMDFixed<512>* tmdOut)
     auto ret = ReadTMD(tmdOut);
     if (ret != DI::DIError::OK) {
         return ret;
+    }
+
+    auto esRet =
+        EmuES::DIVerify(m_partition.ticket.info.titleID, &m_partition.ticket);
+    if (esRet != ES::ESError::OK) {
+        PRINT(IOS_EmuDI, ERROR, "DIVerify failed: %d", esRet);
+        return DI::DIError::Verify;
     }
 
     u8 titleKeyBuffer[32] ATTRIBUTE_ALIGN(32);

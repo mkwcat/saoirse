@@ -115,6 +115,16 @@ constexpr bool in_mem2_effective(T addr)
 
 #endif
 
+static inline u32 u64Hi(u64 value)
+{
+    return value >> 32;
+}
+
+static inline u32 u64Lo(u64 value)
+{
+    return value & 0xFFFFFFFF;
+}
+
 #ifndef TARGET_IOS
 LIBOGC_SUCKS_BEGIN
 #include <ogc/machine/processor.h>

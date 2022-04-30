@@ -67,6 +67,10 @@ extern "C" char* IOSOpenStrncpy(char* dest, const char* src, u32 num, s32 pid)
             dest[0] = '$';
             return dest;
         }
+        if (!strcmp(src, "/dev/es")) {
+            dest[0] = '~';
+            return dest;
+        }
         if (!strncmp(src, "/dev/di", 7)) {
             dest[0] = '~';
         }

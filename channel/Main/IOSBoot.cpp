@@ -355,7 +355,7 @@ IOSBoot::IPCLog* IOSBoot::IPCLog::sInstance;
 void IOSBoot::IPCLog::startGameIOS()
 {
     Queue<u32> eventWaitQueue(1);
-    setEventWaitingQueue(&eventWaitQueue, 2);
+    setEventWaitingQueue(&eventWaitQueue, 3);
     logRM.ioctl(Log::IPCLogIoctl::StartGameEvent, nullptr, 0, nullptr, 0);
     eventWaitQueue.receive();
 }

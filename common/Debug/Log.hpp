@@ -27,7 +27,8 @@ enum class LogSource
     IOS_DevMgr,
     IOS_USB,
     IOS_EmuFS,
-    IOS_EmuDI
+    IOS_EmuDI,
+    IOS_EmuES,
 };
 
 enum class LogLevel

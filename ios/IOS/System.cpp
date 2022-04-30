@@ -11,12 +11,14 @@
 #include <EmuDI/EmuDI.hpp>
 #include <FAT/ff.h>
 #include <IOS/DeviceMgr.hpp>
+#include <IOS/EmuES.hpp>
 #include <IOS/EmuFS.hpp>
 #include <IOS/IPCLog.hpp>
 #include <IOS/Patch.hpp>
 #include <IOS/Syscalls.h>
 #include <System/AES.hpp>
 #include <System/Config.hpp>
+#include <System/ES.hpp>
 #include <System/Hollywood.hpp>
 #include <System/OS.hpp>
 #include <System/SHA.hpp>
@@ -166,6 +168,7 @@ s32 SystemThreadEntry([[maybe_unused]] void* arg)
     SHA::sInstance = new SHA();
     AES::sInstance = new AES();
     DI::sInstance = new DI();
+    ES::sInstance = new ES();
 
     ImportKoreanCommonKey();
     IOS::Resource::MakeIPCToCallbackThread();
@@ -181,6 +184,7 @@ s32 SystemThreadEntry([[maybe_unused]] void* arg)
 
     new Thread(EmuFS::ThreadEntry, nullptr, nullptr, 0x2000, 80);
     new Thread(EmuDI::ThreadEntry, nullptr, nullptr, 0x2000, 80);
+    new Thread(EmuES::ThreadEntry, nullptr, nullptr, 0x2000, 80);
 
     return 0;
 }
