@@ -130,20 +130,20 @@ void usleep(u32 usec)
     u32 queueData;
     const s32 queue = IOS_CreateMessageQueue(&queueData, 1);
     if (queue < 0) {
-        PRINT(IOS, ERROR, "[usleep] Failed to create message queue: %d", queue);
+        PRINT(IOS, ERROR, "Failed to create message queue: %d", queue);
         abort();
     }
 
     const s32 timer = IOS_CreateTimer(usec, 0, queue, 1);
     if (timer < 0) {
-        PRINT(IOS, ERROR, "[usleep] Failed to create timer: %d", timer);
+        PRINT(IOS, ERROR, "Failed to create timer: %d", timer);
         abort();
     }
 
     u32 msg;
     const s32 ret = IOS_ReceiveMessage(queue, &msg, 0);
     if (ret < 0 || msg != 1) {
-        PRINT(IOS, ERROR, "[usleep] IOS_ReceiveMessage failed: %d", ret);
+        PRINT(IOS, ERROR, "IOS_ReceiveMessage failed: %d", ret);
         abort();
     }
 

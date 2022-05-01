@@ -25,6 +25,11 @@ static constexpr std::array<const char*, 3> logColors = {
     "\x1b[33;1m",
     "\x1b[31;1m",
 };
+static constexpr std::array<char, 3> logChars = {
+    'I',
+    'W',
+    'E',
+};
 static Mutex* logMutex;
 constexpr u32 logMask = 0xFFFFFFFF;
 constexpr u32 logLevel = 0;
@@ -74,14 +79,19 @@ void Log::VPrint(LogSource src, const char* srcStr, const char* funcStr,
 
 #ifdef TARGET_IOS
         static std::array<char, 256> printBuffer;
-        snprintf(&printBuffer[0], printBuffer.size(), "%s[%s %s] %s\x1b[37;1m",
-                 logColors[slvl], srcStr, funcStr, logBuffer.data());
 
         if (ipcLogEnabled) {
+            len = snprintf(&printBuffer[0], printBuffer.size(),
+                           "%s[%s %s] %s\x1b[37;1m", logColors[slvl], srcStr,
+                           funcStr, logBuffer.data());
             IPCLog::sInstance->Print(&printBuffer[0]);
         }
 
-        DeviceMgr::sInstance->WriteToLog(&logBuffer[0], len);
+        if (DeviceMgr::sInstance->IsLogEnabled()) {
+            len = snprintf(&printBuffer[0], printBuffer.size(), "%c[%s %s] %s",
+                           logChars[slvl], srcStr, funcStr, logBuffer.data());
+            DeviceMgr::sInstance->WriteToLog(&printBuffer[0], len);
+        }
 
 #else
         printf("%s[%s %s] %s\n\x1b[37;1m", logColors[slvl], srcStr, funcStr,

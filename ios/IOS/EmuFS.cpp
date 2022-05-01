@@ -279,9 +279,7 @@ static s32 TryCloseFileDescriptor(int fd)
 
     const FRESULT fret = f_close(&sFileArray[fd].fil);
     if (fret != FR_OK) {
-        PRINT(IOS_EmuFS, ERROR,
-              "[EmuFS::TryCloseFileDescriptor] Failed to close file, error: %d",
-              fret);
+        PRINT(IOS_EmuFS, ERROR, "Failed to close file, error: %d", fret);
         return FResultToISFSError(fret);
     }
 
@@ -358,14 +356,11 @@ static const char* GetReplacedFilepath(const char* filepath, char* out_buf,
     // Create and write the replaced filepath
     filepath = strchr(filepath, NAND_DIRECTORY_SEPARATOR_CHAR);
     if (snprintf(out_buf, out_len, EFS_DRIVE "%s", filepath + 1) <= 0) {
-        PRINT(IOS_EmuFS, ERROR,
-              "[EmuFS::GetReplacedFilepath] Failed to format "
-              "the replaced filepath !");
+        PRINT(IOS_EmuFS, ERROR, "Failed to format the replaced filepath");
         return nullptr;
     }
 
-    PRINT(IOS_EmuFS, INFO,
-          "[EmuFS::GetReplacedFilepath] Replaced file path: \"%s\"", out_buf);
+    PRINT(IOS_EmuFS, INFO, "Replaced file path: \"%s\"", out_buf);
 
     return out_buf;
 }
@@ -377,22 +372,19 @@ static s32 CopyFromNandToEFS(const char* nandPath, FIL& fil)
     // Only allow renaming files from /tmp
     if (strncmp(nandPath, "/tmp", 4) != 0) {
         PRINT(IOS_EmuFS, ERROR,
-              "[EmuFS::CopyFromNandToEFS] Attempting to rename a file from "
-              "outside of /tmp");
+              "Attempting to rename a file from outside of /tmp");
         return ISFSError::NoAccess;
     }
 
     IOS::File isfsFile(nandPath, IOS::Mode::Read);
 
     if (isfsFile.fd() < 0) {
-        PRINT(IOS_EmuFS, ERROR,
-              "[EmuFS::CopyFromNandToEFS] Failed to open ISFS file: %d",
-              isfsFile.fd());
+        PRINT(IOS_EmuFS, ERROR, "Failed to open ISFS file: %d", isfsFile.fd());
         return isfsFile.fd();
     }
 
     s32 size = isfsFile.size();
-    PRINT(IOS_EmuFS, INFO, "[EmuFS::CopyFromNandToEFS] File size: 0x%X", size);
+    PRINT(IOS_EmuFS, INFO, "File size: 0x%X", size);
 
     for (s32 pos = 0; pos < size; pos += sizeof(efsCopyBuffer)) {
         u32 readlen = size - pos;
@@ -403,9 +395,7 @@ static s32 CopyFromNandToEFS(const char* nandPath, FIL& fil)
 
         if ((u32)ret != readlen) {
             f_close(&fil);
-            PRINT(IOS_EmuFS, ERROR,
-                  "[EmuFS::CopyFromNandToEFS] Failed to read from ISFS file: "
-                  "%d != %d",
+            PRINT(IOS_EmuFS, ERROR, "Failed to read from ISFS file: %d != %d",
                   ret, readlen);
             if (ret < 0)
                 return ret;
@@ -417,9 +407,8 @@ static s32 CopyFromNandToEFS(const char* nandPath, FIL& fil)
 
         if (fret != FR_OK || (u32)bw != readlen) {
             PRINT(IOS_EmuFS, ERROR,
-                  "[EmuFS::CopyFromNandToEFS] Failed to write to EFS file: "
-                  "%d != 0 OR %d != %d",
-                  fret, readlen, bw);
+                  "Failed to write to EFS file: %d != 0 OR %d != %d", fret,
+                  readlen, bw);
             if (fret != FR_OK)
                 return FResultToISFSError(fret);
             return ISFSError::Unknown;
@@ -434,9 +423,7 @@ static s32 ReopenFile(s32 fd)
     const FRESULT fret = f_lseek(&sFileArray[fd].fil, 0);
     if (fret != FR_OK) {
         PRINT(IOS_EmuFS, ERROR,
-              "[EmuFS::ReqProxyOpen] Failed to seek to position 0x%08X "
-              "in file descriptor %d !",
-              0, fd);
+              "Failed to seek to position 0x%08X in file descriptor %d", 0, fd);
 
         FreeFileDescriptor(fd);
         return FResultToISFSError(fret);
@@ -459,29 +446,24 @@ static s32 ReqProxyOpen(const char* filepath, u32 mode)
 
     int fd = RegisterFileDescriptor(filepath);
     if (fd < 0) {
-        PRINT(IOS_EmuFS, ERROR,
-              "[EmuFS::ReqProxyOpen] Could not register file descriptor: %d",
-              fd);
+        PRINT(IOS_EmuFS, ERROR, "Could not register file descriptor: %d", fd);
         return fd;
     }
-    PRINT(IOS_EmuFS, INFO,
-          "[EmuFS::ReqProxyOpen] Registered file descriptor %d", fd);
+    PRINT(IOS_EmuFS, INFO, "Registered file descriptor %d", fd);
 
     ASSERT(IsFileDescriptorValid(fd));
 
     sFileArray[fd].mode = mode;
 
     if (sFileArray[fd].filOpened) {
-        PRINT(IOS_EmuFS, INFO,
-              "[EmuFS::ReqProxyOpen] File already open, reusing descriptor");
+        PRINT(IOS_EmuFS, INFO, "File already open, reusing descriptor");
         return ReopenFile(fd);
     }
 
     const FRESULT fret =
         f_open(&sFileArray[fd].fil, efsFilepath, FA_READ | FA_WRITE);
     if (fret != FR_OK) {
-        PRINT(IOS_EmuFS, ERROR,
-              "[EmuFS::ReqProxyOpen] Failed to open file '%s', error: %d",
+        PRINT(IOS_EmuFS, ERROR, "Failed to open file '%s', error: %d",
               efsFilepath, fret);
 
         FreeFileDescriptor(fd);
@@ -490,9 +472,7 @@ static s32 ReqProxyOpen(const char* filepath, u32 mode)
 
     sFileArray[fd].filOpened = true;
 
-    PRINT(IOS_EmuFS, INFO,
-          "[EmuFS::ReqProxyOpen] Successfully opened file '%s' (fd=%d, "
-          "mode=%u) !",
+    PRINT(IOS_EmuFS, INFO, "Successfully opened file '%s' (fd=%d, mode=%u)",
           efsFilepath, fd, mode);
 
     return fd;
@@ -506,8 +486,7 @@ static s32 ReqDirectOpen(const char* filepath, u32 mode)
 {
     int fd = FindAvailableFileDescriptor();
     if (fd < 0) {
-        PRINT(IOS_EmuFS, ERROR,
-              "[EmuFS::ReqDirectOpen] Could not find an open file descriptor!");
+        PRINT(IOS_EmuFS, ERROR, "Could not find an open file descriptor");
         return fd;
     }
 
@@ -517,9 +496,7 @@ static s32 ReqDirectOpen(const char* filepath, u32 mode)
 
     const FRESULT fret = f_open(&sFileArray[fd].fil, filepath, mode);
     if (fret != FR_OK) {
-        PRINT(IOS_EmuFS, ERROR,
-              "[EmuFS::ReqDirectOpen] Failed to open file '%s', mode: %X, "
-              "error: %d",
+        PRINT(IOS_EmuFS, ERROR, "Failed to open file '%s', mode: %X, error: %d",
               filepath, mode, fret);
         return FResultToISFSError(fret);
     }
@@ -527,9 +504,7 @@ static s32 ReqDirectOpen(const char* filepath, u32 mode)
     sFileArray[fd].inUse = true;
     sFileArray[fd].filOpened = true;
 
-    PRINT(IOS_EmuFS, INFO,
-          "[EmuFS::ReqDirectOpen] Successfully opened file '%s' (fd=%d, "
-          "mode=%u) !",
+    PRINT(IOS_EmuFS, INFO, "Successfully opened file '%s' (fd=%d, mode=%u)",
           filepath, fd, mode);
 
     return fd;
@@ -551,15 +526,13 @@ static s32 ReqClose(s32 fd)
         return ISFSError::Invalid;
 
     if (f_sync(&sFileArray[fd].fil) != FR_OK) {
-        PRINT(IOS_EmuFS, ERROR,
-              "[EmuFS::ReqClose] Failed to sync file descriptor %d !", fd);
+        PRINT(IOS_EmuFS, ERROR, "Failed to sync file descriptor %d", fd);
         return ISFSError::Unknown;
     }
 
     FreeFileDescriptor(fd);
 
-    PRINT(IOS_EmuFS, INFO,
-          "[EmuFS::ReqClose] Successfully closed file descriptor %d !", fd);
+    PRINT(IOS_EmuFS, INFO, "Successfully closed file descriptor %d", fd);
 
     return ISFSError::OK;
 }
@@ -583,16 +556,13 @@ static s32 ReqRead(s32 fd, void* data, u32 len)
     const FRESULT fret = f_read(&sFileArray[fd].fil, data, len, &bytesRead);
     if (fret != FR_OK) {
         PRINT(IOS_EmuFS, ERROR,
-              "[EmuFS::ReqRead] Failed to read %u bytes from file descriptor "
-              "%d, error: %d",
-              len, fd, fret);
+              "Failed to read %u bytes from file descriptor %d, error: %d", len,
+              fd, fret);
         return FResultToISFSError(fret);
     }
 
-    PRINT(
-        IOS_EmuFS, INFO,
-        "[EmuFS::ReqRead] Successfully read %u bytes from file descriptor %d !",
-        bytesRead, fd);
+    PRINT(IOS_EmuFS, INFO, "Successfully read %u bytes from file descriptor %d",
+          bytesRead, fd);
 
     return bytesRead;
 }
@@ -616,16 +586,13 @@ static s32 ReqWrite(s32 fd, const void* data, u32 len)
     const FRESULT fret = f_write(&sFileArray[fd].fil, data, len, &bytesWrote);
     if (fret != FR_OK) {
         PRINT(IOS_EmuFS, ERROR,
-              "[EmuFS::ReqWrite] Failed to write %u bytes to file descriptor "
-              "%d, error: %d",
-              len, fd, fret);
+              "Failed to write %u bytes to file descriptor %d, error: %d", len,
+              fd, fret);
         return FResultToISFSError(fret);
     }
 
-    PRINT(
-        IOS_EmuFS, INFO,
-        "[EmuFS::ReqWrite] Successfully wrote %u bytes to file descriptor %d !",
-        bytesWrote, fd);
+    PRINT(IOS_EmuFS, INFO, "Successfully wrote %u bytes to file descriptor %d",
+          bytesWrote, fd);
 
     return bytesWrote;
 }
@@ -672,15 +639,13 @@ static s32 ReqSeek(s32 fd, s32 where, s32 whence)
     const FRESULT fresult = f_lseek(fil, offset);
     if (fresult != FR_OK) {
         PRINT(IOS_EmuFS, ERROR,
-              "[EmuFS::ReqSeek] Failed to seek to position 0x%08X in file "
-              "descriptor %d !",
-              offset, fd);
+              "Failed to seek to position 0x%08X in file descriptor %d", offset,
+              fd);
         return FResultToISFSError(fresult);
     }
 
     PRINT(IOS_EmuFS, INFO,
-          "[EmuFS::ReqSeek] Successfully seeked to position 0x%08X in file "
-          "descriptor %d !",
+          "Successfully seeked to position 0x%08X in file descriptor %d",
           offset, fd);
 
     return offset;
@@ -707,8 +672,7 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
             // I'd rather not have the whole of IOS panic over an alignment
             // exception.
             if (!aligned(io, 4)) {
-                PRINT(IOS_EmuFS, ERROR,
-                      "[EmuFS::ReqIoctl] Invalid GetFileStats input alignment");
+                PRINT(IOS_EmuFS, ERROR, "Invalid GetFileStats input alignment");
                 return ISFSError::Invalid;
             }
             IOS::File::Stat* stat = reinterpret_cast<IOS::File::Stat*>(io);
@@ -717,7 +681,7 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
             return ISFSError::OK;
         }
 
-        PRINT(IOS_EmuFS, ERROR, "[EmuFS::ReqIoctl] Unknown file ioctl: %u",
+        PRINT(IOS_EmuFS, ERROR, "Unknown file ioctl: %u",
               static_cast<s32>(cmd));
         return ISFSError::Invalid;
     }
@@ -738,8 +702,7 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
     case ISFSIoctl::Format:
         /* Hmm, a command to remove everything in the filesystem and brick the
          * Wii. Very good. */
-        PRINT(IOS_EmuFS, ERROR,
-              "[EmuFS::ReqIoctl] Attempt to use ISFS_Format!");
+        PRINT(IOS_EmuFS, ERROR, "Format: Attempt to use ISFS_Format!");
         return ISFSError::NoAccess;
 
     // [ISFS_CreateDir]
@@ -772,13 +735,11 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
         const FRESULT fresult = f_mkdir(path);
         if (fresult != FR_OK) {
             PRINT(IOS_EmuFS, ERROR,
-                  "[EmuFS::ReqIoctl] Failed to create directory '%s' !",
-                  efsFilepath);
+                  "CreateDir: Failed to create directory '%s'", efsFilepath);
             return FResultToISFSError(fresult);
         }
 
-        PRINT(IOS_EmuFS, INFO,
-              "[EmuFS::ReqIoctl] Successfully created directory '%s' !",
+        PRINT(IOS_EmuFS, INFO, "CreateDir: Successfully created directory '%s'",
               efsFilepath);
 
         return ISFSError::OK;
@@ -814,16 +775,15 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
 
         const FRESULT fresult = f_stat(efsFilepath, nullptr);
         if (fresult != FR_OK) {
-            PRINT(IOS_EmuFS, ERROR,
-                  "[EmuFS::ReqIoctl] Failed to set attributes for file or "
-                  "directory '%s' !",
-                  efsFilepath);
+            PRINT(
+                IOS_EmuFS, ERROR,
+                "SetAttr: Failed to set attributes for file or directory '%s'",
+                efsFilepath);
             return FResultToISFSError(fresult);
         }
 
         PRINT(IOS_EmuFS, INFO,
-              "[EmuFS::ReqIoctl] Successfully set attributes for file or "
-              "directory '%s' !",
+              "SetAttr: Successfully set attributes for file or directory '%s'",
               efsFilepath);
 
         return ISFSError::OK;
@@ -860,10 +820,10 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
 
         const FRESULT fresult = f_stat(efsFilepath, nullptr);
         if (fresult != FR_OK) {
-            PRINT(IOS_EmuFS, ERROR,
-                  "[EmuFS::ReqIoctl] Failed to get attributes for file or "
-                  "directory '%s' !",
-                  efsFilepath);
+            PRINT(
+                IOS_EmuFS, ERROR,
+                "GetAttr: Failed to get attributes for file or directory '%s'",
+                efsFilepath);
             return FResultToISFSError(fresult);
         }
 
@@ -877,8 +837,7 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
         isfsAttrBlock->attributes = ATTRIBUTES;
 
         PRINT(IOS_EmuFS, INFO,
-              "[EmuFS::ReqIoctl] Successfully got attributes for file or "
-              "directory '%s' !",
+              "GetAttr: Successfully got attributes for file or directory '%s'",
               efsFilepath);
 
         return ISFSError::OK;
@@ -923,13 +882,13 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
         const FRESULT fresult = f_unlink(efsFilepath);
         if (fresult != FR_OK) {
             PRINT(IOS_EmuFS, ERROR,
-                  "[EmuFS::ReqIoctl] Failed to delete file or directory '%s' !",
+                  "Delete: Failed to delete file or directory '%s'",
                   efsFilepath);
             return FResultToISFSError(fresult);
         }
 
         PRINT(IOS_EmuFS, INFO,
-              "[EmuFS::ReqIoctl] Successfully deleted file or directory '%s' !",
+              "Delete: Successfully deleted file or directory '%s'",
               efsFilepath);
 
         return ISFSError::OK;
@@ -949,7 +908,7 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
 
         const char* pathOld = isfsRenameBlock->pathOld;
         const char* pathNew = isfsRenameBlock->pathNew;
-        PRINT(IOS_EmuFS, INFO, "[EmuFS::ReqIoctl] Rename(%s, %s)", pathOld,
+        PRINT(IOS_EmuFS, INFO, "Rename: ISFS_Rename(\"%s\", \"%s\")", pathOld,
               pathNew);
 
         // Check if the old and new filepaths are valid
@@ -1032,15 +991,13 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
         const FRESULT fresult = f_rename(efsOldFilepath, efsNewFilepath);
         if (fresult != FR_OK) {
             PRINT(IOS_EmuFS, ERROR,
-                  "[EmuFS::ReqIoctl] Failed to rename file or directory '%s' "
-                  "to '%s' !",
+                  "Rename: Failed to rename file or directory '%s' to '%s'",
                   efsOldFilepath, efsNewFilepath);
             return FResultToISFSError(fresult);
         }
 
         PRINT(IOS_EmuFS, INFO,
-              "[EmuFS::ReqIoctl] Successfully renamed file or directory '%s' "
-              "to '%s' !",
+              "Rename: Successfully renamed file or directory '%s' to '%s'",
               efsOldFilepath, efsNewFilepath);
 
         return ISFSError::OK;
@@ -1061,8 +1018,7 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
 
         const char* path = isfsAttrBlock->path;
 
-        PRINT(IOS_EmuFS, INFO, "[EmuFS::ReqIoctl] ISFS_CreateFile(\"%s\")",
-              path);
+        PRINT(IOS_EmuFS, INFO, "CreateFile: ISFS_CreateFile(\"%s\")", path);
 
         // Check if the filepath is valid
         if (!IsFilepathValid(path))
@@ -1080,8 +1036,7 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
         const FRESULT fresult =
             f_open(&fil, efsFilepath, FA_CREATE_NEW | FA_READ | FA_WRITE);
         if (fresult != FR_OK) {
-            PRINT(IOS_EmuFS, ERROR,
-                  "[EmuFS::ReqIoctl] Failed to create file '%s' !",
+            PRINT(IOS_EmuFS, ERROR, "CreateFile: Failed to create file '%s'",
                   efsFilepath);
             return FResultToISFSError(fresult);
         }
@@ -1094,8 +1049,7 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
             sFileArray[ret].fil = fil; // Copy
         }
 
-        PRINT(IOS_EmuFS, INFO,
-              "[EmuFS::ReqIoctl] Successfully created file '%s' !",
+        PRINT(IOS_EmuFS, INFO, "CreateFile: Successfully created file '%s'",
               efsFilepath);
 
         return ISFSError::OK;
@@ -1105,13 +1059,12 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
     case ISFSIoctl::Shutdown: {
         // This command is called to wait for any in-progress file operations to
         // be completed before shutting down
-        PRINT(IOS_EmuFS, INFO, "[EmuFS::ReqIoctl] ISFS_Shutdown");
+        PRINT(IOS_EmuFS, INFO, "Shutdown: ISFS_Shutdown()");
         return ISFSError::OK;
     }
 
     default:
-        PRINT(IOS_EmuFS, ERROR, "[EmuFS::ReqIoctl] Unknown manager ioctl: %u",
-              cmd);
+        PRINT(IOS_EmuFS, ERROR, "Unknown manager ioctl: %u", cmd);
         return ISFSError::Invalid;
     }
 }
@@ -1135,45 +1088,37 @@ static s32 ReqIoctlv(s32 fd, ISFSIoctl cmd, u32 in_count, u32 out_count,
     // Open a direct file
     if (GetDescriptorType(fd) == DescType::Direct) {
         if (cmd != ISFSIoctl::OpenDirect) {
-            PRINT(IOS_EmuFS, ERROR,
-                  "[EmuFS::ReqIoctlv] Unknown direct ioctl: %u",
+            PRINT(IOS_EmuFS, ERROR, "Unknown direct ioctl: %u",
                   static_cast<s32>(cmd));
             return ISFSError::Invalid;
         }
 
         if (in_count != 2 || out_count != 0) {
-            PRINT(IOS_EmuFS, ERROR,
-                  "[EmuFS::ReqIoctlv] Direct ioctl: wrong vector count!");
+            PRINT(IOS_EmuFS, ERROR, "OpenDirect: Wrong vector count!");
             return ISFSError::Invalid;
         }
 
         if (vec[0].len < 1 || vec[0].len > EFS_MAX_PATH_LEN) {
-            PRINT(IOS_EmuFS, ERROR,
-                  "[EmuFS::ReqIoctlv] Direct ioctl: invalid path length: %d",
+            PRINT(IOS_EmuFS, ERROR, "OpenDirect: Invalid path length: %d",
                   vec[0].len);
             return ISFSError::Invalid;
         }
 
         if (vec[1].len != sizeof(u32)) {
-            PRINT(
-                IOS_EmuFS, ERROR,
-                "[EmuFS::ReqIoctlv] Direct ioctl: invalid open mode length: %d",
-                vec[1].len);
+            PRINT(IOS_EmuFS, ERROR, "OpenDirect: Invalid open mode length: %d",
+                  vec[1].len);
             return ISFSError::Invalid;
         }
 
         if (!aligned(vec[1].data, 4)) {
-            PRINT(IOS_EmuFS, ERROR,
-                  "[EmuFS::ReqIoctlv] Direct ioctl: invalid open mode "
-                  "alignment!");
+            PRINT(IOS_EmuFS, ERROR, "OpenDirect: Invalid open mode alignment");
             return ISFSError::Invalid;
         }
 
         // Check if the supplied file path length is valid.
         if (strnlen(reinterpret_cast<const char*>(vec[0].data), vec[0].len) ==
             vec[0].len) {
-            PRINT(IOS_EmuFS, ERROR,
-                  "[EmuFS::ReqIoctlv] Direct ioctl: path does not terminate!");
+            PRINT(IOS_EmuFS, ERROR, "OpenDirect: Path does not terminate");
             return ISFSError::Invalid;
         }
 
@@ -1199,7 +1144,7 @@ static s32 ReqIoctlv(s32 fd, ISFSIoctl cmd, u32 in_count, u32 out_count,
     case ISFSIoctl::ReadDir: {
         const char* path = (const char*)vec[0].data;
 
-        PRINT(IOS_EmuFS, INFO, "[EmuFS::ReqIoctlv] ISFS_ReadDir(\"%s\")", path);
+        PRINT(IOS_EmuFS, INFO, "ReadDir: ISFS_ReadDir(\"%s\")", path);
 
         // XXX actually implement this properly
 
@@ -1215,7 +1160,7 @@ static s32 ReqIoctlv(s32 fd, ISFSIoctl cmd, u32 in_count, u32 out_count,
         auto fret = f_opendir(&dir, efsFilepath);
         if (fret != FR_OK) {
             PRINT(IOS_EmuFS, ERROR,
-                  "[EmuFS::ReqIoctlv] Failed to open replaced directory");
+                  "ReadDir: Failed to open replaced directory");
             return FResultToISFSError(fret);
         }
 
@@ -1235,8 +1180,7 @@ static s32 ReqIoctlv(s32 fd, ISFSIoctl cmd, u32 in_count, u32 out_count,
     }
 
     default:
-        PRINT(IOS_EmuFS, ERROR, "[EmuFS::ReqIoctlv] Unknown manager ioctlv: %u",
-              cmd);
+        PRINT(IOS_EmuFS, ERROR, "Unknown manager ioctlv: %u", cmd);
         return ISFSError::Invalid;
     }
 }
@@ -1273,7 +1217,7 @@ static s32 ForwardRequest(IOS::Request* req)
                           req->ioctlv.io_count, req->ioctlv.vec);
 
     default:
-        PRINT(IOS_EmuFS, ERROR, "EFS: Unknown command: %u",
+        PRINT(IOS_EmuFS, ERROR, "Unknown command: %u",
               static_cast<u32>(req->cmd));
         return ISFSError::Invalid;
     }
@@ -1285,11 +1229,10 @@ static s32 OpenReplaced(IOS::Request* req)
     strncpy(path, req->open.path, 64);
     path[0] = '/';
 
-    PRINT(IOS_EmuFS, INFO, "[EmuFS::IPCRequest] IOS_Open(%s, 0x%X)", path,
-          req->open.mode);
+    PRINT(IOS_EmuFS, INFO, "IOS_Open(\"%s\", 0x%X)", path, req->open.mode);
 
     if (!strcmp(path, "/dev/fs")) {
-        PRINT(IOS_EmuFS, INFO, "[EmuFS::IPCRequest] Open /dev/fs from PPC");
+        PRINT(IOS_EmuFS, INFO, "Open /dev/fs from PPC");
 
         // Find open handle.
         u32 i = 0;
@@ -1308,8 +1251,7 @@ static s32 OpenReplaced(IOS::Request* req)
         s32 pid = IOS_GetProcessId();
         assert(pid >= 0);
 
-        PRINT(IOS_EmuFS, INFO,
-              "[EmuFS::IPCRequest] Set PID %d to uid %08X gid %04X", pid,
+        PRINT(IOS_EmuFS, INFO, "Set PID %d to uid %08X gid %04X", pid,
               req->open.uid, req->open.gid);
 
         s32 ret2 = IOS_SetUid(pid, req->open.uid);
@@ -1325,12 +1267,11 @@ static s32 OpenReplaced(IOS::Request* req)
         assert(ret2 == IOSError::OK);
 
         if (realFS[i].fd() < 0) {
-            PRINT(IOS_EmuFS, INFO, "[EmuFS::IPCRequest] /dev/fs open error: %d",
-                  realFS[i].fd());
+            PRINT(IOS_EmuFS, INFO, "/dev/fs open error: %d", realFS[i].fd());
             return realFS[i].fd();
         }
 
-        PRINT(IOS_EmuFS, INFO, "[EmuFS::IPCRequest] /dev/fs open success");
+        PRINT(IOS_EmuFS, INFO, "/dev/fs open success");
         return MGR_HANDLE_BASE + i;
     }
 
@@ -1343,7 +1284,7 @@ static s32 OpenReplaced(IOS::Request* req)
         return ReqProxyOpen(path, req->open.mode);
     }
 
-    PRINT(IOS_EmuFS, INFO, "[EmuFS::IPCRequest] Forwarding open to real FS");
+    PRINT(IOS_EmuFS, INFO, "Forwarding open to real FS");
     return ForwardRequest(req);
 }
 
@@ -1388,8 +1329,7 @@ static s32 IPCRequest(IOS::Request* req)
         }
 
         if (i == DIRECT_HANDLE_MAX) {
-            PRINT(IOS_EmuFS, ERROR,
-                  "[EmuFS::IPCRequest] No direct file handles available!");
+            PRINT(IOS_EmuFS, ERROR, "No direct file handles available!");
             ret = ISFSError::MaxOpen;
             break;
         }
@@ -1401,7 +1341,7 @@ static s32 IPCRequest(IOS::Request* req)
     }
 
     case IOS::Command::Close:
-        PRINT(IOS_EmuFS, INFO, "[EmuFS::IPCRequest] IOS_Close(%d)", fd);
+        PRINT(IOS_EmuFS, INFO, "IOS_Close(%d)", fd);
         ret = ISFSError::OK;
 
         // If the fd is Direct, this means the file hasn't been opened and this
@@ -1418,28 +1358,25 @@ static s32 IPCRequest(IOS::Request* req)
         break;
 
     case IOS::Command::Read:
-        PRINT(IOS_EmuFS, INFO, "[EmuFS::IPCRequest] IOS_Read(%d, 0x%08X, 0x%X)",
-              fd, req->read.data, req->read.len);
+        PRINT(IOS_EmuFS, INFO, "IOS_Read(%d, 0x%08X, 0x%X)", fd, req->read.data,
+              req->read.len);
         ret = ReqRead(fd, req->read.data, req->read.len);
         break;
 
     case IOS::Command::Write:
-        PRINT(IOS_EmuFS, INFO,
-              "[EmuFS::IPCRequest] IOS_Write(%d, 0x%08X, 0x%X)", fd,
+        PRINT(IOS_EmuFS, INFO, "IOS_Write(%d, 0x%08X, 0x%X)", fd,
               req->write.data, req->write.len);
         ret = ReqWrite(fd, req->write.data, req->write.len);
         break;
 
     case IOS::Command::Seek:
-        PRINT(IOS_EmuFS, INFO, "[EmuFS::IPCRequest] IOS_Seek(%d, %d, %d)", fd,
-              req->seek.where, req->seek.whence);
+        PRINT(IOS_EmuFS, INFO, "IOS_Seek(%d, %d, %d)", fd, req->seek.where,
+              req->seek.whence);
         ret = ReqSeek(fd, req->seek.where, req->seek.whence);
         break;
 
     case IOS::Command::Ioctl:
-        PRINT(IOS_EmuFS, INFO,
-              "[EmuFS::IPCRequest] IOS_Ioctl(%d, %d, 0x%08X, 0x%X, 0x%08X, "
-              "0x%X)",
+        PRINT(IOS_EmuFS, INFO, "IOS_Ioctl(%d, %d, 0x%08X, 0x%X, 0x%08X, 0x%X)",
               fd, req->ioctl.cmd, req->ioctl.in, req->ioctl.in_len,
               req->ioctl.io, req->ioctl.io_len);
         ret =
@@ -1448,8 +1385,7 @@ static s32 IPCRequest(IOS::Request* req)
         break;
 
     case IOS::Command::Ioctlv:
-        PRINT(IOS_EmuFS, INFO,
-              "[EmuFS::IPCRequest] IOS_Ioctlv(%d, %d, %d, %d, 0x%08X)", fd,
+        PRINT(IOS_EmuFS, INFO, "IOS_Ioctlv(%d, %d, %d, %d, 0x%08X)", fd,
               req->ioctlv.cmd, req->ioctlv.in_count, req->ioctlv.io_count,
               req->ioctlv.vec);
         ret = ReqIoctlv(fd, static_cast<ISFSIoctl>(req->ioctlv.cmd),
@@ -1458,13 +1394,13 @@ static s32 IPCRequest(IOS::Request* req)
         break;
 
     default:
-        PRINT(IOS_EmuFS, ERROR, "[EmuFS::IPCRequest] Unknown command: %u",
+        PRINT(IOS_EmuFS, ERROR, "Unknown command: %u",
               static_cast<u32>(req->cmd));
         ret = ISFSError::Invalid;
         break;
     }
 
-    PRINT(IOS_EmuFS, INFO, "[EmuFS::IPCRequest] Reply: %d", ret);
+    PRINT(IOS_EmuFS, INFO, "Reply: %d", ret);
     return ret;
 }
 
@@ -1487,17 +1423,13 @@ s32 ThreadEntry([[maybe_unused]] void* arg)
     Queue<IOS::Request*> queue(8);
     s32 ret = IOS_RegisterResourceManager("$", queue.id());
     if (ret != IOSError::OK) {
-        PRINT(IOS_EmuFS, ERROR,
-              "[EmuFS::ThreadEntry] IOS_RegisterResourceManager failed: %d",
-              ret);
+        PRINT(IOS_EmuFS, ERROR, "IOS_RegisterResourceManager failed: %d", ret);
         abort();
     }
 
     ret = IOS_RegisterResourceManager("/dev/saoirse/file", queue.id());
     if (ret != IOSError::OK) {
-        PRINT(IOS_EmuFS, ERROR,
-              "[EmuFS::ThreadEntry] IOS_RegisterResourceManager failed: %d",
-              ret);
+        PRINT(IOS_EmuFS, ERROR, "IOS_RegisterResourceManager failed: %d", ret);
         abort();
     }
 
