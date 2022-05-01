@@ -372,8 +372,16 @@ static const char* GetReplacedFilepath(const char* filepath, char* out_buf,
 
 static u8 efsCopyBuffer[0x2000] ATTRIBUTE_ALIGN(32); // 8 KB
 
-static s32 CopyFromNandToEFS(const char* nandPath, const char* efsPath)
+static s32 CopyFromNandToEFS(const char* nandPath, FIL& fil)
 {
+    // Only allow renaming files from /tmp
+    if (strncmp(nandPath, "/tmp", 4) != 0) {
+        PRINT(IOS_EmuFS, ERROR,
+              "[EmuFS::CopyFromNandToEFS] Attempting to rename a file from "
+              "outside of /tmp");
+        return ISFSError::NoAccess;
+    }
+
     IOS::File isfsFile(nandPath, IOS::Mode::Read);
 
     if (isfsFile.fd() < 0) {
@@ -385,15 +393,6 @@ static s32 CopyFromNandToEFS(const char* nandPath, const char* efsPath)
 
     s32 size = isfsFile.size();
     PRINT(IOS_EmuFS, INFO, "[EmuFS::CopyFromNandToEFS] File size: 0x%X", size);
-
-    FIL fil;
-    FRESULT fret = f_open(&fil, efsPath, FA_WRITE | FA_CREATE_NEW);
-
-    if (fret != FR_OK) {
-        PRINT(IOS_EmuFS, ERROR,
-              "[EmuFS::CopyFromNandToEFS] Failed to open EFS file: %d", fret);
-        return FResultToISFSError(fret);
-    }
 
     for (s32 pos = 0; pos < size; pos += sizeof(efsCopyBuffer)) {
         u32 readlen = size - pos;
@@ -414,10 +413,9 @@ static s32 CopyFromNandToEFS(const char* nandPath, const char* efsPath)
         }
 
         UINT bw;
-        fret = f_write(&fil, efsCopyBuffer, readlen, &bw);
+        auto fret = f_write(&fil, efsCopyBuffer, readlen, &bw);
 
         if (fret != FR_OK || (u32)bw != readlen) {
-            f_close(&fil);
             PRINT(IOS_EmuFS, ERROR,
                   "[EmuFS::CopyFromNandToEFS] Failed to write to EFS file: "
                   "%d != 0 OR %d != %d",
@@ -428,7 +426,6 @@ static s32 CopyFromNandToEFS(const char* nandPath, const char* efsPath)
         }
     }
 
-    f_close(&fil);
     return ISFSError::OK;
 }
 
@@ -971,9 +968,47 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
 
         // Rename from NAND to EFS file
         if (!isOldFilepathReplaced && isNewFilepathReplaced) {
-            if (!GetReplacedFilepath(pathNew, efsNewFilepath, EFS_MAX_PATH_LEN))
-                return ISFSError::Invalid;
-            s32 ret = CopyFromNandToEFS(pathOld, efsNewFilepath);
+            // Check if the file is already open somewhere
+            int openFd = FindOpenFileDescriptor(pathNew);
+
+            s32 ret;
+            if (openFd < 0 || openFd >= static_cast<int>(sFileArray.size())) {
+                // File is not open
+                if (!GetReplacedFilepath(pathNew, efsNewFilepath,
+                                         EFS_MAX_PATH_LEN))
+                    return ISFSError::Invalid;
+
+                FIL destFil;
+                auto fret = f_open(&destFil, efsNewFilepath,
+                                   FA_WRITE | FA_CREATE_ALWAYS);
+                if (fret != FR_OK)
+                    return FResultToISFSError(fret);
+
+                ret = CopyFromNandToEFS(pathOld, destFil);
+                fret = f_close(&destFil);
+                assert(fret == FR_OK);
+            } else {
+                // File is open
+                assert(sFileArray[openFd].filOpened);
+
+                if (sFileArray[openFd].inUse)
+                    return ISFSError::Locked;
+
+                // Seek back to the beginning
+                auto fret = f_lseek(&sFileArray[openFd].fil, 0);
+                if (fret != FR_OK)
+                    return FResultToISFSError(fret);
+
+                // Truncate from the beginning of the file
+                fret = f_truncate(&sFileArray[openFd].fil);
+                if (fret != FR_OK)
+                    return FResultToISFSError(fret);
+
+                ret = CopyFromNandToEFS(pathOld, sFileArray[openFd].fil);
+                fret = f_sync(&sFileArray[openFd].fil);
+                assert(fret == FR_OK);
+            }
+
             if (ret != ISFSError::OK)
                 return ret;
 
@@ -1063,6 +1098,14 @@ static s32 ReqIoctl(s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io,
               "[EmuFS::ReqIoctl] Successfully created file '%s' !",
               efsFilepath);
 
+        return ISFSError::OK;
+    }
+
+    // [ISFS_Shutdown]
+    case ISFSIoctl::Shutdown: {
+        // This command is called to wait for any in-progress file operations to
+        // be completed before shutting down
+        PRINT(IOS_EmuFS, INFO, "[EmuFS::ReqIoctl] ISFS_Shutdown");
         return ISFSError::OK;
     }
 
@@ -1168,11 +1211,17 @@ static s32 ReqIoctlv(s32 fd, ISFSIoctl cmd, u32 in_count, u32 out_count,
         if (!GetReplacedFilepath(path, efsFilepath, sizeof(efsFilepath)))
             return ISFSError::Invalid;
 
-        FIL fil;
-        if (f_open(&fil, efsFilepath, FA_READ | FA_OPEN_EXISTING) !=
-            FR_NO_FILE) {
-            f_close(&fil);
-            return ISFSError::Invalid;
+        DIR dir;
+        auto fret = f_opendir(&dir, efsFilepath);
+        if (fret != FR_OK) {
+            PRINT(IOS_EmuFS, ERROR,
+                  "[EmuFS::ReqIoctlv] Failed to open replaced directory");
+            return FResultToISFSError(fret);
+        }
+
+        fret = f_closedir(&dir);
+        if (fret != FR_OK) {
+            return ISFSError::Unknown;
         }
 
         return ISFSError::NotFound;
@@ -1200,7 +1249,7 @@ static s32 ForwardRequest(IOS::Request* req)
     switch (req->cmd) {
     case IOS::Command::Open:
         // Should never reach here.
-        assert(0);
+        assert(!"Open in ForwardRequest");
         return IOSError::NotFound;
 
     case IOS::Command::Close:

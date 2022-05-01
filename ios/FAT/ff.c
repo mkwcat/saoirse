@@ -4561,7 +4561,8 @@ FRESULT f_opendir (
 						dp->obj.sclust = ld_clust(fs, dp->dir);	/* Get object allocation info */
 					}
 				} else {						/* This object is a file */
-					res = FR_NO_PATH;
+					//! Changed in Saoirse to return FR_INVALID_PARAMETER instead of FR_NO_PATH
+					res = FR_INVALID_PARAMETER;
 				}
 			}
 			if (res == FR_OK) {
