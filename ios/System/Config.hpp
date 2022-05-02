@@ -15,4 +15,5 @@ public:
 
     bool IsISFSPathReplaced(const char* path);
     bool IsFileLogEnabled();
+    bool BlockIOSReload();
 };

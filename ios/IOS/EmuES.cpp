@@ -7,6 +7,7 @@
 #include "EmuES.hpp"
 #include <Debug/Log.hpp>
 #include <IOS/IPCLog.hpp>
+#include <System/Config.hpp>
 #include <System/ES.hpp>
 #include <System/OS.hpp>
 #include <System/Util.h>
@@ -16,7 +17,7 @@
 namespace EmuES
 {
 
-bool s_useTitleCtx = false;
+static bool s_useTitleCtx = false;
 static u64 s_titleID;
 static ES::TicketView s_ticketView;
 
@@ -86,10 +87,11 @@ static ES::ESError ReqIoctlv(ES::ESIoctl cmd, u32 inCount, u32 outCount,
         ES::TicketView view = *reinterpret_cast<ES::TicketView*>(vec[1].data);
 
         // Redirect to system menu on attempted IOS reload
-        if (u64Hi(titleID) == 1 && u64Lo(titleID) != 2) {
+        if (Config::sInstance->BlockIOSReload() && u64Hi(titleID) == 1 &&
+            u64Lo(titleID) != 2) {
             PRINT(IOS_EmuES, WARN,
                   "LaunchTitle: Attempt to launch IOS title %016llX", titleID);
-            u64 titleID = 0x0000000100000002;
+            titleID = 0x0000000100000002;
             auto ret = ES::sInstance->GetTicketViews(titleID, 1, &view);
             assert(ret == ES::ESError::OK);
         }

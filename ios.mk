@@ -98,7 +98,9 @@ else
 CFLAGS	:= $(GCC_ARCH)
 endif
 
-CFLAGS	+=	 $(INCLUDE) -DTARGET_IOS -Wall -Wextra -Wpedantic -Werror -Wno-unused-parameter -Wno-keyword-macro -Wno-nested-anon-types -Wno-unused-const-variable -Wno-unused-function -O0 -fshort-enums -fomit-frame-pointer -fverbose-asm -ffunction-sections -fdata-sections -fno-exceptions
+CFLAGS	+=	 $(INCLUDE) -DTARGET_IOS -Wall -Wextra -Wpedantic -Werror -Wno-unused-parameter -Wno-keyword-macro \
+	-Wno-nested-anon-types -Wno-unused-const-variable -Wno-unused-function -O0 -fshort-enums -fomit-frame-pointer \
+	-fverbose-asm -ffunction-sections -fdata-sections -fno-exceptions -Wno-pointer-arith
 CXXFLAGS = $(CFLAGS) -std=c++20 -fno-rtti -fno-builtin-memcpy -fno-builtin-memset -Wno-narrowing 
 
 ifeq ($(COMPILER),clang)
