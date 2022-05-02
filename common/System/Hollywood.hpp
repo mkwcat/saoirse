@@ -23,6 +23,9 @@ enum class ACRReg
     IPC_ARMMSG = 0x008,
     IPC_ARMCTRL = 0x00C,
 
+    TIMER = 0x010,
+    ALARM = 0x014,
+
     VISOLID = 0x024,
 
     PPC_IRQFLAG = 0x030,

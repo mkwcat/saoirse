@@ -61,7 +61,7 @@ void IPCLog::HandleRequest(IOS::Request* req)
         switch (static_cast<Log::IPCLogIoctl>(req->ioctl.cmd)) {
         case Log::IPCLogIoctl::RegisterPrintHook:
             // Read from console
-            if (req->ioctl.io_len != printSize) {
+            if (req->ioctl.io_len != printSize || !aligned(req->ioctl.in, 32)) {
                 req->reply(IOSError::Invalid);
                 break;
             }
@@ -73,6 +73,18 @@ void IPCLog::HandleRequest(IOS::Request* req)
         case Log::IPCLogIoctl::StartGameEvent:
             // Start game IOS command
             m_startRequestQueue.send(0);
+            req->reply(IOSError::OK);
+            break;
+
+        case Log::IPCLogIoctl::SetTime:
+            if (req->ioctl.in_len != sizeof(u32) + sizeof(u64) ||
+                !aligned(req->ioctl.in, 4)) {
+                req->reply(IOSError::Invalid);
+                break;
+            }
+
+            System::SetTime(*reinterpret_cast<u32*>(req->ioctl.in),
+                            *reinterpret_cast<u64*>(req->ioctl.in + 4));
             req->reply(IOSError::OK);
             break;
 

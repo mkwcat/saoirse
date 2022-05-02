@@ -41,7 +41,8 @@ enum class LogLevel
 enum class IPCLogIoctl
 {
     RegisterPrintHook,
-    StartGameEvent
+    StartGameEvent,
+    SetTime,
 };
 
 enum class IPCLogReply

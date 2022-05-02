@@ -151,6 +151,61 @@ void usleep(u32 usec)
     IOS_DestroyMessageQueue(queue);
 }
 
+bool s_timerStarted = false;
+u8 s_timerIndex = 0;
+u64 s_baseEpoch = 0;
+struct {
+    u32 m_timer = 0;
+    u64 m_tick = 0;
+} s_timerCtx[2];
+
+#define diff_ticks(tick0, tick1)                                               \
+    (((u64)(tick1) < (u64)(tick0)) ? ((u64)-1 - (u64)(tick0) + (u64)(tick1))   \
+                                   : ((u64)(tick1) - (u64)(tick0)))
+
+static s32 TimerThreadEntry([[maybe_unused]] void* arg)
+{
+    // 32 minute interval
+    static constexpr u32 TimerInterval = 1000 * (60 * 32);
+
+    while (true) {
+        usleep(TimerInterval);
+
+        u8 prev = s_timerIndex;
+        u8 next = prev ^ 1;
+
+        u32 prevTimer = s_timerCtx[prev].m_timer;
+        u32 nextTimer = ACRReadTrusted(ACRReg::TIMER);
+
+        s_timerCtx[next].m_tick =
+            s_timerCtx[prev].m_tick + diff_ticks(prevTimer, nextTimer);
+        s_timerCtx[next].m_timer = nextTimer;
+        s_timerIndex = next;
+    }
+}
+
+void System::SetTime(u32 hwTimerVal, u64 epoch)
+{
+    s_timerCtx[s_timerIndex].m_timer = hwTimerVal;
+    s_timerCtx[s_timerIndex].m_tick = 0;
+    s_baseEpoch = epoch;
+
+    if (!s_timerStarted) {
+        s_timerStarted = true;
+        new Thread(TimerThreadEntry, nullptr, nullptr, 0x400, 1);
+    }
+}
+
+u64 System::GetTime()
+{
+    u8 i = s_timerIndex;
+    u64 timeNow =
+        s_timerCtx[i].m_tick +
+        diff_ticks(s_timerCtx[i].m_timer, ACRReadTrusted(ACRReg::TIMER));
+
+    return s_baseEpoch + (timeNow / 1898614);
+}
+
 void KernelWrite(u32 address, u32 value)
 {
     const s32 queue = IOS_CreateMessageQueue((u32*)address, 0x40000000);

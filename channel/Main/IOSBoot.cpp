@@ -13,6 +13,7 @@
 #include <ogc/cache.h>
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
 #include <unistd.h>
 
 // #define IOS_LAUNCH_FAIL_DEBUG
@@ -412,7 +413,8 @@ IOSBoot::IPCLog::IPCLog()
         // succeeds.
         for (s32 i = 0; i < 1000; i++) {
             usleep(1000);
-            new (&this->logRM) IOS::ResourceCtrl<s32>("/dev/saoirse");
+            new (&this->logRM)
+                IOS::ResourceCtrl<Log::IPCLogIoctl>("/dev/saoirse");
             if (this->logRM.fd() != IOSError::NotFound)
                 break;
         }
@@ -423,6 +425,17 @@ IOSBoot::IPCLog::IPCLog()
         // again.
         abort();
     }
+
+    // Set the time on IOS
+    u64 epoch = time(nullptr);
+    u32 input[3] = {
+        ACRReadTrusted(ACRReg::TIMER),
+        u64Hi(epoch),
+        u64Lo(epoch),
+    };
+    s32 ret = this->logRM.ioctl(Log::IPCLogIoctl::SetTime, input, sizeof(input),
+                                nullptr, 0);
+    assert(ret == IOSError::OK);
 
     new (&m_thread)
         Thread(threadEntry, reinterpret_cast<void*>(this), nullptr, 0x800, 80);

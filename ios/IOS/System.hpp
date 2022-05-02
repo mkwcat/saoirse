@@ -22,6 +22,9 @@ public:
         return s_heapId;
     }
 
+    static void SetTime(u32 hwTimerVal, u64 epoch);
+    static u64 GetTime();
+
 private:
     static s32 s_heapId;
 };
