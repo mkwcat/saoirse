@@ -19,7 +19,7 @@ namespace EmuES
 
 static bool s_useTitleCtx = false;
 static u64 s_titleID;
-static ES::TicketView s_ticketView;
+static ES::Ticket s_ticket;
 
 ES::ESError DIVerify(u64 titleID, const ES::Ticket* ticket)
 {
@@ -27,8 +27,7 @@ ES::ESError DIVerify(u64 titleID, const ES::Ticket* ticket)
     if (ticket->info.titleID != titleID)
         return ES::ESError::InvalidTicket;
 
-    s_ticketView.view = 0;
-    s_ticketView.info = ticket->info;
+    s_ticket = *ticket;
 
     s_useTitleCtx = true;
     return ES::ESError::OK;
@@ -319,6 +318,37 @@ static ES::ESError ReqIoctlv(ES::ESIoctl cmd, u32 inCount, u32 outCount,
 
         return ES::sInstance->GetTMDView(
             titleID, reinterpret_cast<u32*>(vec[1].data), vec[1].len);
+    }
+
+    case ES::ESIoctl::DIGetTicketView: {
+        if (inCount != 1 || outCount != 1) {
+            PRINT(IOS_EmuES, ERROR, "DIGetTicketView: Wrong vector count");
+            return ES::ESError::Invalid;
+        }
+
+        ES::Ticket* ticket = nullptr;
+
+        if (vec[0].len != 0) {
+            if (vec[0].len != sizeof(ES::Ticket) || !aligned(vec[0].data, 4)) {
+                PRINT(IOS_EmuES, ERROR,
+                      "DIGetTicketView: Wrong input ticket size or alignment");
+                return ES::ESError::Invalid;
+            }
+            ticket = reinterpret_cast<ES::Ticket*>(vec[0].data);
+        }
+
+        if (vec[1].len != sizeof(ES::TicketView) || !aligned(vec[0].data, 4)) {
+            PRINT(
+                IOS_EmuES, ERROR,
+                "DIGetTicketView: Wrong output ticket view size or alignment");
+            return ES::ESError::Invalid;
+        }
+
+        if (ticket == nullptr && s_useTitleCtx)
+            ticket = &s_ticket;
+
+        return ES::sInstance->DIGetTicketView(
+            ticket, reinterpret_cast<ES::TicketView*>(vec[1].data));
     }
 
     case ES::ESIoctl::GetDataDir: {

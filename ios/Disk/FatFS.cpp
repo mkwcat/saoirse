@@ -1,107 +1,76 @@
-// Disk.cpp - SD Card/USB I/O
+// FatFS.cpp - FatFS Disk I/O Layer
 //   Written by Palapeli
 //
 // Copyright (C) 2022 Team Saoirse
 // SPDX-License-Identifier: MIT
 
 #include <Debug/Log.hpp>
-#include <Disk/SDCard.hpp>
+#include <Disk/DeviceMgr.hpp>
 #include <FAT/diskio.h>
 #include <FAT/ff.h>
-#include <IOS/DeviceMgr.hpp>
 #include <System/OS.hpp>
 #include <limits>
 #include <tuple>
 
-constexpr BYTE DRV_SDCARD = 0;
-
 DSTATUS disk_status(BYTE pdrv)
 {
-    if (pdrv == DRV_SDCARD) {
-        if (!SDCard::IsInitialized() || !SDCard::IsInserted()) {
-            DeviceMgr::sInstance->SetError(DeviceMgr::DRVToDeviceKind(pdrv));
-            DeviceMgr::sInstance->ForceUpdate();
-            PRINT(DiskIO, WARN, "disk_status returning STA_NODISK");
-            return STA_NODISK;
-        }
+    auto device = DeviceMgr::DRVToDeviceKind(pdrv);
+
+    if (DeviceMgr::sInstance->IsMounted(device))
         return 0;
-    }
-    return STA_NOINIT;
+
+    return STA_NODISK;
 }
 
 DSTATUS disk_initialize(BYTE pdrv)
 {
-    if (pdrv == DRV_SDCARD) {
-        if (!SDCard::Startup()) {
-            /* No way to differentiate between error and not inserted */
-            DeviceMgr::sInstance->SetError(DeviceMgr::DRVToDeviceKind(pdrv));
-            DeviceMgr::sInstance->ForceUpdate();
-            PRINT(DiskIO, WARN,
-                  "disk_initialize: SDCard::Startup returned false");
-            return STA_NODISK;
-        }
+    auto device = DeviceMgr::DRVToDeviceKind(pdrv);
+
+    if (DeviceMgr::sInstance->DeviceInit(device))
         return 0;
-    }
-    PRINT(DiskIO, ERROR, "disk_initialize: unknown pdrv (%d)", pdrv);
+
     return STA_NOINIT;
 }
 
 DRESULT disk_read(BYTE pdrv, BYTE* buff, LBA_t sector, UINT count)
 {
-    if (pdrv == DRV_SDCARD) {
-        if (disk_status(pdrv) != 0)
-            return RES_ERROR;
+    auto device = DeviceMgr::DRVToDeviceKind(pdrv);
 
-        s32 ret = SDCard::ReadSectors(sector, count, buff);
-        if (ret < 0) {
-            DeviceMgr::sInstance->SetError(DeviceMgr::DRVToDeviceKind(pdrv));
-            DeviceMgr::sInstance->ForceUpdate();
-            PRINT(DiskIO, ERROR, "disk_read: SDCard::ReadSectors failed: %d",
-                  ret);
-            return RES_ERROR;
-        }
+    if (DeviceMgr::sInstance->DeviceRead(device, reinterpret_cast<void*>(buff),
+                                         static_cast<u32>(sector),
+                                         static_cast<u32>(count)))
         return RES_OK;
-    }
-    return RES_NOTRDY;
+
+    return RES_ERROR;
 }
 
 DRESULT disk_write(BYTE pdrv, const BYTE* buff, LBA_t sector, UINT count)
 {
-    if (pdrv == DRV_SDCARD) {
-        if (disk_status(pdrv) != 0)
-            return RES_ERROR;
+    auto device = DeviceMgr::DRVToDeviceKind(pdrv);
 
-        s32 ret = SDCard::WriteSectors(sector, count, buff);
-        if (ret < 0) {
-            DeviceMgr::sInstance->SetError(DeviceMgr::DRVToDeviceKind(pdrv));
-            DeviceMgr::sInstance->ForceUpdate();
-            PRINT(DiskIO, ERROR, "disk_write: SDCard::WriteSectors failed: %d",
-                  ret);
-            return RES_ERROR;
-        }
+    if (DeviceMgr::sInstance->DeviceWrite(
+            device, reinterpret_cast<const void*>(buff),
+            static_cast<u32>(sector), static_cast<u32>(count)))
         return RES_OK;
-    }
-    return RES_NOTRDY;
+
+    return RES_ERROR;
 }
 
 DRESULT disk_ioctl(BYTE pdrv, BYTE cmd, void* buff)
 {
+    auto device = DeviceMgr::DRVToDeviceKind(pdrv);
+
     switch (cmd) {
     case CTRL_SYNC:
-        if (pdrv == DRV_SDCARD)
-            return RES_OK;
-        return RES_NOTRDY;
+        return DeviceMgr::sInstance->DeviceSync(device) ? RES_OK : RES_ERROR;
 
     case GET_SECTOR_SIZE:
-        if (pdrv == DRV_SDCARD) {
-            /* Always 512 */
-            *(WORD*)buff = 512;
-            return RES_OK;
-        }
-        return RES_NOTRDY;
+        // Sectors are always 512 bytes
+        *reinterpret_cast<WORD*>(buff) = 512;
+        return RES_OK;
 
     default:
-        PRINT(DiskIO, ERROR, "disk_ioctl: unknown command: %d", cmd);
+        PRINT(IOS_DevMgr, ERROR, "Unknown command: %d", cmd);
         return RES_PARERR;
     }
 }
@@ -143,7 +112,7 @@ DWORD get_fattime()
     u64 time64 = System::GetTime();
     u32 time32 = time64;
 
-    u32 days = time64 / 86400;
+    s32 days = time64 / 86400;
     auto date = civil_from_days(days);
 
     fattime = {
@@ -158,8 +127,6 @@ DWORD get_fattime()
     return *reinterpret_cast<DWORD*>(&fattime);
 }
 
-#if FF_USE_LFN == 3
-
 void* ff_memalloc(UINT msize)
 {
     return new u8[msize];
@@ -168,12 +135,8 @@ void* ff_memalloc(UINT msize)
 void ff_memfree(void* mblock)
 {
     u8* data = reinterpret_cast<u8*>(mblock);
-    delete data;
+    delete[] data;
 }
-
-#endif
-
-#if FF_FS_REENTRANT
 
 int ff_cre_syncobj([[maybe_unused]] BYTE vol, FF_SYNC_t* sobj)
 {
@@ -203,5 +166,3 @@ int ff_del_syncobj(FF_SYNC_t sobj)
     delete mutex;
     return 1;
 }
-
-#endif

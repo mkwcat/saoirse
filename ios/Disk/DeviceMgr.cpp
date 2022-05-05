@@ -34,14 +34,14 @@ bool DeviceMgr::IsInserted(DeviceKind device)
 {
     ASSERT((u32)device < DEVICE_COUNT);
 
-    return m_devices[device].inserted;
+    return m_devices[device].inserted & !m_devices[device].error;
 }
 
 bool DeviceMgr::IsMounted(DeviceKind device)
 {
     ASSERT((u32)device < DEVICE_COUNT);
 
-    return m_devices[device].mounted & !m_devices[device].error;
+    return IsInserted(device) && m_devices[device].mounted;
 }
 
 void DeviceMgr::SetError(DeviceKind device)
@@ -95,6 +95,75 @@ void DeviceMgr::WriteToLog(const char* str, u32 len)
     static const char newline = '\n';
     f_write(&m_logFile, &newline, 1, &bw);
     f_sync(&m_logFile);
+}
+
+bool DeviceMgr::DeviceInit(DeviceKind device)
+{
+    ASSERT((u32)device < DEVICE_COUNT);
+
+    if (device == Dev_SDCard) {
+        if (SDCard::Startup())
+            return true;
+
+        SetError(device);
+        ForceUpdate();
+        PRINT(IOS_DevMgr, ERROR, "SDCard::Startup failed");
+        return false;
+    }
+
+    PRINT(IOS_DevMgr, ERROR, "Device not recognized: %d", device);
+    return false;
+}
+
+bool DeviceMgr::DeviceRead(DeviceKind device, void* data, u32 sector, u32 count)
+{
+    ASSERT((u32)device < DEVICE_COUNT);
+
+    if (device == Dev_SDCard) {
+        auto ret = SDCard::ReadSectors(sector, count, data);
+        if (ret == IOSError::OK)
+            return true;
+
+        SetError(device);
+        ForceUpdate();
+        PRINT(IOS_DevMgr, ERROR, "SDCard::ReadSectors failed: %08X", ret);
+        return false;
+    }
+
+    PRINT(IOS_DevMgr, ERROR, "Device not recognized: %d", device);
+    return false;
+}
+
+bool DeviceMgr::DeviceWrite(DeviceKind device, const void* data, u32 sector,
+                            u32 count)
+{
+    ASSERT((u32)device < DEVICE_COUNT);
+
+    if (device == Dev_SDCard) {
+        auto ret = SDCard::WriteSectors(sector, count, data);
+        if (ret == 0)
+            return true;
+
+        SetError(device);
+        ForceUpdate();
+        PRINT(IOS_DevMgr, ERROR, "SDCard::WriteSectors failed: %08X", ret);
+        return false;
+    }
+
+    PRINT(IOS_DevMgr, ERROR, "Device not recognized: %d", device);
+    return false;
+}
+
+bool DeviceMgr::DeviceSync(DeviceKind device)
+{
+    ASSERT((u32)device < DEVICE_COUNT);
+
+    if (device == Dev_SDCard) {
+        return true;
+    }
+
+    PRINT(IOS_DevMgr, ERROR, "Device not recognized: %d", device);
+    return false;
 }
 
 void DeviceMgr::Run()

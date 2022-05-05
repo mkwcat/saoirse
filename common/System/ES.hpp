@@ -243,6 +243,8 @@ public:
     ESError GetTicketViews(u64 titleID, u32 count, TicketView* outViews);
     ESError GetTMDViewSize(u64 titleID, u32* outSize);
     ESError GetTMDView(u64 titleID, void* out, u32 outLen);
+    ESError DIGetTicketView(const Ticket* inTicket, TicketView* outView);
+    ESError DIGetTicketView(TicketView* outView);
     ESError GetDataDir(u64 titleID, char* outPath);
     ESError GetDeviceCert(void* out);
     ESError GetTitleID(u64* outTitleID);

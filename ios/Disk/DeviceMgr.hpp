@@ -40,9 +40,14 @@ public:
     static DeviceKind DRVToDeviceKind(int drv);
     FATFS* GetFilesystem(DeviceKind device);
     void ForceUpdate();
-
     bool IsLogEnabled();
     void WriteToLog(const char* str, u32 len);
+
+    bool DeviceInit(DeviceKind device);
+    bool DeviceRead(DeviceKind device, void* data, u32 sector, u32 count);
+    bool DeviceWrite(DeviceKind device, const void* data, u32 sector,
+                     u32 count);
+    bool DeviceSync(DeviceKind device);
 
 private:
     void Run();

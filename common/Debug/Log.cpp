@@ -8,7 +8,7 @@
 #include <System/OS.hpp>
 #include <System/Types.h>
 #ifdef TARGET_IOS
-#include <IOS/DeviceMgr.hpp>
+#include <Disk/DeviceMgr.hpp>
 #include <IOS/IPCLog.hpp>
 #endif
 #include <array>

@@ -7,6 +7,7 @@
 #pragma once
 
 #include "VirtualDisc.hpp"
+#include <Disk/DeviceMgr.hpp>
 #include <FAT/ff.h>
 #include <System/Types.h>
 
@@ -15,15 +16,16 @@ class ISO : public VirtualDisc
 public:
     ISO(const char* path, const char* path2);
     virtual ~ISO();
+    virtual bool IsInserted();
 
-private:
+protected:
     static constexpr u32 DiskID_OFFSET = 0;
 
     static constexpr u32 BlockSize = 0x8000;
     static constexpr u32 BlockHeaderSize = 0x400;
     static constexpr u32 BlockDataSize = 0x7C00;
 
-    bool ReadRaw(void* buffer, u32 wordOffset, u32 byteLen);
+    virtual bool ReadRaw(void* buffer, u32 wordOffset, u32 byteLen);
 
     template <class T>
     bool ReadRawStruct(T* data, u32 wordOffset)
@@ -33,6 +35,7 @@ private:
 
     bool ReadAndDecryptBlock(u32 wordOffset);
 
+private:
     FIL m_isoFile;
 
     // If ISO is split into multiple parts.
@@ -45,12 +48,16 @@ private:
     // FatFS fast seek feature
     DWORD m_isoClmt[0x1000] = {0};
 
+protected:
+    DeviceMgr::DeviceKind m_device = DeviceMgr::Dev_SDCard;
+
     DI::DiskID m_diskID;
     bool m_readDiskIDCalled = false;
     DI::Partition m_partition;
     u32 m_partitionOffset;
     bool m_partitionOpened = false;
 
+    bool m_isEncrypted = true;
     u8 m_titleKey[16] ATTRIBUTE_ALIGN(4);
     u8 m_dataBlock[BlockSize] ATTRIBUTE_ALIGN(32);
     u8 m_dataBlockDecrypted[BlockDataSize] ATTRIBUTE_ALIGN(32);

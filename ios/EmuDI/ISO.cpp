@@ -70,6 +70,11 @@ ISO::~ISO()
 {
 }
 
+bool ISO::IsInserted()
+{
+    return DeviceMgr::sInstance->IsInserted(m_device);
+}
+
 bool ISO::ReadRaw(void* buffer, u32 wordOffset, u32 byteLen)
 {
     const u32 lastPart = m_numParts - 1;

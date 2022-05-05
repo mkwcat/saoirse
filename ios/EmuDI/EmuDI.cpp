@@ -10,7 +10,7 @@
 #include <DVD/DI.hpp>
 #include <DVD/EmuDI.hpp>
 #include <Debug/Log.hpp>
-#include <IOS/DeviceMgr.hpp>
+#include <Disk/DeviceMgr.hpp>
 #include <IOS/IPCLog.hpp>
 #include <IOS/Syscalls.h>
 #include <IOS/System.hpp>
@@ -169,8 +169,18 @@ static DI::DIError EmuIoctl(DVDCommand* block, DI::DIIoctl cmd, void* out,
         return WriteOutput(out, outLen, bca, 0x40);
     }
 
+    case DI::DIIoctl::GetControlRegister: {
+        u32 dicr = 0;
+        return WriteOutputStruct(out, outLen, &dicr);
+    }
+
+    case DI::DIIoctl::GetCoverRegister: {
+        u32 dicvr = disc->IsInserted() ? 0 : 1;
+        return WriteOutputStruct(out, outLen, &dicvr);
+    }
+
     default:
-        PRINT(IOS_EmuDI, ERROR, "Unknown ioctl %u", static_cast<u32>(cmd));
+        PRINT(IOS_EmuDI, ERROR, "Unknown ioctl 0x%02X", static_cast<u32>(cmd));
         return DI::DIError::Security;
     }
 }
@@ -237,7 +247,7 @@ static DI::DIError EmuIoctlv(DVDCommand* block, DI::DIIoctl cmd, u32 inCount,
     }
 
     default:
-        PRINT(IOS_EmuDI, ERROR, "Unknown ioctlv %u", static_cast<u32>(cmd));
+        PRINT(IOS_EmuDI, ERROR, "Unknown ioctlv 0x%02X", static_cast<u32>(cmd));
         return DI::DIError::Security;
     }
 }

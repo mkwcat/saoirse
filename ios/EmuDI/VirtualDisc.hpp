@@ -21,4 +21,5 @@ public:
                                       ES::TMDFixed<512>* tmdOut) = 0;
     virtual bool ReadDiskID(DI::DiskID* out) = 0;
     virtual DI::DIError ReadTMD(ES::TMDFixed<512>* out) = 0;
+    virtual bool IsInserted() = 0;
 };

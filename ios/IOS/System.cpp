@@ -7,10 +7,10 @@
 #include "System.hpp"
 #include <DVD/DI.hpp>
 #include <Debug/Log.hpp>
+#include <Disk/DeviceMgr.hpp>
 #include <Disk/SDCard.hpp>
 #include <EmuDI/EmuDI.hpp>
 #include <FAT/ff.h>
-#include <IOS/DeviceMgr.hpp>
 #include <IOS/EmuES.hpp>
 #include <IOS/EmuFS.hpp>
 #include <IOS/IPCLog.hpp>

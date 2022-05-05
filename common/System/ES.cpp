@@ -138,6 +138,23 @@ ES::ESError ES::GetTMDView(u64 titleID, void* out, u32 outLen)
     return static_cast<ESError>(ret);
 }
 
+ES::ESError ES::DIGetTicketView(const Ticket* inTicket, TicketView* outView)
+{
+    IOS::IOVector<1, 1> vec;
+    vec.in[0].data = reinterpret_cast<const void*>(inTicket);
+    vec.in[0].len = sizeof(Ticket);
+    vec.out[0].data = reinterpret_cast<void*>(outView);
+    vec.out[0].len = sizeof(TicketView);
+
+    s32 ret = m_rm.ioctlv(ESIoctl::DIGetTicketView, vec);
+    return static_cast<ESError>(ret);
+}
+
+ES::ESError ES::DIGetTicketView(TicketView* outView)
+{
+    return DIGetTicketView(nullptr, outView);
+}
+
 ES::ESError ES::GetDataDir(u64 titleID, char* outPath)
 {
     IOS::IOVector<1, 1> vec;
