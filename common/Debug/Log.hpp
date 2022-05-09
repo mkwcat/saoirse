@@ -21,7 +21,6 @@ enum class LogSource
     Payload,
     FST,
     PatchList,
-    DiskIO,
     IOS,
     IOS_Loader,
     IOS_DevMgr,

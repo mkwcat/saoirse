@@ -1,316 +1,349 @@
-/*-------------------------------------------------------------
+// USBStorage.cpp - USB Mass Storage I/O
+//
+// This file is from MKW-SP
+// Copyright (C) 2021-2022 Pablo Stebler
+// SPDX-License-Identifier: MIT
+//
+// Modified by Palapeli for Saoirse
 
-usbstorage.c -- Bulk-only USB mass storage support
-
-Copyright (C) 2008
-Sven Peter (svpe) <svpe@gmx.net>
-Copyright (C) 2009-2010
-tueidj, rodries, Tantric
-Stripped down nintendont port by FIX94
-Modified by Palapeli for Saoirse (2022)
-
-This software is provided 'as-is', without any express or implied
-warranty.  In no event will the authors be held liable for any
-damages arising from the use of this software.
-
-Permission is granted to anyone to use this software for any
-purpose, including commercial applications, and to alter it and
-redistribute it freely, subject to the following restrictions:
-
-1.	The origin of this software must not be misrepresented; you
-must not claim that you wrote the original software. If you use
-this software in a product, an acknowledgment in the product
-documentation would be appreciated but is not required.
-
-2.	Altered source versions must be plainly marked as such, and
-must not be misrepresented as being the original software.
-
-3.	This notice may not be removed or altered from any source
-distribution.
-
--------------------------------------------------------------*/
+// Resources:
+// - https://www.usb.org/sites/default/files/usbmassbulk_10.pdf
+// -
+// https://www.seagate.com/files/staticfiles/support/docs/manual/Interface%20manuals/100293068j.pdf
+// -
+// https://www.downtowndougbrown.com/2018/12/usb-mass-storage-with-embedded-devices-tips-and-quirks/
+// - https://github.com/devkitPro/libogc/blob/master/libogc/usbstorage.c
 
 #include "USBStorage.hpp"
-#include "USB.hpp"
-#include <System/OS.hpp>
-#include <System/Types.h>
+#include <Debug/Log.hpp>
+#include <Disk/USB.hpp>
 #include <System/Util.h>
+#include <algorithm>
 #include <cstring>
 
-#ifdef TARGET_IOS
-#include <IOS/System.hpp>
-#else
-#include <unistd.h>
-#endif
-
-#define ROUNDDOWN32(v) (((u32)(v)-0x1f) & ~0x1f)
-
-#define HEAP_SIZE (18 * 1024)
-#define TAG_START 0x0BADC0DE
-
-#define CBW_SIZE 31
-#define CBW_SIGNATURE 0x43425355
-#define CBW_IN (1 << 7)
-#define CBW_OUT 0
-
-#define CSW_SIZE 13
-#define CSW_SIGNATURE 0x53425355
-
-#define SCSI_TEST_UNIT_READY 0x00
-#define SCSI_REQUEST_SENSE 0x03
-#define SCSI_INQUIRY 0x12
-#define SCSI_START_STOP 0x1B
-#define SCSI_READ_CAPACITY 0x25
-#define SCSI_READ_10 0x28
-#define SCSI_WRITE_10 0x2A
-
-#define SCSI_SENSE_REPLY_SIZE 18
-#define SCSI_SENSE_NOT_READY 0x02
-#define SCSI_SENSE_MEDIUM_ERROR 0x03
-#define SCSI_SENSE_HARDWARE_ERROR 0x04
-
-#define USB_CLASS_MASS_STORAGE 0x08
-#define MASS_STORAGE_RBC_COMMANDS 0x01
-#define MASS_STORAGE_ATA_COMMANDS 0x02
-#define MASS_STORAGE_QIC_COMMANDS 0x03
-#define MASS_STORAGE_UFI_COMMANDS 0x04
-#define MASS_STORAGE_SFF8070_COMMANDS 0x05
-#define MASS_STORAGE_SCSI_COMMANDS 0x06
-#define MASS_STORAGE_BULK_ONLY 0x50
-
-#define USBSTORAGE_GET_MAX_LUN 0xFE
-#define USBSTORAGE_RESET 0xFF
-
-#define USB_ENDPOINT_BULK 0x02
-
-#define USBSTORAGE_CYCLE_RETRIES 3
-
-#define INVALID_LUN -2
-
-#define MAX_TRANSFER_SIZE_V5 (16 * 1024)
-
-#define DEVLIST_MAXSIZE 8
-
-Mutex transferMutex;
-static u8* cbw_buffer = (u8*)IOS::Alloc(32);
-static u8* transferbuffer = (u8*)IOS::Alloc(MAX_TRANSFER_SIZE_V5);
-
-s32 USBStorage::__send_cbw(u8 lun, u32 len, u8 flags, const u8* cb, u8 cbLen)
+enum
 {
-    s32 retval = USBStorage::Error_OK;
+    MSC_GET_MAX_LUN = 0xfe,
+};
 
-    if (cbLen == 0 || cbLen > 16)
-        return IOSError::Invalid;
+enum
+{
+    CSW_SIZE = 0x1f,
+    CBW_SIZE = 0xd,
+};
 
-    write32(((u32)cbw_buffer), bswap32(CBW_SIGNATURE));
-    write32(((u32)cbw_buffer) + 4, bswap32(++__tag));
-    write32(((u32)cbw_buffer) + 8, bswap32(len));
-    cbw_buffer[12] = flags;
-    cbw_buffer[13] = lun;
-    cbw_buffer[14] = (cbLen > 6 ? 10 : 6);
+enum
+{
+    SCSI_TEST_UNIT_READY = 0x0,
+    SCSI_REQUEST_SENSE = 0x3,
+    SCSI_INQUIRY = 0x12,
+    SCSI_READ_CAPACITY_10 = 0x25,
+    SCSI_READ_10 = 0x28,
+    SCSI_WRITE_10 = 0x2a,
+    SCSI_SYNCHRONIZE_CACHE_10 = 0x35,
+};
 
-    memcpy(cbw_buffer + 15, cb, cbLen);
+enum
+{
+    SCSI_TYPE_DIRECT_ACCESS = 0x0,
+};
 
-    retval = USB::sInstance->WriteBlkMsg(__usb_fd, __ep_out, CBW_SIZE,
-                                         (void*)cbw_buffer);
-
-    if (retval == CBW_SIZE)
-        return USBStorage::Error_OK;
-    else if (retval > 0)
-        return USBStorage::Error_ShortWrite;
-
-    return retval;
+USBStorage::USBStorage(USB* usb, USB::DeviceInfo info)
+{
+    m_buffer = (u8*)IOS::Alloc(0x4000);
+    m_usb = usb;
+    m_info = info;
 }
 
-s32 USBStorage::send_cbw(u8 lun, u32 len, u8 flags, const u8* cb, u8 cbLen)
+bool USBStorage::GetLunCount(u8* lunCount)
 {
-    transferMutex.lock();
-    auto ret = __send_cbw(lun, len, flags, cb, cbLen);
-    transferMutex.unlock();
-    return ret;
-}
-
-s32 USBStorage::__read_csw(u8* status, u32* dataResidue)
-{
-    s32 retval = USBStorage::Error_OK;
-    u32 signature, tag, _dataResidue, _status;
-
-    retval =
-        USB::sInstance->WriteBlkMsg(__usb_fd, __ep_in, CSW_SIZE, cbw_buffer);
-    if (retval > 0 && retval != CSW_SIZE)
-        return USBStorage::Error_ShortRead;
-    else if (retval < 0)
-        return retval;
-
-    signature = bswap32(read32(((u32)cbw_buffer)));
-    tag = bswap32(read32(((u32)cbw_buffer) + 4));
-    _dataResidue = bswap32(read32(((u32)cbw_buffer) + 8));
-    _status = cbw_buffer[12];
-
-    if (signature != CSW_SIGNATURE)
-        return USBStorage::Error_Signature;
-
-    if (dataResidue != NULL)
-        *dataResidue = _dataResidue;
-    if (status != NULL)
-        *status = _status;
-
-    if (tag != __tag)
-        return USBStorage::Error_Tag;
-
-    return USBStorage::Error_OK;
-}
-
-s32 USBStorage::read_csw(u8* status, u32* dataResidue)
-{
-    transferMutex.lock();
-    auto ret = __read_csw(status, dataResidue);
-    transferMutex.unlock();
-    return ret;
-}
-
-s32 USBStorage::__cycle(u8 lun, u8* buffer, u32 len, u8* cb, u8 cbLen, u8 write,
-                        u8* _status, u32* _dataResidue)
-{
-    s32 retval = USBStorage::Error_OK;
-
-    u8 status = 0;
-    u32 dataResidue = 0;
-    u32 max_size = MAX_TRANSFER_SIZE_V5;
-    u8 ep = write ? __ep_out : __ep_in;
-    s8 retries = USBSTORAGE_CYCLE_RETRIES + 1;
-
-    do {
-        u8* _buffer = buffer;
-        u32 _len = len;
-        retries--;
-
-        if (retval == USBStorage::Error_Timedout)
-            break;
-
-        retval = send_cbw(lun, len, (write ? CBW_OUT : CBW_IN), cb, cbLen);
-
-        while (_len > 0 && retval >= 0) {
-            u32 thisLen = _len > max_size ? max_size : _len;
-
-            if (!aligned(buffer, 32) || !in_mem2(buffer)) {
-                if (write)
-                    memcpy(transferbuffer, _buffer, thisLen);
-                retval = USB::sInstance->WriteBlkMsg(__usb_fd, ep, thisLen,
-                                                     transferbuffer);
-                if (!write && retval > 0)
-                    memcpy(_buffer, transferbuffer, retval);
-            } else {
-                retval =
-                    USB::sInstance->WriteBlkMsg(__usb_fd, ep, thisLen, _buffer);
-            }
-            if (static_cast<u32>(retval) == thisLen) {
-                _len -= retval;
-                _buffer += retval;
-            } else if (retval != USBStorage::Error_Timedout) {
-                retval = USBStorage::Error_DataResidue;
-            }
-        }
-
-        if (retval >= 0) {
-            retval = read_csw(&status, &dataResidue);
-        }
-
-        if (retval < 0) {
-            if (__usbstorage_reset() == USBStorage::Error_Timedout)
-                retval = USBStorage::Error_Timedout;
-        }
-    } while (retval < 0 && retries > 0);
-
-    if (_status != NULL)
-        *_status = status;
-    if (_dataResidue != NULL)
-        *_dataResidue = dataResidue;
-
-    return retval;
-}
-
-s32 USBStorage::cycle(u8 lun, u8* buffer, u32 len, u8* cb, u8 cbLen, u8 write,
-                      u8* _status, u32* _dataResidue)
-{
-    transferMutex.lock();
-    auto ret =
-        __cycle(lun, buffer, len, cb, cbLen, write, _status, _dataResidue);
-    transferMutex.unlock();
-    return ret;
-}
-
-s32 USBStorage::__usbstorage_reset()
-{
-    s32 retval = USB::sInstance->WriteCtrlMsg(
-        __usb_fd,
-        (USB::CtrlType::Dir_Host2Device | USB::CtrlType::Type_Class |
-         USB::CtrlType::Rec_Interface),
-        USBSTORAGE_RESET, 0, __interface, 0, NULL);
-
-    usleep(60 * 1000);
-    // from http://www.usb.org/developers/devclass_docs/usbmassbulk_10.pdf
-    USB::sInstance->ClearHalt(__usb_fd, __ep_in);
-    usleep(10000);
-    USB::sInstance->ClearHalt(__usb_fd, __ep_out);
-    usleep(10000);
-    return retval;
-}
-
-bool USBStorage::ReadSectors(u32 sector, u32 numSectors, void* buffer)
-{
-    if (!__mounted)
+    u8 requestType = USB::CtrlType::Rec_Interface;
+    requestType |= USB::CtrlType::ReqType_Class;
+    requestType |= USB::CtrlType::Dir_Device2Host;
+    if (m_usb->WriteCtrlMsg(m_id, requestType, MSC_GET_MAX_LUN, 0, m_interface,
+                            0x1, m_buffer) != USB::USBError::OK) {
+        PRINT(IOS_USB, ERROR, "WriteCtrlMsg failed");
         return false;
-
-    u8 status = 0;
-    s32 retval;
-    u8 cmd[] = {
-        SCSI_READ_10, __lun << 5, sector >> 24,    sector >> 16, sector >> 8,
-        sector,       0,          numSectors >> 8, numSectors,   0};
-
-    retval = cycle(__lun, reinterpret_cast<u8*>(buffer), numSectors * s_size,
-                   cmd, sizeof(cmd), 0, &status, NULL);
-    if (retval > 0 && status != 0)
-        retval = USBStorage::Error_Status;
-
-    return retval >= 0;
+    }
+    *lunCount = read8(m_buffer) + 1;
+    return *lunCount >= 1 && *lunCount <= 16;
 }
 
-bool USBStorage::WriteSectors(u32 sector, u32 numSectors, const void* buffer)
+bool USBStorage::SCSITransfer(bool isWrite, u32 size, void* data, u8 lun,
+                              u8 cbSize, void* cb)
 {
-    if (!__mounted)
+    assert(!!size == !!data);
+    assert(lun <= 16);
+    assert(cbSize >= 1 && cbSize <= 16);
+    assert(cb);
+
+    memset(m_buffer, 0, CSW_SIZE);
+
+    m_tag++;
+
+    write32_le(m_buffer + 0x0, 0x43425355);
+    write32_le(m_buffer + 0x4, m_tag);
+    write32_le(m_buffer + 0x8, size);
+    write8(m_buffer + 0xC, !isWrite << 7);
+    write8(m_buffer + 0xD, lun);
+    write8(m_buffer + 0xE, cbSize);
+    memcpy(m_buffer + 0xF, cb, cbSize);
+
+    if (m_usb->WriteBulkMsg(m_id, m_outEndpoint, CSW_SIZE, m_buffer) !=
+        USB::USBError::OK) {
+        PRINT(IOS_USB, ERROR, "WriteBulkMsg failed");
         return false;
+    }
 
-    u8 status = 0;
-    s32 retval;
-    u8 cmd[] = {
-        SCSI_WRITE_10, __lun << 5, sector >> 24,    sector >> 16, sector >> 8,
-        sector,        0,          numSectors >> 8, numSectors,   0};
+    u32 remainingSize = size;
+    while (remainingSize > 0) {
+        u32 chunkSize = std::min<u32>(remainingSize, 0x4000);
+        if (isWrite) {
+            memcpy(m_buffer, data, chunkSize);
+        }
+        if (m_usb->WriteBulkMsg(m_id, isWrite ? m_outEndpoint : m_inEndpoint,
+                                chunkSize, m_buffer) != USB::USBError::OK) {
+            PRINT(IOS_USB, ERROR, "WriteBulkMsg (2) failed");
+            return false;
+        }
+        if (!isWrite) {
+            memcpy(data, m_buffer, chunkSize);
+        }
+        remainingSize -= chunkSize;
+        data += chunkSize;
+    }
 
-    retval = cycle(__lun, (u8*)buffer, numSectors * s_size, cmd, sizeof(cmd), 1,
-                   &status, NULL);
-    if (retval > 0 && status != 0)
-        retval = USBStorage::Error_Status;
+    memset(m_buffer, 0, CBW_SIZE);
 
-    return retval >= 0;
+    if (m_usb->WriteBulkMsg(m_id, m_inEndpoint, CBW_SIZE, m_buffer) !=
+        USB::USBError::OK) {
+        PRINT(IOS_USB, ERROR, "WriteBulkMsg (3) failed");
+        return false;
+    }
+
+    if (read32_le(m_buffer + 0x0) != 0x53425355) {
+        return false;
+    }
+    if (read32_le(m_buffer + 0x4) != m_tag) {
+        return false;
+    }
+    if (read32_le(m_buffer + 0x8) != 0) {
+        return false;
+    }
+    if (read8(m_buffer + 0xC) != 0) {
+        return false;
+    }
+
+    return true;
 }
 
-USBStorage::USBStorage(u32 sector_size, u32 sector_count, u8 lun, u8 ep_in,
-                       u8 ep_out, u16 vid, u16 pid, u32 tag, u32 interface,
-                       s32 usb_fd)
+bool USBStorage::TestUnitReady(u8 lun)
 {
-    s_size = sector_size;
-    s_cnt = sector_count;
+    u8 cmd[6] = {0};
+    write8(cmd + 0x0, SCSI_TEST_UNIT_READY);
 
-    __lun = lun;
-    __vid = vid;
-    __pid = pid;
-    __tag = tag;
-    __interface = interface;
-    __usb_fd = usb_fd;
-    __ep_in = ep_in;
-    __ep_out = ep_out;
+    return SCSITransfer(false, 0, NULL, lun, sizeof(cmd), cmd);
+}
 
-    __inited = true;
-    __mounted = true;
+bool USBStorage::Inquiry(u8 lun, u8* type)
+{
+    u8 response[36] = {0};
+    u8 cmd[6] = {0};
+    write8(cmd + 0x0, SCSI_INQUIRY);
+    write8(cmd + 0x1, lun << 5);
+    write8(cmd + 0x4, sizeof(response));
+
+    if (!SCSITransfer(false, sizeof(response), response, lun, sizeof(cmd),
+                      cmd)) {
+        return false;
+    }
+
+    *type = response[0] & 0x1f;
+    return true;
+}
+
+bool USBStorage::InitLun(u8 lun)
+{
+    if (!TestUnitReady(lun)) {
+        return false;
+    }
+
+    u8 type;
+    if (!Inquiry(lun, &type)) {
+        return false;
+    }
+    return type == SCSI_TYPE_DIRECT_ACCESS;
+}
+
+bool USBStorage::RequestSense(u8 lun)
+{
+    u8 response[18] = {0};
+    u8 cmd[6] = {0};
+    write8(cmd + 0x0, SCSI_REQUEST_SENSE);
+    write8(cmd + 0x4, sizeof(response));
+
+    if (!SCSITransfer(false, sizeof(response), response, lun, sizeof(cmd),
+                      cmd)) {
+        return false;
+    }
+
+    PRINT(IOS_USB, INFO, "USBStorage: Sense key: %x", response[0x2] & 0xf);
+    return true;
+}
+
+bool USBStorage::FindLun(u8 lunCount, u8* lun)
+{
+    for (*lun = 0; *lun < lunCount; (*lun)++) {
+        for (u32 i = 0; i < 5; i++) {
+            if (InitLun(*lun)) {
+                return true;
+            }
+
+            // This can clear a UNIT ATTENTION condition
+            RequestSense(*lun);
+
+            usleep(i * 10);
+        }
+    }
+
+    return false;
+}
+
+bool USBStorage::ReadCapacity(u8 lun, u32* blockSize)
+{
+    u8 response[8] = {0};
+    u8 cmd[10] = {0};
+    write8(cmd, SCSI_READ_CAPACITY_10);
+
+    if (!SCSITransfer(false, sizeof(response), response, lun, sizeof(cmd),
+                      cmd)) {
+        return false;
+    }
+
+    *blockSize = read32(response + 0x4);
+    return true;
+}
+
+bool USBStorage::Init()
+{
+    u8 numEndpoints = m_info.interface.numEndpoints;
+    assert(numEndpoints <= 16);
+    bool outFound = false;
+    bool inFound = false;
+    for (u32 i = 0; i < numEndpoints; i++) {
+        const USB::EndpointDescriptor* endpointDescriptor = &m_info.endpoint[i];
+
+        u8 transferType =
+            endpointDescriptor->attributes & USB::CtrlType::TransferType_Mask;
+        if (transferType != USB::CtrlType::TransferType_Bulk) {
+            continue;
+        }
+
+        u8 direction =
+            endpointDescriptor->endpointAddr & USB::CtrlType::Dir_Mask;
+        if (!outFound && direction == USB::CtrlType::Dir_Host2Device) {
+            m_outEndpoint = endpointDescriptor->endpointAddr;
+            outFound = true;
+            m_maxPacketSize = endpointDescriptor->maxPacketSize;
+        }
+        if (!inFound && direction == USB::CtrlType::Dir_Device2Host) {
+            m_inEndpoint = endpointDescriptor->endpointAddr;
+            inFound = true;
+        }
+    }
+    if (!outFound || !inFound) {
+        return false;
+    }
+
+    u16 vendorId = m_info.device.vid;
+    u16 productId = m_info.device.pid;
+    PRINT(IOS_USB, INFO, "USBStorage: Found device %x:%x", vendorId, productId);
+    m_id = m_info.devId;
+    m_interface = m_info.interface.ifNum;
+
+    PRINT(IOS_USB, INFO, "USBStorage: Max packet size: %d", m_maxPacketSize);
+
+    u8 lunCount;
+    if (!GetLunCount(&lunCount)) {
+        return false;
+    }
+    PRINT(IOS_USB, INFO, "USBStorage: Device has %d logical unit(s)", lunCount);
+
+    if (!FindLun(lunCount, &m_lun)) {
+        return false;
+    }
+    PRINT(IOS_USB, INFO, "USBStorage: Using logical unit %d", m_lun);
+
+    if (!ReadCapacity(m_lun, &m_blockSize)) {
+        return false;
+    }
+    PRINT(IOS_USB, INFO, "USBStorage: Block size: %d bytes", m_blockSize);
+
+    if (!TestUnitReady(m_lun)) {
+        return false;
+    }
+
+    m_valid = true;
+    return true;
+}
+
+u32 USBStorage::SectorSize()
+{
+    return m_blockSize;
+}
+
+bool USBStorage::ReadSectors(u32 firstSector, u32 sectorCount, void* buffer)
+{
+    assert(sectorCount <= UINT16_MAX);
+
+    for (u32 i = 0; i < 1; i++) {
+        u8 cmd[10] = {0};
+        write8(cmd + 0x0, SCSI_READ_10);
+        write16(cmd + 0x2, firstSector >> 16);
+        write16(cmd + 0x4, firstSector & 0xFFFF);
+        write8(cmd + 0x7, sectorCount >> 8);
+        write8(cmd + 0x8, sectorCount & 0xFF);
+
+        u32 size = sectorCount * m_blockSize;
+        if (SCSITransfer(false, size, buffer, m_lun, sizeof(cmd), cmd)) {
+            return true;
+        }
+
+        usleep(i * 10);
+    }
+
+    return false;
+}
+
+bool USBStorage::WriteSectors(u32 firstSector, u32 sectorCount,
+                              const void* buffer)
+{
+    assert(sectorCount <= UINT16_MAX);
+
+    for (u32 i = 0; i < 1; i++) {
+        u8 cmd[10] = {0};
+        write8(cmd + 0x0, SCSI_WRITE_10);
+        write16(cmd + 0x2, firstSector >> 16);
+        write16(cmd + 0x4, firstSector & 0xFFFF);
+        write8(cmd + 0x7, sectorCount >> 8);
+        write8(cmd + 0x8, sectorCount & 0xFF);
+
+        u32 size = sectorCount * m_blockSize;
+        if (SCSITransfer(true, size, const_cast<void*>(buffer), m_lun,
+                         sizeof(cmd), cmd)) {
+            return true;
+        }
+
+        usleep(i * 10);
+    }
+
+    return false;
+}
+
+bool USBStorage::Sync()
+{
+    u8 cmd[10] = {0};
+    write8(cmd, SCSI_SYNCHRONIZE_CACHE_10);
+
+    return SCSITransfer(false, 0, NULL, m_lun, sizeof(cmd), cmd);
 }

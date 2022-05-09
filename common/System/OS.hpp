@@ -470,7 +470,7 @@ struct Request {
         } open;
 
         struct {
-            void* data;
+            u8* data;
             u32 len;
         } read, write;
 
@@ -481,9 +481,9 @@ struct Request {
 
         struct {
             u32 cmd;
-            void* in;
+            u8* in;
             u32 in_len;
-            void* io;
+            u8* io;
             u32 io_len;
         } ioctl;
 

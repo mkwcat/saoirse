@@ -127,6 +127,9 @@ ASM_FUNCTION(void AssertFail(const char* expr, const char* file, s32 line),
 
 void usleep(u32 usec)
 {
+    if (usec == 0)
+        return;
+
     u32 queueData;
     const s32 queue = IOS_CreateMessageQueue(&queueData, 1);
     if (queue < 0) {

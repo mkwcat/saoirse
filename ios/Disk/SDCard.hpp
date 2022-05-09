@@ -8,16 +8,15 @@
 
 typedef u32 sec_t;
 
-namespace SDCard
+class SDCard
 {
-
-bool Open(void);
-bool Startup(void);
-bool Shutdown(void);
-s32 ReadSectors(sec_t sector, sec_t numSectors, void* buffer);
-s32 WriteSectors(sec_t sector, sec_t numSectors, const void* buffer);
-bool ClearStatus(void);
-bool IsInserted(void);
-bool IsInitialized(void);
-
-}
+public:
+    static bool Open();
+    static bool Startup();
+    static bool Shutdown();
+    static s32 ReadSectors(sec_t sector, sec_t numSectors, void* buffer);
+    static s32 WriteSectors(sec_t sector, sec_t numSectors, const void* buffer);
+    static bool ClearStatus();
+    static bool IsInserted();
+    static bool IsInitialized();
+};

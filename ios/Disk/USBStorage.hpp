@@ -4,58 +4,56 @@
 // SPDX-License-Identifier: MIT
 
 #pragma once
+#include <Disk/USB.hpp>
 #include <System/Types.h>
 
 class USBStorage
 {
-    USBStorage(u32 sector_size, u32 sector_count, u8 lun, u8 ep_in, u8 ep_out,
-               u16 vid, u16 pid, u32 tag, u32 interface, s32 usb_fd);
-
-    enum
-    {
-        Error_OK = 0,
-        Error_NoInterface = -10000,
-        Error_Sense = -10001,
-        Error_ShortWrite = -10002,
-        Error_ShortRead = -10003,
-        Error_Signature = -10004,
-        Error_Tag = -10005,
-        Error_Status = -10006,
-        Error_DataResidue = -10007,
-        Error_Timedout = -10008,
-        Error_Init = -10009,
-        Error_Processing = -10010
-    };
-
-    bool ReadSectors(u32 sector, u32 numSectors, void* buffer);
-    bool WriteSectors(u32 sector, u32 numSectors, const void* buffer);
-
-    u32 s_size;
-    u32 s_cnt;
+public:
+    USBStorage(USB* usb, USB::DeviceInfo info);
 
 private:
-    s32 send_cbw(u8 lun, u32 len, u8 flags, const u8* cb, u8 cbLen);
-    s32 __send_cbw(u8 lun, u32 len, u8 flags, const u8* cb, u8 cbLen);
+    enum class USBStorageError
+    {
+        OK = 0,
+        USBHalted = int(USB::USBError::Halted),
+    };
 
-    s32 __read_csw(u8* status, u32* dataResidue);
-    s32 read_csw(u8* status, u32* dataResidue);
+    bool GetLunCount(u8* lunCount);
+    bool SCSITransfer(bool isWrite, u32 size, void* data, u8 lun, u8 cbSize,
+                      void* cb);
+    bool TestUnitReady(u8 lun);
+    bool Inquiry(u8 lun, u8* type);
+    bool InitLun(u8 lun);
+    bool RequestSense(u8 lun);
+    bool FindLun(u8 lunCount, u8* lun);
+    bool ReadCapacity(u8 lun, u32* blockSize);
 
-    s32 __cycle(u8 lun, u8* buffer, u32 len, u8* cb, u8 cbLen, u8 write,
-                u8* _status, u32* _dataResidue);
-    s32 cycle(u8 lun, u8* buffer, u32 len, u8* cb, u8 cbLen, u8 write,
-                u8* _status, u32* _dataResidue);
-    
-    s32 __usbstorage_reset();
+public:
+    bool Init();
 
-    bool __inited = false;
-    bool __mounted = false;
+    u32 SectorSize();
+    bool ReadSectors(u32 firstSector, u32 sectorCount, void* buffer);
+    bool WriteSectors(u32 firstSector, u32 sectorCount, const void* buffer);
+    bool Sync();
 
-    u8 __lun = 0;
-    u8 __ep_in = 0;
-    u8 __ep_out = 0;
-    u16 __vid = 0;
-    u16 __pid = 0;
-    u32 __tag = 0;
-    u32 __interface = 0;
-    s32 __usb_fd = -1;
+    u32 GetDevID() const
+    {
+        return m_info.devId;
+    }
+
+private:
+    USB* m_usb;
+    USB::DeviceInfo m_info;
+    bool m_valid = false;
+
+    u32 m_id;
+    u8 m_interface;
+    u8 m_outEndpoint;
+    u8 m_inEndpoint;
+    u8* m_buffer;
+    u32 m_maxPacketSize;
+    u32 m_tag = 0;
+    u8 m_lun;
+    u32 m_blockSize;
 };

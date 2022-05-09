@@ -262,8 +262,8 @@ static void OpenPatchFile(FIL* fp, DVDPatch* patch)
     memset(fp, 0, sizeof(FIL));
 
     // Get FATFS object
-    auto device = DeviceMgr::DRVToDeviceKind(patch->drv);
-    auto fatfs = DeviceMgr::sInstance->GetFilesystem(device);
+    auto devId = DeviceMgr::sInstance->DRVToDevID(patch->drv);
+    auto fatfs = DeviceMgr::sInstance->GetFilesystem(devId);
 
     fp->obj.fs = fatfs;
     fp->obj.id = fatfs->id;

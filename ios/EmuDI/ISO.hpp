@@ -16,7 +16,7 @@ class ISO : public VirtualDisc
 public:
     ISO(const char* path, const char* path2);
     virtual ~ISO();
-    virtual bool IsInserted();
+    virtual bool IsInserted() override;
 
 protected:
     static constexpr u32 DiskID_OFFSET = 0;
@@ -49,7 +49,7 @@ private:
     DWORD m_isoClmt[0x1000] = {0};
 
 protected:
-    DeviceMgr::DeviceKind m_device = DeviceMgr::Dev_SDCard;
+    u32 m_devId = 0;
 
     DI::DiskID m_diskID;
     bool m_readDiskIDCalled = false;

@@ -16,60 +16,57 @@ DeviceMgr::DeviceMgr()
 {
     // 64 ms repeating timer
     m_timer = IOS_CreateTimer(0, 64000, m_timerQueue.id(), 0);
-    ASSERT(m_timer >= 0);
+    assert(m_timer >= 0);
 
     bool ret = SDCard::Open();
-    ASSERT(ret);
+    assert(ret);
+
+    USB::sInstance = new USB(0);
+    ret = USB::sInstance->Init();
+    assert(ret);
 
     // Reset everything to default.
-    for (int i = 0; i < DEVICE_COUNT; i++) {
-        InitHandle((DeviceKind)i);
+    for (u32 i = 0; i < DeviceCount; i++) {
+        InitHandle(i);
     }
+
+    for (u32 i = 0; i < USB::MaxDevices; i++) {
+        m_usbDevices[i].inUse = false;
+    }
+
+    m_devices[0].disk = SDCard();
+    m_devices[0].enabled = true;
 
     m_thread.create(ThreadEntry, reinterpret_cast<void*>(this), nullptr, 0x800,
                     40);
 }
 
-bool DeviceMgr::IsInserted(DeviceKind device)
+bool DeviceMgr::IsInserted(u32 devId)
 {
-    ASSERT((u32)device < DEVICE_COUNT);
+    ASSERT(devId < DeviceCount);
 
-    return m_devices[device].inserted & !m_devices[device].error;
+    return m_devices[devId].inserted & !m_devices[devId].error;
 }
 
-bool DeviceMgr::IsMounted(DeviceKind device)
+bool DeviceMgr::IsMounted(u32 devId)
 {
-    ASSERT((u32)device < DEVICE_COUNT);
+    ASSERT(devId < DeviceCount);
 
-    return IsInserted(device) && m_devices[device].mounted;
+    return IsInserted(devId) && m_devices[devId].mounted;
 }
 
-void DeviceMgr::SetError(DeviceKind device)
+void DeviceMgr::SetError(u32 devId)
 {
-    ASSERT((u32)device < DEVICE_COUNT);
+    ASSERT(devId < DeviceCount);
 
-    m_devices[device].error = true;
+    m_devices[devId].error = true;
 }
 
-int DeviceMgr::DeviceKindToDRV(DeviceKind device)
+FATFS* DeviceMgr::GetFilesystem(u32 devId)
 {
-    ASSERT((u32)device < DEVICE_COUNT);
+    ASSERT(devId < DeviceCount);
 
-    return static_cast<s32>(device);
-}
-
-DeviceMgr::DeviceKind DeviceMgr::DRVToDeviceKind(int drv)
-{
-    ASSERT((u32)drv < DEVICE_COUNT);
-
-    return static_cast<DeviceKind>(drv);
-}
-
-FATFS* DeviceMgr::GetFilesystem(DeviceKind device)
-{
-    ASSERT((u32)device < DEVICE_COUNT);
-
-    return &m_devices[device].fs;
+    return &m_devices[devId].fs;
 }
 
 void DeviceMgr::ForceUpdate()
@@ -97,72 +94,132 @@ void DeviceMgr::WriteToLog(const char* str, u32 len)
     f_sync(&m_logFile);
 }
 
-bool DeviceMgr::DeviceInit(DeviceKind device)
+bool DeviceMgr::DeviceInit(u32 devId)
 {
-    ASSERT((u32)device < DEVICE_COUNT);
+    ASSERT(devId < DeviceCount);
+    DeviceHandle* dev = &m_devices[devId];
 
-    if (device == Dev_SDCard) {
+    if (!dev->enabled || dev->error) {
+        PRINT(IOS_DevMgr, ERROR, "Device not enabled: %u", devId);
+        return false;
+    }
+
+    if (std::holds_alternative<SDCard>(dev->disk)) {
         if (SDCard::Startup())
             return true;
 
-        SetError(device);
-        ForceUpdate();
+        SetError(devId);
         PRINT(IOS_DevMgr, ERROR, "SDCard::Startup failed");
         return false;
     }
 
-    PRINT(IOS_DevMgr, ERROR, "Device not recognized: %d", device);
+    if (std::holds_alternative<USBStorage>(dev->disk)) {
+        USBStorage& disk = std::get<USBStorage>(dev->disk);
+        if (disk.Init())
+            return true;
+
+        SetError(devId);
+        PRINT(IOS_DevMgr, ERROR, "USBStorage::Init failed");
+        return false;
+    }
+
+    PRINT(IOS_DevMgr, ERROR, "Device not recognized: %u", devId);
     return false;
 }
 
-bool DeviceMgr::DeviceRead(DeviceKind device, void* data, u32 sector, u32 count)
+bool DeviceMgr::DeviceRead(u32 devId, void* data, u32 sector, u32 count)
 {
-    ASSERT((u32)device < DEVICE_COUNT);
+    ASSERT(devId < DeviceCount);
+    DeviceHandle* dev = &m_devices[devId];
 
-    if (device == Dev_SDCard) {
+    if (!dev->enabled || dev->error) {
+        PRINT(IOS_DevMgr, ERROR, "Device not enabled: %u", devId);
+        return false;
+    }
+
+    if (std::holds_alternative<SDCard>(dev->disk)) {
         auto ret = SDCard::ReadSectors(sector, count, data);
         if (ret == IOSError::OK)
             return true;
 
-        SetError(device);
-        ForceUpdate();
+        SetError(devId);
         PRINT(IOS_DevMgr, ERROR, "SDCard::ReadSectors failed: %08X", ret);
         return false;
     }
 
-    PRINT(IOS_DevMgr, ERROR, "Device not recognized: %d", device);
+    if (std::holds_alternative<USBStorage>(dev->disk)) {
+        USBStorage& disk = std::get<USBStorage>(dev->disk);
+        if (disk.ReadSectors(sector, count, data))
+            return true;
+
+        SetError(devId);
+        PRINT(IOS_DevMgr, ERROR, "USBStorage::ReadSectors failed");
+        return false;
+    }
+
+    PRINT(IOS_DevMgr, ERROR, "Device not recognized: %u", devId);
     return false;
 }
 
-bool DeviceMgr::DeviceWrite(DeviceKind device, const void* data, u32 sector,
-                            u32 count)
+bool DeviceMgr::DeviceWrite(u32 devId, const void* data, u32 sector, u32 count)
 {
-    ASSERT((u32)device < DEVICE_COUNT);
+    ASSERT(devId < DeviceCount);
+    DeviceHandle* dev = &m_devices[devId];
 
-    if (device == Dev_SDCard) {
+    if (!dev->enabled || dev->error) {
+        PRINT(IOS_DevMgr, ERROR, "Device not enabled: %u", devId);
+        return false;
+    }
+
+    if (std::holds_alternative<SDCard>(dev->disk)) {
         auto ret = SDCard::WriteSectors(sector, count, data);
         if (ret == 0)
             return true;
 
-        SetError(device);
-        ForceUpdate();
+        SetError(devId);
         PRINT(IOS_DevMgr, ERROR, "SDCard::WriteSectors failed: %08X", ret);
         return false;
     }
 
-    PRINT(IOS_DevMgr, ERROR, "Device not recognized: %d", device);
+    if (std::holds_alternative<USBStorage>(dev->disk)) {
+        USBStorage& disk = std::get<USBStorage>(dev->disk);
+        if (disk.WriteSectors(sector, count, data))
+            return true;
+
+        SetError(devId);
+        PRINT(IOS_DevMgr, ERROR, "USBStorage::WriteSectors failed");
+        return false;
+    }
+
+    PRINT(IOS_DevMgr, ERROR, "Device not recognized: %u", devId);
     return false;
 }
 
-bool DeviceMgr::DeviceSync(DeviceKind device)
+bool DeviceMgr::DeviceSync(u32 devId)
 {
-    ASSERT((u32)device < DEVICE_COUNT);
+    ASSERT(devId < DeviceCount);
+    DeviceHandle* dev = &m_devices[devId];
 
-    if (device == Dev_SDCard) {
+    if (!dev->enabled || dev->error) {
+        PRINT(IOS_DevMgr, ERROR, "Device not enabled: %u", devId);
+        return false;
+    }
+
+    if (std::holds_alternative<SDCard>(dev->disk)) {
         return true;
     }
 
-    PRINT(IOS_DevMgr, ERROR, "Device not recognized: %d", device);
+    if (std::holds_alternative<USBStorage>(dev->disk)) {
+        USBStorage& disk = std::get<USBStorage>(dev->disk);
+        if (disk.Sync())
+            return true;
+
+        SetError(devId);
+        PRINT(IOS_DevMgr, ERROR, "USBStorage::Sync failed");
+        return false;
+    }
+
+    PRINT(IOS_DevMgr, ERROR, "Device not recognized: %u", devId);
     return false;
 }
 
@@ -171,16 +228,31 @@ void DeviceMgr::Run()
     PRINT(IOS_DevMgr, INFO, "Entering DeviceMgr...");
     PRINT(IOS_DevMgr, INFO, "DevMgr thread ID: %d", IOS_GetThreadId());
 
+    auto usbDevices = (USB::DeviceEntry*)IOS::Alloc(sizeof(USB::DeviceEntry) *
+                                                    USB::MaxDevices);
+    IOS::Request usbReq = {};
+    if (!USB::sInstance->EnqueueDeviceChange(usbDevices, &m_timerQueue,
+                                             &usbReq))
+        USBFatal();
+
     while (true) {
         // Wait for 64 ms.
-        m_timerQueue.receive(0);
+        auto req = m_timerQueue.receive(0);
 
-        m_devices[Dev_SDCard].inserted = SDCard::IsInserted();
+        if (req == &usbReq) {
+            PRINT(IOS_DevMgr, INFO, "USB device change");
+            assert(req->cmd == IOS::Command::Reply);
 
-        // TODO: USB
+            u32 count = req->result;
+            USBChange(usbDevices, count);
+            usbReq = {};
+            if (!USB::sInstance->EnqueueDeviceChange(usbDevices, &m_timerQueue,
+                                                     &usbReq))
+                USBFatal();
+        }
 
-        for (int i = 0; i < DEVICE_COUNT; i++) {
-            UpdateHandle((DeviceKind)i);
+        for (u32 i = 0; i < DeviceCount; i++) {
+            UpdateHandle(i);
         }
     }
 }
@@ -193,19 +265,146 @@ s32 DeviceMgr::ThreadEntry(void* arg)
     return 0;
 }
 
-void DeviceMgr::InitHandle(DeviceKind id)
+void DeviceMgr::USBFatal()
 {
-    ASSERT((u32)id < DEVICE_COUNT);
-
-    m_devices[id].inserted = false;
-    m_devices[id].error = false;
-    m_devices[id].mounted = false;
+    assert(!"USBFatal() was called!");
 }
 
-void DeviceMgr::UpdateHandle(DeviceKind id)
+void DeviceMgr::USBChange(USB::DeviceEntry* devices, u32 count)
 {
-    ASSERT((u32)id < DEVICE_COUNT);
-    DeviceHandle* dev = &m_devices[id];
+    if (count > USB::MaxDevices) {
+        PRINT(IOS_DevMgr, ERROR, "USB GetDeviceChange error: %d", (s32)count);
+        USBFatal();
+        return;
+    }
+
+    // Scan for device changes
+    bool foundMap[USB::MaxDevices] = {};
+
+    for (u32 i = 0; i < USB::MaxDevices; i++) {
+        if (!m_usbDevices[i].inUse)
+            continue;
+
+        // Invalidate device's intId if it errored
+        u32 intId = m_usbDevices[i].intId;
+        if (intId < DeviceCount && m_devices[intId].error)
+            m_usbDevices[i].intId = DeviceCount;
+
+        u32 j = 0;
+        // Sometimes the first 16 bits "device index?" will change
+        while (j < count && (m_usbDevices[i].usbId & 0xFFFF) !=
+                                (devices[j].devId & 0xFFFF)) {
+            j++;
+        }
+
+        if (j < count) {
+            foundMap[j] = true;
+            continue;
+        }
+
+        PRINT(IOS_DevMgr, INFO, "Device with id %X was removed",
+              m_usbDevices[i].usbId);
+
+        // Set device to not inserted
+        if (intId < DeviceCount)
+            m_devices[intId].inserted = false;
+
+        m_usbDevices[i].inUse = false;
+    }
+
+    // Search for new devices
+    for (u32 i = 0; i < count; i++) {
+        if (foundMap[i] == true)
+            continue;
+
+        PRINT(IOS_DevMgr, INFO, "Device with id %X was added",
+              devices[i].devId);
+
+        // Search for an open handle
+        u32 j = 0;
+        for (; j < USB::MaxDevices; j++) {
+            if (!m_usbDevices[j].inUse)
+                break;
+        }
+        assert(j < USB::MaxDevices);
+
+        m_usbDevices[j].inUse = true;
+        m_usbDevices[j].usbId = devices[i].devId;
+        m_usbDevices[j].intId = DeviceCount; // Invalid
+
+        USB::DeviceInfo info;
+        u8 alt = 0;
+        for (; alt < devices[i].altSetCount; alt++)
+            if (USB::sInstance->GetDeviceInfo(devices[i].devId, &info, alt) ==
+                USB::USBError::OK)
+                break;
+        if (alt == devices[i].altSetCount) {
+            PRINT(IOS_DevMgr, ERROR, "Failed to get info from device %X",
+                  devices[i].devId);
+            continue;
+        }
+        assert(info.devId == devices[i].devId);
+
+        if (info.interface.ifClass != USB::ClassCode::MassStorage ||
+            info.interface.ifSubClass != USB::SubClass::MassStorage_SCSI ||
+            info.interface.ifProtocol != USB::Protocol::MassStorage_BulkOnly) {
+            PRINT(IOS_DevMgr, WARN,
+                  "USB device is not a (compatible) storage device (%X:%X:%X)",
+                  info.interface.ifClass, info.interface.ifSubClass,
+                  info.interface.ifProtocol);
+            continue;
+        }
+
+        if (USB::sInstance->Attach(info.devId) != USB::USBError::OK) {
+            PRINT(IOS_DevMgr, ERROR, "Failed to attach device %X", info.devId);
+            continue;
+        }
+
+        // Find open device ID
+        u32 k = 0;
+        for (; k < DeviceCount; k++) {
+            if (!m_devices[k].enabled)
+                break;
+        }
+        if (k >= DeviceCount) {
+            PRINT(IOS_DevMgr, ERROR, "No open devices available");
+            continue;
+        }
+
+        PRINT(IOS_DevMgr, INFO, "Using device %u", k);
+
+        auto dev = &m_devices[k];
+        dev->disk = USBStorage(USB::sInstance, info);
+
+        m_usbDevices[j].intId = k;
+        dev->inserted = true;
+        dev->error = false;
+        dev->mounted = false;
+        dev->enabled = true;
+    }
+}
+
+void DeviceMgr::InitHandle(u32 devId)
+{
+    ASSERT(devId < DeviceCount);
+
+    m_devices[devId].enabled = false;
+    m_devices[devId].inserted = false;
+    m_devices[devId].error = false;
+    m_devices[devId].mounted = false;
+}
+
+void DeviceMgr::UpdateHandle(u32 devId)
+{
+    ASSERT(devId < DeviceCount);
+    DeviceHandle* dev = &m_devices[devId];
+
+    if (!dev->enabled)
+        return;
+
+    if (std::holds_alternative<SDCard>(dev->disk)) {
+        dev->inserted = SDCard::IsInserted();
+    }
 
     // Clear error if the device has been ejected, so we can try again if it's
     // reinserted.
@@ -214,64 +413,72 @@ void DeviceMgr::UpdateHandle(DeviceKind id)
 
     if (!dev->inserted && dev->mounted) {
         // Disable file log if it was writing to this device
-        if (m_logEnabled && id == m_logDevice) {
+        if (m_logEnabled && std::holds_alternative<SDCard>(dev->disk)) {
             m_logEnabled = false;
+            m_logDevice = DeviceCount;
         }
 
-        PRINT(IOS_DevMgr, INFO, "Unmount device %d", id);
+        PRINT(IOS_DevMgr, INFO, "Unmount device %d", devId);
 
-        // If we don't finish then it's an error.
-        dev->error = true;
+        dev->error = false;
         dev->mounted = false;
 
         FRESULT fret = f_unmount("0:");
         if (fret != FR_OK) {
-            PRINT(IOS_DevMgr, ERROR, "Failed to unmount device %d: %d", id,
+            PRINT(IOS_DevMgr, ERROR, "Failed to unmount device %d: %d", devId,
                   fret);
+            dev->error = true;
             return;
         }
 
-        PRINT(IOS_DevMgr, INFO, "Successfully unmounted device %d", id);
+        PRINT(IOS_DevMgr, INFO, "Successfully unmounted device %d", devId);
 
-        dev->error = false;
+        if (std::holds_alternative<USBStorage>(dev->disk)) {
+            dev->enabled = false;
+        }
     }
 
     if (dev->inserted && !dev->mounted && !dev->error) {
         // Mount the device.
-        PRINT(IOS_DevMgr, INFO, "Mount device %d", id);
+        PRINT(IOS_DevMgr, INFO, "Mount device %d", devId);
 
-        // If we don't finish then it's an error.
-        dev->error = true;
+        dev->error = false;
 
         // Create drv str.
         char str[16] = "0:";
-        str[0] = DeviceKindToDRV(id) + '\0';
+        str[0] = devId + '0';
 
         FRESULT fret = f_mount(&dev->fs, str, 0);
         if (fret != FR_OK) {
-            PRINT(IOS_DevMgr, ERROR, "Failed to mount device %d: %d", id, fret);
+            PRINT(IOS_DevMgr, ERROR, "Failed to mount device %d: %d", devId,
+                  fret);
+            dev->error = true;
+            dev->enabled = false;
             return;
         }
 
         // Create default path str.
         char str2[16] = "0:/saoirse";
-        str2[0] = DeviceKindToDRV(id) + '0';
+        str2[0] = devId + '0';
 
         fret = f_chdir(str2);
         if (fret != FR_OK) {
             PRINT(IOS_DevMgr, ERROR, "Failed to change directory to %s: %d",
                   str2, fret);
+            dev->error = true;
+            dev->enabled = false;
             return;
         }
 
-        PRINT(IOS_DevMgr, INFO, "Successfully mounted device %d", id);
+        PRINT(IOS_DevMgr, INFO, "Successfully mounted device %d", devId);
 
         dev->mounted = true;
         dev->error = false;
 
         // Open log file if it's enabled
         if (!m_logEnabled && Config::sInstance->IsFileLogEnabled() &&
-            id == m_logDevice) {
+            std::holds_alternative<SDCard>(dev->disk)) {
+            m_logDevice = devId;
             OpenLogFile();
         }
     }
@@ -282,7 +489,7 @@ bool DeviceMgr::OpenLogFile()
     PRINT(IOS_DevMgr, INFO, "Opening log file");
 
     char path[16] = "0:log.txt";
-    path[0] = DeviceKindToDRV(m_logDevice) + '0';
+    path[0] = m_logDevice + '0';
 
     auto fret = f_open(&m_logFile, path, FA_CREATE_ALWAYS | FA_WRITE);
     if (fret != FR_OK) {

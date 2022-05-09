@@ -24,6 +24,7 @@ ISO::ISO(const char* path, const char* path2)
 
     m_numParts = 1;
     m_partSize = f_size(&m_isoFile);
+    m_lastPartSize = m_partSize;
 
     if (path2 != nullptr) {
         fret = f_open(&m_isoFile2, path2, FA_READ);
@@ -72,7 +73,7 @@ ISO::~ISO()
 
 bool ISO::IsInserted()
 {
-    return DeviceMgr::sInstance->IsInserted(m_device);
+    return DeviceMgr::sInstance->IsInserted(m_devId);
 }
 
 bool ISO::ReadRaw(void* buffer, u32 wordOffset, u32 byteLen)

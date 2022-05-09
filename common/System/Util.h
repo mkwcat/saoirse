@@ -131,38 +131,70 @@ LIBOGC_SUCKS_BEGIN
 LIBOGC_SUCKS_END
 #else
 
-static inline void write32(u32 address, u32 value)
-{
-    *(vu32*)address = value;
-}
-
-static inline u32 read32(u32 address)
-{
-    return *(vu32*)address;
-}
-
-static inline void mask32(u32 address, u32 clear, u32 set)
-{
-    *(vu32*)address = ((*(vu32*)address) & ~clear) | set;
-}
-
-static inline void write16(u32 address, u16 value)
-{
-    *(vu16*)address = value;
-}
-
-static inline u16 read16(u32 address)
-{
-    return *(vu16*)address;
-}
-
 static inline u32 bswap32(u32 val)
 {
     return ((val & 0xFF) << 24) | ((val & 0xFF00) << 8) |
            ((val & 0xFF0000) >> 8) | ((val & 0xFF000000) >> 24);
 }
 
+static inline u16 bswap16(u16 val)
+{
+    return ((val & 0xFF) << 8) | ((val & 0xFF00) >> 8);
+}
+
+static inline u32 _read8(u32 address)
+{
+    return *(vu8*)address;
+}
+
+static inline u32 _read16(u32 address)
+{
+    return *(vu16*)address;
+}
+
+static inline u32 _read32(u32 address)
+{
+    return *(vu32*)address;
+}
+
+static inline void _write8(u32 address, u8 value)
+{
+    *(vu8*)address = value;
+}
+
+static inline void _write16(u32 address, u16 value)
+{
+    *(vu16*)address = value;
+}
+
+static inline void _write32(u32 address, u32 value)
+{
+    *(vu32*)address = value;
+}
+
+static inline void _mask32(u32 address, u32 clear, u32 set)
+{
+    *(vu32*)address = ((*(vu32*)address) & ~clear) | set;
+}
+
+#define write8(_ADDRESS, _VALUE) _write8((u32)(_ADDRESS), (u8)(_VALUE))
+#define write16(_ADDRESS, _VALUE) _write16((u32)(_ADDRESS), (u16)(_VALUE))
+#define write32(_ADDRESS, _VALUE) _write32((u32)(_ADDRESS), (u32)(_VALUE))
+#define read8(_ADDRESS) _read8((u32)(_ADDRESS))
+#define read16(_ADDRESS) _read16((u32)(_ADDRESS))
+#define read32(_ADDRESS) _read32((u32)(_ADDRESS))
+
+#define mask32(_ADDRESS, _CLEAR, _SET)                                         \
+    _mask32((u32)(_ADDRESS), (u32)(_CLEAR), (u32)(_SET))
+
 #endif
+
+#define read16_le(_ADDRESS) bswap16(read16((u32)(_ADDRESS)))
+#define read32_le(_ADDRESS) bswap32(read32((u32)(_ADDRESS)))
+#define write16_le(_ADDRESS, _VALUE)                                           \
+    write16((u32)(_ADDRESS), bswap16((u16)(_VALUE)))
+#define write32_le(_ADDRESS, _VALUE)                                           \
+    write32((u32)(_ADDRESS), bswap32((u32)(_VALUE)))
 
 // libogc doesn't have this for some reason?
 static inline void mask16(u32 address, u16 clear, u16 set)
