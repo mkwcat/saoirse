@@ -80,7 +80,7 @@ VPATH		=  $(foreach dir,$(SOURCES),$(ROOT)/$(dir))
 #---------------------------------------------------------------------------------
 INCLUDE	:=			$(foreach dir,$(INCLUDES),-I$(dir))
 ifeq ($(COMPILER),clang)
-INCLUDE +=          -I$(DEVKITARM)/arm-none-eabi/include -I$(DEVKITARM)/arm-none-eabi/include/c++/10.2.0 -I$(DEVKITARM)/arm-none-eabi/include/c++/10.2.0/arm-none-eabi/be
+INCLUDE +=          -I$(DEVKITARM)/arm-none-eabi/include/c++/11.2.0 -I$(DEVKITARM)/arm-none-eabi/include -I$(DEVKITARM)/arm-none-eabi/include/c++/11.2.0/arm-none-eabi/be
 endif
 
 #---------------------------------------------------------------------------------

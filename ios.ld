@@ -9,7 +9,7 @@ PHDRS {
 }
 
 MEMORY {
-	phys_ram(rwx) 	: ORIGIN = 0x13620000, LENGTH = 0x80000
+	phys_ram(rwx) 	: ORIGIN = 0x13670000, LENGTH = 0x80000
 	virt_ram(rwx) 	: ORIGIN = 0x7FE80000, LENGTH = 0x80000
 }
 
