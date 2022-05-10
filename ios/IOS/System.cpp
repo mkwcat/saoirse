@@ -209,6 +209,46 @@ u64 System::GetTime()
     return s_baseEpoch + (timeNow / 1898614);
 }
 
+/*
+ * Memcpy with only word writes to work around a Wii hardware bug.
+ */
+void* System::UnalignedMemcpy(void* dest, const void* src, size_t len)
+{
+    const u32 destAddr = u32(dest);
+    const u32 destRounded = round_down(destAddr, 4);
+    const u32 destEndAddr = destAddr + len;
+    const u32 destEndRounded = round_down(destEndAddr, 4);
+
+    // Do main rounded copy (optimized memcpy will copy in words anyway)
+    memcpy(round_up(dest, 4), src + round_up(destAddr, 4) - destAddr,
+           destEndRounded - round_up(destAddr, 4));
+
+    // Write the leading bytes
+    if (destRounded != destAddr) {
+        u32 srcData;
+        memcpy(&srcData, src, 4);
+
+        srcData >>= ((destAddr % 4) * 8);
+        u32 mask = 0xFFFFFFFF >> ((destAddr % 4) * 8);
+        if (destEndAddr - destRounded < 4)
+            mask &= ~(0xFFFFFFFF >> ((destEndAddr - destRounded) * 8));
+        mask32(destRounded, mask, srcData & mask);
+    }
+
+    // Write the trailing bytes
+    if (destEndAddr != destEndRounded &&
+        // Check if this was covered by the leading bytes copy
+        (destEndRounded != destRounded || destRounded == destAddr)) {
+        u32 srcData;
+        memcpy(&srcData, src + (destEndRounded - destAddr), 4);
+
+        u32 mask = ~(0xFFFFFFFF >> ((destEndAddr - destEndRounded) * 8));
+        mask32(destEndRounded, mask, srcData & mask);
+    }
+
+    return dest;
+}
+
 void KernelWrite(u32 address, u32 value)
 {
     const s32 queue = IOS_CreateMessageQueue((u32*)address, 0x40000000);

@@ -197,6 +197,32 @@ void TestISFS()
     IOS_Close(ret);
 }
 
+void TestISFSReadDir()
+{
+    PRINT(Core, INFO, "Testing ISFS_ReadDir()");
+
+    s32 ret = ISFS_Initialize();
+    ASSERT(ret >= 0);
+
+    PRINT(Core, INFO, "Opened /dev/fs");
+
+    u32 count = 0;
+    ret = ISFS_ReadDir("/title/00010000/534d4e45/data", nullptr, &count);
+    PRINT(Core, INFO, "ISFS_ReadDir result: %d, count: %d", ret, count);
+    ASSERT(ret == ISFSError::OK);
+
+    char* namelist = new (std::align_val_t(32)) char[count * 13];
+    ret = ISFS_ReadDir("/title/00010000/534d4e45/data", namelist, &count);
+    PRINT(Core, INFO, "ISFS_ReadDir result: %d", ret);
+    ASSERT(ret == ISFSError::OK);
+
+    for (u32 i = 0; i < count; i++) {
+        PRINT(Core, INFO, "Name: %s", namelist + i * 13);
+    }
+
+    delete namelist;
+}
+
 void TestDirectOpen()
 {
     s32 fd = IOS_Open("/dev/saoirse/file", 0);

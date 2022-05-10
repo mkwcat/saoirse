@@ -25,6 +25,8 @@ public:
     static void SetTime(u32 hwTimerVal, u64 epoch);
     static u64 GetTime();
 
+    static void* UnalignedMemcpy(void* dest, const void* src, size_t len);
+
 private:
     static s32 s_heapId;
 };

@@ -17,6 +17,7 @@
 #include <System/OS.hpp>
 #include <System/Types.h>
 #include <array>
+#include <climits>
 #include <cstdio>
 #include <cstring>
 
@@ -1142,11 +1143,58 @@ static s32 ReqIoctlv(s32 fd, ISFSIoctl cmd, u32 in_count, u32 out_count,
     // vec[0]: path
     // todo
     case ISFSIoctl::ReadDir: {
-        const char* path = (const char*)vec[0].data;
+        if (in_count != out_count || in_count < 1 || in_count > 2) {
+            PRINT(IOS_EmuFS, ERROR, "ReadDir: Wrong vector count");
+            return ISFSError::Invalid;
+        }
 
+        if (!aligned(vec[0].data, 4) || vec[0].len < ISFSMaxPath) {
+            PRINT(IOS_EmuFS, ERROR, "ReadDir: Invalid input path vector");
+            return ISFSError::Invalid;
+        }
+
+        char path[ISFSMaxPath];
+        memcpy(path, vec[0].data, ISFSMaxPath);
         PRINT(IOS_EmuFS, INFO, "ReadDir: ISFS_ReadDir(\"%s\")", path);
 
-        // XXX actually implement this properly
+        u32 inMaxCount = 0;
+        char* outNames = nullptr;
+        u32* outCountPtr = nullptr;
+
+        if (in_count == 2) {
+            if (!aligned(vec[1].data, 4) || vec[1].len < sizeof(u32)) {
+                PRINT(IOS_EmuFS, ERROR,
+                      "ReadDir: Invalid input max file count vector");
+                return ISFSError::Invalid;
+            }
+
+            inMaxCount = *reinterpret_cast<u32*>(vec[1].data);
+
+            if (!aligned(vec[2].data, 4) || vec[2].len < inMaxCount * 13) {
+                PRINT(IOS_EmuFS, ERROR,
+                      "ReadDir: Invalid output file names vector");
+                return ISFSError::Invalid;
+            }
+
+            outNames = reinterpret_cast<char*>(vec[2].data);
+            memset(outNames, 0, inMaxCount * 13);
+
+            if (!aligned(vec[3].data, 4) || vec[3].len < sizeof(u32)) {
+                PRINT(IOS_EmuFS, ERROR,
+                      "ReadDir: Invalid output file count vector");
+                return ISFSError::Invalid;
+            }
+
+            outCountPtr = reinterpret_cast<u32*>(vec[3].data);
+        } else {
+            if (!aligned(vec[1].data, 4) || vec[1].len < sizeof(u32)) {
+                PRINT(IOS_EmuFS, ERROR,
+                      "ReadDir: Invalid output file count vector");
+                return ISFSError::Invalid;
+            }
+
+            outCountPtr = reinterpret_cast<u32*>(vec[1].data);
+        }
 
         // Check if the filepath should be replaced
         if (!IsReplacedFilepath(path))
@@ -1160,16 +1208,51 @@ static s32 ReqIoctlv(s32 fd, ISFSIoctl cmd, u32 in_count, u32 out_count,
         auto fret = f_opendir(&dir, efsFilepath);
         if (fret != FR_OK) {
             PRINT(IOS_EmuFS, ERROR,
-                  "ReadDir: Failed to open replaced directory");
+                  "ReadDir: Failed to open replaced directory: %d", fret);
             return FResultToISFSError(fret);
         }
 
-        fret = f_closedir(&dir);
-        if (fret != FR_OK) {
+        FILINFO info;
+        u32 count = 0;
+        while ((fret = f_readdir(&dir, &info)) == FR_OK) {
+            const char* name = info.fname;
+            auto len = strlen(name);
+
+            if (len <= 0)
+                break;
+
+            if (len > 12) {
+                if (strlen(info.altname) < 1 || !strcmp(info.altname, "?"))
+                    continue;
+                name = info.altname;
+            }
+
+            if (count < inMaxCount) {
+                char nameData[13] = {0};
+                strncpy(nameData, name, sizeof(nameData));
+                System::UnalignedMemcpy(outNames + count * 13, nameData,
+                                        sizeof(nameData));
+            }
+
+            assert(count < INT_MAX);
+            count++;
+        }
+
+        auto fret2 = f_closedir(&dir);
+        if (fret2 != FR_OK) {
+            PRINT(IOS_EmuFS, ERROR, "ReadDir: f_closedir error: %d", fret2);
             return ISFSError::Unknown;
         }
 
-        return ISFSError::NotFound;
+        if (fret != FR_OK) {
+            PRINT(IOS_EmuFS, ERROR, "ReadDir: f_readdir error: %d", fret);
+            return FResultToISFSError(fret);
+        }
+
+        PRINT(IOS_EmuFS, INFO, "ReadDir: count: %u", count);
+        *outCountPtr = count;
+
+        return ISFSError::OK;
     }
 
     // [ISFS_GetUsage]
