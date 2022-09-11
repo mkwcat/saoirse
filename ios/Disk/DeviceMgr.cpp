@@ -332,6 +332,12 @@ void DeviceMgr::USBChange(USB::DeviceEntry* devices, u32 count)
         m_usbDevices[j].usbId = devices[i].devId;
         m_usbDevices[j].intId = DeviceCount; // Invalid
 
+        if (USB::sInstance->Attach(devices[i].devId) != USB::USBError::OK) {
+            PRINT(IOS_DevMgr, ERROR, "Failed to attach device %X",
+                  devices[i].devId);
+            continue;
+        }
+
         USB::DeviceInfo info;
         u8 alt = 0;
         for (; alt < devices[i].altSetCount; alt++)
@@ -352,11 +358,6 @@ void DeviceMgr::USBChange(USB::DeviceEntry* devices, u32 count)
                   "USB device is not a (compatible) storage device (%X:%X:%X)",
                   info.interface.ifClass, info.interface.ifSubClass,
                   info.interface.ifProtocol);
-            continue;
-        }
-
-        if (USB::sInstance->Attach(info.devId) != USB::USBError::OK) {
-            PRINT(IOS_DevMgr, ERROR, "Failed to attach device %X", info.devId);
             continue;
         }
 
