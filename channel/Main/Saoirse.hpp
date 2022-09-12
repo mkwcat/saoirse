@@ -7,6 +7,3 @@
 #pragma once
 
 void LaunchGame();
-void TestISFS();
-void TestISFSReadDir();
-void TestDirectOpen();

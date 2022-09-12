@@ -5,6 +5,7 @@
 // SPDX-License-Identifier: MIT
 
 #include "Arch.hpp"
+#include <cstdlib>
 #include <stdio.h>
 #include <string.h>
 
