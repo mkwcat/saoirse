@@ -11,6 +11,7 @@
 #include <System/Util.h>
 #include <new>
 #include <ogc/cache.h>
+#include <cstdlib>
 #include <stdio.h>
 #include <string.h>
 #include <time.h>

@@ -18,6 +18,7 @@
 #include <System/Util.h>
 #include <UI/BasicUI.hpp>
 #include <UI/Input.hpp>
+#include <cstdlib>
 #include <cstring>
 #include <stdio.h>
 #include <unistd.h>
@@ -173,86 +174,6 @@ void LaunchGame()
     /* Unreachable! */
     abort();
     // LWP_SuspendThread(LWP_GetSelf());
-}
-
-void TestISFS()
-{
-    PRINT(Core, INFO, "Testing ISFS");
-
-    s32 ret = ISFS_Initialize();
-    ASSERT(ret >= 0);
-
-    PRINT(Core, INFO, "Opened /dev/fs");
-
-    ret = ISFS_CreateFile("/tmp/test.bin", 0, 3, 3, 0);
-    PRINT(Core, INFO, "ret: %d", ret);
-    sleep(2);
-    ASSERT(ret >= 0);
-
-    PRINT(Core, INFO, "Created file");
-
-    PRINT(Core, INFO, "Attempt open");
-    ret = IOS_Open("/tmp/test.bin", 2);
-    PRINT(Core, INFO, "Result: %d", ret);
-    IOS_Close(ret);
-}
-
-void TestISFSReadDir()
-{
-    PRINT(Core, INFO, "Testing ISFS_ReadDir()");
-
-    s32 ret = ISFS_Initialize();
-    ASSERT(ret >= 0);
-
-    PRINT(Core, INFO, "Opened /dev/fs");
-
-    u32 count = 0;
-    ret = ISFS_ReadDir("/title/00010000/534d4e45/data", nullptr, &count);
-    PRINT(Core, INFO, "ISFS_ReadDir result: %d, count: %d", ret, count);
-    ASSERT(ret == ISFSError::OK);
-
-    char* namelist = new (std::align_val_t(32)) char[count * 13];
-    ret = ISFS_ReadDir("/title/00010000/534d4e45/data", namelist, &count);
-    PRINT(Core, INFO, "ISFS_ReadDir result: %d", ret);
-    ASSERT(ret == ISFSError::OK);
-
-    for (u32 i = 0; i < count; i++) {
-        PRINT(Core, INFO, "Name: %s", namelist + i * 13);
-    }
-
-    delete namelist;
-}
-
-void TestDirectOpen()
-{
-    s32 fd = IOS_Open("/dev/saoirse/file", 0);
-    printf("fd: %d\n", fd);
-    ASSERT(fd >= 0);
-
-    PRINT(Core, INFO, "Open success!");
-
-    IOS::Vector vec[2];
-    u32 mode = 2;
-
-    char path[] = "0:/open_test.txt";
-
-    vec[0].data = reinterpret_cast<void*>(path);
-    vec[0].len = sizeof("0:/open_test.txt");
-    vec[1].data = (void*)&mode;
-    vec[1].len = sizeof(mode);
-
-    s32 ret =
-        IOS_Ioctlv(fd, static_cast<u32>(ISFSIoctl::OpenDirect), 2, 0, vec);
-    ASSERT(ret >= 0);
-
-    PRINT(Core, INFO, "Open direct success!");
-
-    ret = IOS_Write(fd, (const void*)"test write", sizeof("test write") - 1);
-    ASSERT(ret >= 0);
-
-    PRINT(Core, INFO, "Write success!");
-
-    IOS_Close(fd);
 }
 
 s32 main([[maybe_unused]] s32 argc, [[maybe_unused]] char** argv)

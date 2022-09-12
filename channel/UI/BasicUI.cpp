@@ -31,10 +31,6 @@ OptionDisplay options[] = {
         BasicUI::OptionType::StartGame,
     },
     {
-        "Test EmuFS",
-        BasicUI::OptionType::TestFS,
-    },
-    {
         "Exit",
         BasicUI::OptionType::Exit,
     },
@@ -170,7 +166,6 @@ BasicUI::OptionStatus BasicUI::GetOptionStatus(OptionType opt)
 
     switch (opt) {
     case OptionType::StartGame:
-    case OptionType::TestFS:
         if (!LaunchState::Get()->DiscInserted.available)
             return OptionStatus::Waiting;
 
@@ -284,11 +279,6 @@ void BasicUI::OnSelect(OptionType opt)
         VIDEO_WaitVSync();
         WPAD_Shutdown();
         LaunchGame();
-        break;
-
-    case OptionType::TestFS:
-        VIDEO_WaitVSync();
-        TestISFSReadDir();
         break;
 
     case OptionType::Exit:
