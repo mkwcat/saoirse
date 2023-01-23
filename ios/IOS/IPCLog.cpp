@@ -14,21 +14,36 @@ IPCLog* IPCLog::sInstance;
 IPCLog::IPCLog() : m_ipcQueue(8), m_responseQueue(1), m_startRequestQueue(1)
 {
     s32 ret = IOS_RegisterResourceManager("/dev/saoirse", m_ipcQueue.id());
-    if (ret < 0)
+    if (ret < 0) {
         AbortColor(YUV_WHITE);
+    }
 }
 
 void IPCLog::Print(const char* buffer)
 {
     IOS::Request* req = m_responseQueue.receive();
     memcpy(req->ioctl.io, buffer, printSize);
-    req->reply(0);
+    req->reply(s32(Log::IPCLogReply::Print));
 }
 
 void IPCLog::Notify()
 {
     IOS::Request* req = m_responseQueue.receive();
-    req->reply(1);
+    req->reply(s32(Log::IPCLogReply::Notice));
+}
+
+void IPCLog::NotifyDeviceInsertion(u8 id)
+{
+    IOS::Request* req = m_responseQueue.receive();
+    System::UnalignedMemcpy(req->ioctl.io, &id, sizeof(id));
+    req->reply(s32(Log::IPCLogReply::DevInsert));
+}
+
+void IPCLog::NotifyDeviceRemoval(u8 id)
+{
+    IOS::Request* req = m_responseQueue.receive();
+    System::UnalignedMemcpy(req->ioctl.io, &id, sizeof(id));
+    req->reply(s32(Log::IPCLogReply::DevRemove));
 }
 
 void IPCLog::HandleRequest(IOS::Request* req)
@@ -53,7 +68,7 @@ void IPCLog::HandleRequest(IOS::Request* req)
         // Wait for any ongoing requests to finish. TODO: This could be done
         // better with a mutex maybe?
         usleep(10000);
-        m_responseQueue.receive()->reply(2);
+        m_responseQueue.receive()->reply(s32(Log::IPCLogReply::Close));
         req->reply(IOSError::OK);
         break;
 

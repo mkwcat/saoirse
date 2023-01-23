@@ -9,9 +9,9 @@
 #include <Debug/Log.hpp>
 #include <System/Hollywood.hpp>
 #include <System/Util.h>
+#include <cstdlib>
 #include <new>
 #include <ogc/cache.h>
-#include <cstdlib>
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
@@ -370,6 +370,9 @@ bool IOSBoot::IPCLog::handleEvent(s32 result)
     }
 
     switch (static_cast<Log::IPCLogReply>(result)) {
+    case Log::IPCLogReply::Close:
+        return false;
+
     case Log::IPCLogReply::Print:
         puts(logBuffer);
         return true;
@@ -384,11 +387,18 @@ bool IOSBoot::IPCLog::handleEvent(s32 result)
         }
         return true;
 
-    case Log::IPCLogReply::Close:
-        return false;
-    }
+    case Log::IPCLogReply::DevInsert:
+        PRINT(Core, INFO, "Received device insertion: %u", *(u8*)logBuffer);
+        return true;
 
-    return true;
+    case Log::IPCLogReply::DevRemove:
+        PRINT(Core, INFO, "Received device removal: %u", *(u8*)logBuffer);
+        return true;
+
+    default:
+        PRINT(Core, INFO, "Received unknown IPCLogReply: %d", result);
+        return true;
+    }
 }
 
 s32 IOSBoot::IPCLog::threadEntry(void* userdata)

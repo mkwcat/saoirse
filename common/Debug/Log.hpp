@@ -13,8 +13,7 @@
 namespace Log
 {
 
-enum class LogSource
-{
+enum class LogSource {
     Core,
     DVD,
     Loader,
@@ -30,25 +29,24 @@ enum class LogSource
     IOS_EmuES,
 };
 
-enum class LogLevel
-{
+enum class LogLevel {
     INFO,
     WARN,
     ERROR
 };
 
-enum class IPCLogIoctl
-{
+enum class IPCLogIoctl {
     RegisterPrintHook,
     StartGameEvent,
     SetTime,
 };
 
-enum class IPCLogReply
-{
+enum class IPCLogReply {
+    Close,
     Print,
     Notice,
-    Close
+    DevInsert,
+    DevRemove,
 };
 
 #ifdef TARGET_IOS

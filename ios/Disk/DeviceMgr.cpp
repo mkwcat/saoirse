@@ -7,6 +7,7 @@
 #include "DeviceMgr.hpp"
 #include <Debug/Log.hpp>
 #include <Disk/SDCard.hpp>
+#include <IOS/IPCLog.hpp>
 #include <System/Config.hpp>
 #include <System/Types.h>
 
@@ -424,7 +425,11 @@ void DeviceMgr::UpdateHandle(u32 devId)
         dev->error = false;
         dev->mounted = false;
 
-        FRESULT fret = f_unmount("0:");
+        // Create drv str.
+        char str[16] = "0:";
+        str[0] = devId + '0';
+
+        FRESULT fret = f_unmount(str);
         if (fret != FR_OK) {
             PRINT(IOS_DevMgr, ERROR, "Failed to unmount device %d: %d", devId,
                   fret);
@@ -437,6 +442,8 @@ void DeviceMgr::UpdateHandle(u32 devId)
         if (std::holds_alternative<USBStorage>(dev->disk)) {
             dev->enabled = false;
         }
+
+        IPCLog::sInstance->NotifyDeviceRemoval(devId);
     }
 
     if (dev->inserted && !dev->mounted && !dev->error) {
@@ -458,19 +465,6 @@ void DeviceMgr::UpdateHandle(u32 devId)
             return;
         }
 
-        // Create default path str.
-        char str2[16] = "0:/saoirse";
-        str2[0] = devId + '0';
-
-        fret = f_chdir(str2);
-        if (fret != FR_OK) {
-            PRINT(IOS_DevMgr, ERROR, "Failed to change directory to %s: %d",
-                  str2, fret);
-            dev->error = true;
-            dev->enabled = false;
-            return;
-        }
-
         PRINT(IOS_DevMgr, INFO, "Successfully mounted device %d", devId);
 
         dev->mounted = true;
@@ -482,6 +476,8 @@ void DeviceMgr::UpdateHandle(u32 devId)
             m_logDevice = devId;
             OpenLogFile();
         }
+
+        IPCLog::sInstance->NotifyDeviceInsertion(devId);
     }
 }
 
