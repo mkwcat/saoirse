@@ -60,7 +60,6 @@ constexpr int DIRECT_HANDLE_BASE = 300;
 constexpr int DIRECT_HANDLE_MAX = NAND_MAX_FILE_DESCRIPTOR_AMOUNT;
 
 #define EFS_DRIVE "0:"
-#define EFS_MAX_PATH_LEN 2048
 
 static char efsFilepath[EFS_MAX_PATH_LEN];
 static char efsFilepath2[EFS_MAX_PATH_LEN];
@@ -71,7 +70,12 @@ struct ProxyFile {
     bool filOpened;
     char path[64];
     u32 mode;
-    FIL fil;
+    // TODO: Use a std::variant for this
+    bool isDir;
+    union {
+        FIL fil;
+        DIR dir;
+    };
 };
 
 static std::array<ProxyFile, NAND_MAX_FILE_DESCRIPTOR_AMOUNT> sFileArray;
@@ -85,8 +89,7 @@ static std::array<DirectFile, DIRECT_HANDLE_MAX> sDirectFileArray;
 
 static std::array<IOS::ResourceCtrl<ISFSIoctl>, MGR_HANDLE_MAX> realFS;
 
-enum class DescType
-{
+enum class DescType {
     Replaced,
     Real,
     Manager,
@@ -178,12 +181,9 @@ static IOS::ResourceCtrl<ISFSIoctl>* GetManagerResource(s32 fd)
     return resource;
 }
 
-/*---------------------------------------------------------------------------*
- * Name        : IsFileDescriptorValid
- * Description : Checks if a file descriptor is valid.
- * Arguments   : fd    The file descriptor to check.
- * Returns     : If the file descriptor is valid.
- *---------------------------------------------------------------------------*/
+/**
+ * Check if a file descriptor is valid.
+ */
 static bool IsFileDescriptorValid(int fd)
 {
     if (fd < 0 || fd >= static_cast<int>(sFileArray.size()))
@@ -192,10 +192,30 @@ static bool IsFileDescriptorValid(int fd)
     if (!sFileArray[fd].inUse)
         return false;
 
+    if (sFileArray[fd].isDir)
+        return false;
+
     return true;
 }
 
-static int RegisterFileDescriptor(const char* path)
+/**
+ * Check if a file descriptor is a valid directory.
+ */
+static bool IsDirDescValid(int fd)
+{
+    if (fd < 0 || fd >= static_cast<int>(sFileArray.size()))
+        return false;
+
+    if (!sFileArray[fd].inUse)
+        return false;
+
+    if (!sFileArray[fd].isDir)
+        return false;
+
+    return true;
+}
+
+static int RegisterFileDescriptor(const char* path, bool dir = false)
 {
     int match = 0;
 
@@ -479,9 +499,9 @@ static s32 ReqProxyOpen(const char* filepath, u32 mode)
     return fd;
 }
 
-/*
+/**
  * Handles direct open file requests.
- * Returns: File descriptor, or ISFS error code.
+ * @returns File descriptor, or ISFS error code.
  */
 static s32 ReqDirectOpen(const char* filepath, u32 mode)
 {
@@ -491,7 +511,6 @@ static s32 ReqDirectOpen(const char* filepath, u32 mode)
         return fd;
     }
 
-    sFileArray[fd].mode = mode;
     sFileArray[fd].inUse = false;
     sFileArray[fd].filOpened = false;
 
@@ -502,6 +521,7 @@ static s32 ReqDirectOpen(const char* filepath, u32 mode)
         return FResultToISFSError(fret);
     }
 
+    sFileArray[fd].mode = mode;
     sFileArray[fd].inUse = true;
     sFileArray[fd].filOpened = true;
 
@@ -511,9 +531,40 @@ static s32 ReqDirectOpen(const char* filepath, u32 mode)
     return fd;
 }
 
-/*
+/**
+ * Handles direct open directory requests.
+ * @returns File descriptor, or ISFS error code.
+ */
+static s32 ReqDirectOpenDir(const char* path)
+{
+    int fd = FindAvailableFileDescriptor();
+    if (fd < 0) {
+        PRINT(IOS_EmuFS, ERROR, "Could not find an open file descriptor");
+        return fd;
+    }
+
+    sFileArray[fd].inUse = false;
+    sFileArray[fd].filOpened = false;
+
+    const FRESULT fret = f_opendir(&sFileArray[fd].dir, path);
+    if (fret != FR_OK) {
+        PRINT(IOS_EmuFS, ERROR, "Failed to open dir '%s' error: %d", path,
+              fret);
+        return FResultToISFSError(fret);
+    }
+
+    sFileArray[fd].inUse = true;
+    sFileArray[fd].isDir = true;
+
+    PRINT(IOS_EmuFS, INFO, "Successfully opened directory '%s' (fd=%d)", path,
+          fd);
+
+    return fd;
+}
+
+/**
  * Close open file descriptor.
- * Returns: 0 for success, or IOS error code.
+ * @returns 0 for success, or IOS error code.
  */
 static s32 ReqClose(s32 fd)
 {
@@ -538,9 +589,9 @@ static s32 ReqClose(s32 fd)
     return ISFSError::OK;
 }
 
-/*
+/**
  * Read data from open file descriptor.
- * Returns: Amount read, or ISFS error code.
+ * @returns Amount read, or ISFS error code.
  */
 static s32 ReqRead(s32 fd, void* data, u32 len)
 {
@@ -1088,49 +1139,150 @@ static s32 ReqIoctlv(s32 fd, ISFSIoctl cmd, u32 in_count, u32 out_count,
 
     // Open a direct file
     if (GetDescriptorType(fd) == DescType::Direct) {
-        if (cmd != ISFSIoctl::OpenDirect) {
+        switch (cmd) {
+        default:
             PRINT(IOS_EmuFS, ERROR, "Unknown direct ioctl: %u",
                   static_cast<s32>(cmd));
             return ISFSError::Invalid;
+
+        case ISFSIoctl::Direct_Open: {
+            if (in_count != 2 || out_count != 0) {
+                PRINT(IOS_EmuFS, ERROR, "Direct_Open: Wrong vector count!");
+                return ISFSError::Invalid;
+            }
+
+            if (vec[0].len < 1 || vec[0].len > EFS_MAX_PATH_LEN) {
+                PRINT(IOS_EmuFS, ERROR, "Direct_Open: Invalid path length: %d",
+                      vec[0].len);
+                return ISFSError::Invalid;
+            }
+
+            if (vec[1].len != sizeof(u32)) {
+                PRINT(IOS_EmuFS, ERROR,
+                      "Direct_Open: Invalid open mode length: %d", vec[1].len);
+                return ISFSError::Invalid;
+            }
+
+            if (!aligned(vec[1].data, 4)) {
+                PRINT(IOS_EmuFS, ERROR,
+                      "Direct_Open: Invalid open mode alignment");
+                return ISFSError::Invalid;
+            }
+
+            // Check if the supplied file path length is valid.
+            if (strnlen(reinterpret_cast<const char*>(vec[0].data),
+                        vec[0].len) == vec[0].len) {
+                PRINT(IOS_EmuFS, ERROR, "Direct_Open: Path does not terminate");
+                return ISFSError::Invalid;
+            }
+
+            // Check if the file is already open
+            if (sDirectFileArray[fd - DIRECT_HANDLE_BASE].fd !=
+                ISFSError::NotFound) {
+                PRINT(IOS_EmuFS, ERROR, "Direct_Open: File already open");
+                return ISFSError::Invalid;
+            }
+
+            s32 realFd =
+                ReqDirectOpen(reinterpret_cast<const char*>(vec[0].data),
+                              *reinterpret_cast<u32*>(vec[1].data));
+            if (realFd < 0)
+                return realFd;
+
+            sDirectFileArray[fd - DIRECT_HANDLE_BASE].inUse = true;
+            sDirectFileArray[fd - DIRECT_HANDLE_BASE].fd = realFd;
+            return ISFSError::OK;
         }
 
-        if (in_count != 2 || out_count != 0) {
-            PRINT(IOS_EmuFS, ERROR, "OpenDirect: Wrong vector count!");
-            return ISFSError::Invalid;
+        case ISFSIoctl::Direct_DirOpen: {
+            if (in_count != 1 || out_count != 0) {
+                PRINT(IOS_EmuFS, ERROR, "Direct_DirOpen: Wrong vector count!");
+                return ISFSError::Invalid;
+            }
+
+            if (vec[0].len < 1 || vec[0].len > EFS_MAX_PATH_LEN) {
+                PRINT(IOS_EmuFS, ERROR,
+                      "Direct_DirOpen: Invalid path length: %d", vec[0].len);
+                return ISFSError::Invalid;
+            }
+
+            // Check if the supplied file path length is valid.
+            if (strnlen(reinterpret_cast<const char*>(vec[0].data),
+                        vec[0].len) == vec[0].len) {
+                PRINT(IOS_EmuFS, ERROR, "Direct_Open: Path does not terminate");
+                return ISFSError::Invalid;
+            }
+
+            // Check if the file is already open
+            if (sDirectFileArray[fd - DIRECT_HANDLE_BASE].fd !=
+                ISFSError::NotFound) {
+                PRINT(IOS_EmuFS, ERROR, "Direct_DirOpen: File already open");
+                return ISFSError::Invalid;
+            }
+
+            s32 realFd =
+                ReqDirectOpenDir(reinterpret_cast<const char*>(vec[0].data));
+            if (realFd < 0)
+                return realFd;
+
+            sDirectFileArray[fd - DIRECT_HANDLE_BASE].inUse = true;
+            sDirectFileArray[fd - DIRECT_HANDLE_BASE].fd = realFd;
+            return ISFSError::OK;
         }
 
-        if (vec[0].len < 1 || vec[0].len > EFS_MAX_PATH_LEN) {
-            PRINT(IOS_EmuFS, ERROR, "OpenDirect: Invalid path length: %d",
-                  vec[0].len);
-            return ISFSError::Invalid;
+        case ISFSIoctl::Direct_DirNext: {
+            if (in_count != 0 || out_count != 1) {
+                PRINT(IOS_EmuFS, ERROR, "Direct_DirNext: Wrong vector count!");
+                return ISFSError::Invalid;
+            }
+
+            if (vec[0].len != sizeof(ISFSDirect_Stat)) {
+                PRINT(IOS_EmuFS, ERROR,
+                      "Direct_DirNext: Wrong ISFSDirect_Stat length: %u",
+                      vec[0].len);
+                return ISFSError::Invalid;
+            }
+
+            auto stat = reinterpret_cast<ISFSDirect_Stat*>(vec[0].data);
+            memset(stat, 0, vec[0].len);
+
+            if (!sDirectFileArray[fd - DIRECT_HANDLE_BASE].inUse ||
+                sDirectFileArray[fd - DIRECT_HANDLE_BASE].fd ==
+                    ISFSError::NotFound) {
+                PRINT(IOS_EmuFS, ERROR, "Direct_DirNext: File not open!");
+                return ISFSError::Invalid;
+            }
+
+            s32 realFd = sDirectFileArray[fd - DIRECT_HANDLE_BASE].fd;
+            if (!sFileArray[realFd].isDir) {
+                PRINT(IOS_EmuFS, ERROR,
+                      "Direct_DirNext: Requested FD is not a directory!");
+                return ISFSError::Invalid;
+            }
+
+            FILINFO fno;
+            auto fret = f_readdir(&sFileArray[realFd].dir, &fno);
+            if (fret != FR_OK) {
+                PRINT(IOS_EmuFS, ERROR, "Direct_DirNext: f_readdir error: %d",
+                      fret);
+                return FResultToISFSError(fret);
+            }
+
+            if (fno.fname[0] == '\0') {
+                PRINT(IOS_EmuFS, INFO,
+                      "Direct_DirNext: Reached end of directory");
+                // Caller should recognize a blank filename as the end of the
+                // directory.
+                return ISFSError::OK;
+            }
+
+            stat->dirOffset = 0; // TODO
+            stat->attribute = fno.fattrib;
+            stat->size = fno.fsize;
+            strncpy(stat->name, fno.fname, EFS_MAX_PATH_LEN);
+            return ISFSError::OK;
         }
-
-        if (vec[1].len != sizeof(u32)) {
-            PRINT(IOS_EmuFS, ERROR, "OpenDirect: Invalid open mode length: %d",
-                  vec[1].len);
-            return ISFSError::Invalid;
         }
-
-        if (!aligned(vec[1].data, 4)) {
-            PRINT(IOS_EmuFS, ERROR, "OpenDirect: Invalid open mode alignment");
-            return ISFSError::Invalid;
-        }
-
-        // Check if the supplied file path length is valid.
-        if (strnlen(reinterpret_cast<const char*>(vec[0].data), vec[0].len) ==
-            vec[0].len) {
-            PRINT(IOS_EmuFS, ERROR, "OpenDirect: Path does not terminate");
-            return ISFSError::Invalid;
-        }
-
-        s32 realFd = ReqDirectOpen(reinterpret_cast<const char*>(vec[0].data),
-                                   *reinterpret_cast<u32*>(vec[1].data));
-        if (realFd < 0)
-            return realFd;
-
-        sDirectFileArray[fd - DIRECT_HANDLE_BASE].inUse = true;
-        sDirectFileArray[fd - DIRECT_HANDLE_BASE].fd = realFd;
-        return ISFSError::OK;
     }
 
     if (!IsManagerHandle(fd))

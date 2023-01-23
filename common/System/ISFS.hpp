@@ -17,10 +17,11 @@
 #define NAND_SEEK_CUR 1
 #define NAND_SEEK_END 2
 
+#define EFS_MAX_PATH_LEN 2048
+
 constexpr s32 ISFSMaxPath = NAND_MAX_FILEPATH_LENGTH;
 
-enum class ISFSIoctl
-{
+enum class ISFSIoctl {
     Format = 0x1,
     GetStats = 0x2,
     CreateDir = 0x3,
@@ -34,7 +35,9 @@ enum class ISFSIoctl
     GetUsage = 0xC,
     Shutdown = 0xD,
 
-    OpenDirect = 0x1000,
+    Direct_Open = 0x1000,
+    Direct_DirOpen = 0x1001,
+    Direct_DirNext = 0x1002,
 };
 
 struct ISFSRenameBlock {
@@ -54,4 +57,19 @@ struct ISFSAttrBlock {
     u8 otherPerm; // Permissions for any other process
     u8 attributes;
     u8 pad[2];
+};
+
+struct ISFSDirect_Stat {
+    enum {
+        RDO = 0x01, // Read only
+        HID = 0x02, // Hidden
+        SYS = 0x04, // System
+        DIR = 0x10, // Directory
+        ARC = 0x20, // Archive
+    };
+
+    u64 dirOffset;
+    u64 size;
+    u8 attribute;
+    char name[EFS_MAX_PATH_LEN];
 };
