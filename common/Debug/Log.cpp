@@ -20,6 +20,8 @@
 bool Log::ipcLogEnabled = false;
 #endif
 
+Mutex* Log::logMutex;
+
 static constexpr std::array<const char*, 3> logColors = {
     "\x1b[37;1m",
     "\x1b[33;1m",
@@ -30,7 +32,7 @@ static constexpr std::array<char, 3> logChars = {
     'W',
     'E',
 };
-static Mutex* logMutex;
+
 constexpr u32 logMask = 0xFFFFFFFF;
 constexpr u32 logLevel = 0;
 

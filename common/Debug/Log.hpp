@@ -5,10 +5,12 @@
 // SPDX-License-Identifier: MIT
 
 #pragma once
+
 #include <stdarg.h>
 #ifdef TARGET_IOS
 #include <FAT/ff.h>
 #endif
+#include <System/OS.hpp>
 
 namespace Log
 {
@@ -20,6 +22,7 @@ enum class LogSource {
     Payload,
     FST,
     PatchList,
+    Riivo,
     IOS,
     IOS_Loader,
     IOS_DevMgr,
@@ -52,6 +55,8 @@ enum class IPCLogReply {
 #ifdef TARGET_IOS
 extern bool ipcLogEnabled;
 #endif
+
+extern Mutex* logMutex;
 
 bool IsEnabled();
 

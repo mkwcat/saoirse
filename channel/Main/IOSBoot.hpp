@@ -13,6 +13,8 @@
 namespace IOSBoot
 {
 
+void Init();
+void WaitForIOS();
 s32 Entry(u32 entrypoint);
 s32 Launch(const void* data, u32 len);
 void SafeFlushRange(const void* data, u32 len);
@@ -41,6 +43,7 @@ public:
     }
 
 protected:
+    static s32 HandlerThreadEntry(void* userdata);
     bool handleEvent(s32 result);
     static s32 threadEntry(void* userdata);
 
@@ -52,7 +55,14 @@ protected:
     Queue<u32>* m_eventQueue;
     int m_triggerEventCount = -1;
 
+    struct HandlerReq {
+        Log::IPCLogReply cmd;
+        char buffer[256];
+    };
+    Queue<HandlerReq*> m_handlerQueue;
+
     Thread m_thread;
+    Thread m_handlerThread;
 };
 
 void SetupPrintHook();

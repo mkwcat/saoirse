@@ -166,3 +166,15 @@ int ff_del_syncobj(FF_SYNC_t sobj)
     delete mutex;
     return 1;
 }
+
+void* ff_memcpy(void* dst, const void* src, UINT len)
+{
+    if (u32(dst) < 0x02000000) {
+        // MEM1
+        System::UnalignedMemcpy(dst, src, len);
+    } else {
+        // else
+        memcpy(dst, src, len);
+    }
+    return dst;
+}

@@ -14,6 +14,7 @@
 #include <Main/LaunchState.hpp>
 #include <Patch/Codehandler.hpp>
 #include <Patch/PatchList.hpp>
+#include <Patch/Riivolution.hpp>
 #include <System/ISFS.hpp>
 #include <System/Util.h>
 #include <UI/BasicUI.hpp>
@@ -132,6 +133,8 @@ static inline bool startupDrive()
 
 void abort()
 {
+    // *(u32*)0x12345678 = 0;
+
     LIBOGC_SUCKS_BEGIN
     u32 lr = mfspr(8);
     LIBOGC_SUCKS_END
@@ -187,6 +190,11 @@ s32 main([[maybe_unused]] s32 argc, [[maybe_unused]] char** argv)
     // disabled in the first place.
     WiiUEnableHoldPower();
 
+    // Start of the game apploader
+    SYS_SetArena1Hi((void*)0x81200000);
+
+    IOSBoot::Init();
+
     Input::sInstance = new Input();
     BasicUI::sInstance = new BasicUI();
     BasicUI::sInstance->InitVideo();
@@ -200,11 +208,11 @@ s32 main([[maybe_unused]] s32 argc, [[maybe_unused]] char** argv)
     extern const char data_ar_end[];
     Arch::sInstance = new Arch(data_ar, data_ar_end - data_ar);
 
+    // TODO: Manage this instance
+    new Riivolution();
+
     // Launch Saoirse IOS
     IOSBoot::LaunchSaoirseIOS();
-
-    // hack to give IOS time to mount the SD Card
-    sleep(1);
 
     PRINT(Core, INFO, "Send start game IOS request!");
     IOSBoot::IPCLog::sInstance->startGameIOS();
@@ -213,6 +221,7 @@ s32 main([[maybe_unused]] s32 argc, [[maybe_unused]] char** argv)
 
     // TODO move this to like a page based UI system or something
     if (!startupDrive()) {
+        PRINT(Core, ERROR, "Startup drive failed");
         abort();
     }
 

@@ -32,8 +32,7 @@ LIBOGC_SUCKS_END
 
 namespace IOSError
 {
-enum
-{
+enum {
     OK = 0,
     NoAccess = -1,
     Invalid = -4,
@@ -43,8 +42,7 @@ enum
 
 namespace ISFSError
 {
-enum
-{
+enum {
     OK = 0,
     Invalid = -101,
     NoAccess = -102,
@@ -132,7 +130,9 @@ public:
 
     ~LibOGC_Queue()
     {
-        MQ_Close(m_queue);
+        // This should definitely be readded at some point, it's just a hack
+        // because this is causing problems
+        // MQ_Close(m_queue);
     }
 
     void send(T msg, u32 flags = 0)
@@ -397,8 +397,7 @@ static inline void Free(void* ptr)
 
 #endif
 
-enum class Command : u32
-{
+enum class Command : u32 {
     Open = 1,
     Close = 2,
     Read = 3,
@@ -822,8 +821,7 @@ public:
 };
 
 /* Only one IOCTL for specific files */
-enum class FileIoctl
-{
+enum class FileIoctl {
     GetFileStats = 11
 };
 

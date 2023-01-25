@@ -161,6 +161,19 @@ static s32 FResultToISFSError(FRESULT fret)
     }
 }
 
+static u32 ISFSModeToFileMode(u32 mode)
+{
+    u32 out = 0;
+
+    if (mode & IOS::Mode::Read)
+        out |= FA_READ;
+
+    if (mode & IOS::Mode::Write)
+        out |= FA_WRITE;
+
+    return out;
+}
+
 static bool IsManagerHandle(s32 fd)
 {
     if (fd >= MGR_HANDLE_BASE && fd < (MGR_HANDLE_BASE + MGR_HANDLE_MAX))
@@ -513,8 +526,10 @@ static s32 ReqDirectOpen(const char* filepath, u32 mode)
 
     sFileArray[fd].inUse = false;
     sFileArray[fd].filOpened = false;
+    memset(sFileArray[fd].path, 0, 64);
 
-    const FRESULT fret = f_open(&sFileArray[fd].fil, filepath, mode);
+    const FRESULT fret =
+        f_open(&sFileArray[fd].fil, filepath, ISFSModeToFileMode(mode));
     if (fret != FR_OK) {
         PRINT(IOS_EmuFS, ERROR, "Failed to open file '%s', mode: %X, error: %d",
               filepath, mode, fret);
@@ -523,6 +538,7 @@ static s32 ReqDirectOpen(const char* filepath, u32 mode)
 
     sFileArray[fd].mode = mode;
     sFileArray[fd].inUse = true;
+    sFileArray[fd].isDir = false;
     sFileArray[fd].filOpened = true;
 
     PRINT(IOS_EmuFS, INFO, "Successfully opened file '%s' (fd=%d, mode=%u)",
@@ -574,15 +590,43 @@ static s32 ReqClose(s32 fd)
         return IOSError::OK;
     }
 
-    if (!IsFileDescriptorValid(fd))
-        return ISFSError::Invalid;
+    auto type = GetDescriptorType(fd);
 
-    if (f_sync(&sFileArray[fd].fil) != FR_OK) {
-        PRINT(IOS_EmuFS, ERROR, "Failed to sync file descriptor %d", fd);
-        return ISFSError::Unknown;
+    if (type == DescType::Direct) {
+        PRINT(IOS_EmuFS, INFO, "Closing direct handle %d", fd);
+        if (!sDirectFileArray[fd - DIRECT_HANDLE_BASE].inUse)
+            return IOSError::OK;
+
+        s32 realFd = sDirectFileArray[fd - DIRECT_HANDLE_BASE].fd;
+        sDirectFileArray[fd - DIRECT_HANDLE_BASE].inUse = false;
+        sDirectFileArray[fd - DIRECT_HANDLE_BASE].fd = ISFSError::NotFound;
+
+        if (sFileArray[realFd].isDir)
+            return IOSError::OK;
+
+        fd = realFd;
+
+        if (!IsFileDescriptorValid(fd))
+            return ISFSError::Invalid;
+
+        if (f_close(&sFileArray[fd].fil) != FR_OK) {
+            PRINT(IOS_EmuFS, ERROR, "Failed to close file descriptor %d", fd);
+            return ISFSError::Unknown;
+        }
+
+        sFileArray[fd].filOpened = false;
+        FreeFileDescriptor(fd);
+    } else {
+        if (!IsFileDescriptorValid(fd))
+            return ISFSError::Invalid;
+
+        if (f_sync(&sFileArray[fd].fil) != FR_OK) {
+            PRINT(IOS_EmuFS, ERROR, "Failed to sync file descriptor %d", fd);
+            return ISFSError::Unknown;
+        }
+
+        FreeFileDescriptor(fd);
     }
-
-    FreeFileDescriptor(fd);
 
     PRINT(IOS_EmuFS, INFO, "Successfully closed file descriptor %d", fd);
 
@@ -1260,7 +1304,7 @@ static s32 ReqIoctlv(s32 fd, ISFSIoctl cmd, u32 in_count, u32 out_count,
                 return ISFSError::Invalid;
             }
 
-            FILINFO fno;
+            FILINFO fno = {};
             auto fret = f_readdir(&sFileArray[realFd].dir, &fno);
             if (fret != FR_OK) {
                 PRINT(IOS_EmuFS, ERROR, "Direct_DirNext: f_readdir error: %d",
@@ -1276,10 +1320,13 @@ static s32 ReqIoctlv(s32 fd, ISFSIoctl cmd, u32 in_count, u32 out_count,
                 return ISFSError::OK;
             }
 
-            stat->dirOffset = 0; // TODO
-            stat->attribute = fno.fattrib;
-            stat->size = fno.fsize;
-            strncpy(stat->name, fno.fname, EFS_MAX_PATH_LEN);
+            ISFSDirect_Stat tmpStat = {};
+
+            tmpStat.dirOffset = 0; // TODO
+            tmpStat.attribute = fno.fattrib;
+            tmpStat.size = fno.fsize;
+            strncpy(tmpStat.name, fno.fname, EFS_MAX_PATH_LEN);
+            System::UnalignedMemcpy(stat, &tmpStat, sizeof(ISFSDirect_Stat));
             return ISFSError::OK;
         }
         }
@@ -1533,13 +1580,20 @@ static s32 IPCRequest(IOS::Request* req)
         return ForwardRequest(req);
 
     if (req->cmd != IOS::Command::Open &&
-        GetDescriptorType(fd) == DescType::Direct) {
-        ASSERT(sDirectFileArray[fd - DIRECT_HANDLE_BASE].inUse);
+        GetDescriptorType(fd) == DescType::Direct &&
+        (req->cmd == IOS::Command::Read || req->cmd == IOS::Command::Write ||
+         req->cmd == IOS::Command::Seek || req->cmd == IOS::Command::Ioctl)) {
         s32 realFd = sDirectFileArray[fd - DIRECT_HANDLE_BASE].fd;
 
         // Switch to replaced file fd for future commands.
-        if (IsFileDescriptorValid(realFd))
-            fd = realFd;
+        if (!sDirectFileArray[fd - DIRECT_HANDLE_BASE].inUse ||
+            !IsFileDescriptorValid(realFd)) {
+            PRINT(IOS_EmuFS, ERROR,
+                  "Attempting to use an unopened direct file");
+            return ISFSError::Invalid;
+        }
+
+        fd = realFd;
     }
 
     switch (req->cmd) {
@@ -1564,7 +1618,6 @@ static s32 IPCRequest(IOS::Request* req)
         }
 
         if (i == DIRECT_HANDLE_MAX) {
-            PRINT(IOS_EmuFS, ERROR, "No direct file handles available!");
             ret = ISFSError::MaxOpen;
             break;
         }
@@ -1577,19 +1630,7 @@ static s32 IPCRequest(IOS::Request* req)
 
     case IOS::Command::Close:
         PRINT(IOS_EmuFS, INFO, "IOS_Close(%d)", fd);
-        ret = ISFSError::OK;
-
-        // If the fd is Direct, this means the file hasn't been opened and this
-        // will error. We probably need a much more clear "has this been opened"
-        // flag.
-        if (GetDescriptorType(fd) != DescType::Direct)
-            ret = ReqClose(fd);
-
-        if (ret >= 0 && GetDescriptorType(req->fd) == DescType::Direct) {
-            sDirectFileArray[req->fd - DIRECT_HANDLE_BASE].inUse = false;
-            sDirectFileArray[req->fd - DIRECT_HANDLE_BASE].fd =
-                ISFSError::NotFound;
-        }
+        ret = ReqClose(fd);
         break;
 
     case IOS::Command::Read:
@@ -1635,7 +1676,11 @@ static s32 IPCRequest(IOS::Request* req)
         break;
     }
 
-    PRINT(IOS_EmuFS, INFO, "Reply: %d", ret);
+    // Can't print on IOS_Open before game launches due to locked IPC thread
+    if (req->cmd != IOS::Command::Open) {
+        PRINT(IOS_EmuFS, INFO, "Reply: %d", ret);
+    }
+
     return ret;
 }
 

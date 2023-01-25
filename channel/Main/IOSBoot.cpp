@@ -6,12 +6,14 @@
 
 #include "IOSBoot.hpp"
 #include "Arch.hpp"
+#include "Handler.hpp"
 #include <Debug/Log.hpp>
 #include <System/Hollywood.hpp>
 #include <System/Util.h>
 #include <cstdlib>
 #include <new>
 #include <ogc/cache.h>
+#include <ogc/mutex.h>
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
@@ -24,6 +26,20 @@ LIBOGC_SUCKS_BEGIN
 #include <ogc/pad.h>
 LIBOGC_SUCKS_END
 #endif
+
+mutex_t iosSyncMutex;
+
+void IOSBoot::Init()
+{
+    LWP_MutexInit(&iosSyncMutex, true);
+    LWP_MutexLock(iosSyncMutex);
+}
+
+void IOSBoot::WaitForIOS()
+{
+    LWP_MutexLock(iosSyncMutex);
+    LWP_MutexUnlock(iosSyncMutex);
+}
 
 template <class T>
 constexpr T SRAMMirrToReal(T address)
@@ -360,6 +376,39 @@ void IOSBoot::IPCLog::startGameIOS()
     setEventWaitingQueue(&eventWaitQueue, 3);
     logRM.ioctl(Log::IPCLogIoctl::StartGameEvent, nullptr, 0, nullptr, 0);
     eventWaitQueue.receive();
+    LWP_MutexUnlock(iosSyncMutex);
+}
+
+s32 IOSBoot::IPCLog::HandlerThreadEntry(void* userdata)
+{
+    IPCLog* log = reinterpret_cast<IPCLog*>(userdata);
+
+    while (true) {
+        auto hdlr = log->m_handlerQueue.receive();
+        if (hdlr == nullptr) {
+            break;
+        }
+
+        switch (hdlr->cmd) {
+        case Log::IPCLogReply::Close:
+            return 0;
+
+        case Log::IPCLogReply::DevInsert:
+            HandlerMgr::CallDeviceInsertion(hdlr->buffer[0]);
+            break;
+
+        case Log::IPCLogReply::DevRemove:
+            HandlerMgr::CallDeviceRemoval(hdlr->buffer[0]);
+            break;
+
+        default:
+            break;
+        }
+
+        delete hdlr;
+    }
+
+    return 0;
 }
 
 bool IOSBoot::IPCLog::handleEvent(s32 result)
@@ -374,7 +423,9 @@ bool IOSBoot::IPCLog::handleEvent(s32 result)
         return false;
 
     case Log::IPCLogReply::Print:
+        Log::logMutex->lock();
         puts(logBuffer);
+        Log::logMutex->unlock();
         return true;
 
     case Log::IPCLogReply::Notice:
@@ -388,12 +439,13 @@ bool IOSBoot::IPCLog::handleEvent(s32 result)
         return true;
 
     case Log::IPCLogReply::DevInsert:
-        PRINT(Core, INFO, "Received device insertion: %u", *(u8*)logBuffer);
+    case Log::IPCLogReply::DevRemove: {
+        auto hdlr = new HandlerReq;
+        hdlr->cmd = static_cast<Log::IPCLogReply>(result);
+        memcpy(hdlr->buffer, logBuffer, sizeof(logBuffer));
+        m_handlerQueue.send(hdlr);
         return true;
-
-    case Log::IPCLogReply::DevRemove:
-        PRINT(Core, INFO, "Received device removal: %u", *(u8*)logBuffer);
-        return true;
+    }
 
     default:
         PRINT(Core, INFO, "Received unknown IPCLogReply: %d", result);
@@ -448,8 +500,12 @@ IOSBoot::IPCLog::IPCLog()
                                 nullptr, 0);
     assert(ret == IOSError::OK);
 
-    new (&m_thread)
-        Thread(threadEntry, reinterpret_cast<void*>(this), nullptr, 0x800, 80);
+    new (&m_thread) Thread(threadEntry, reinterpret_cast<void*>(this), nullptr,
+                           0x10000, 80);
+
+    new (&m_handlerThread)
+        Thread(HandlerThreadEntry, reinterpret_cast<void*>(this), nullptr,
+               0x10000, 80);
 }
 
 /* don't judge this code; it's not meant to be seen by eyes */

@@ -29,20 +29,20 @@ INCLUDES	:=  $(SOURCES) $(BUILD) common
 CFLAGS	= -g -O0 -Wall -Wextra -Wpedantic -Wnull-dereference -Wshadow -Werror -Wno-format-truncation -fno-exceptions \
 	-fno-asynchronous-unwind-tables -fno-unwind-tables -fno-builtin-memcpy -fno-builtin-memset -Wno-pointer-arith \
 	$(MACHDEP) $(INCLUDE)
-CXXFLAGS	=	$(CFLAGS) -std=c++20 -fno-rtti -Wno-register -Wno-narrowing
+CXXFLAGS	=	$(CFLAGS) -std=c++20 -Wno-register -Wno-narrowing
 
 LDFLAGS	=	-g $(MACHDEP) -Wl,-Map,$(OUTPUT).map -Wl,--section-start,.init=0x80900000
 
 #---------------------------------------------------------------------------------
 # any extra libraries we wish to link with the project
 #---------------------------------------------------------------------------------
-LIBS	:=	 -lwiiuse -lbte -logc -lm
+LIBS	:=	 -lwiiuse -lbte -logc -lm -lmxml
 
 #---------------------------------------------------------------------------------
 # list of directories containing libraries, this must be the top level containing
 # include and lib
 #---------------------------------------------------------------------------------
-LIBDIRS	:=
+LIBDIRS	:= $(PORTLIBS)
 
 #---------------------------------------------------------------------------------
 # no real need to edit anything past this point unless you need to add additional
