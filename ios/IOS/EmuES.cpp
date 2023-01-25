@@ -32,7 +32,7 @@ ES::ESError DIVerify(u64 titleID, const ES::Ticket* ticket)
     return ES::ESError::OK;
 }
 
-/*
+/**
  * Handles ES ioctlv commands.
  */
 static ES::ESError ReqIoctlv(
@@ -60,7 +60,7 @@ static ES::ESError ReqIoctlv(
             return ES::ESError::Invalid;
         }
 
-        return ES::sInstance->GetDeviceID(reinterpret_cast<u32*>(vec[0].data));
+        return ES::s_instance->GetDeviceID(reinterpret_cast<u32*>(vec[0].data));
     }
 
     case ES::ESIoctl::LaunchTitle: {
@@ -85,17 +85,17 @@ static ES::ESError ReqIoctlv(
         ES::TicketView view = *reinterpret_cast<ES::TicketView*>(vec[1].data);
 
         // Redirect to system menu on attempted IOS reload
-        if (Config::sInstance->BlockIOSReload() && u64Hi(titleID) == 1 &&
+        if (Config::s_instance->BlockIOSReload() && u64Hi(titleID) == 1 &&
             u64Lo(titleID) != 2) {
             PRINT(IOS_EmuES, WARN,
               "LaunchTitle: Attempt to launch IOS title %016llX", titleID);
             titleID = 0x0000000100000002;
-            auto ret = ES::sInstance->GetTicketViews(titleID, 1, &view);
+            auto ret = ES::s_instance->GetTicketViews(titleID, 1, &view);
             assert(ret == ES::ESError::OK);
         }
 
         PRINT(IOS_EmuES, INFO, "LaunchTitle: Launching %016llX...", titleID);
-        return ES::sInstance->LaunchTitle(titleID, &view);
+        return ES::s_instance->LaunchTitle(titleID, &view);
     }
 
     case ES::ESIoctl::GetOwnedTitlesCount: {
@@ -110,7 +110,7 @@ static ES::ESError ReqIoctlv(
             return ES::ESError::Invalid;
         }
 
-        return ES::sInstance->GetOwnedTitlesCount(
+        return ES::s_instance->GetOwnedTitlesCount(
           reinterpret_cast<u32*>(vec[0].data));
     }
 
@@ -126,7 +126,7 @@ static ES::ESError ReqIoctlv(
             return ES::ESError::Invalid;
         }
 
-        return ES::sInstance->GetTitlesCount(
+        return ES::s_instance->GetTitlesCount(
           reinterpret_cast<u32*>(vec[0].data));
     }
 
@@ -151,7 +151,7 @@ static ES::ESError ReqIoctlv(
             return ES::ESError::Invalid;
         }
 
-        return ES::sInstance->GetTitles(
+        return ES::s_instance->GetTitles(
           (u32) count, reinterpret_cast<u64*>(vec[1].data));
     }
 
@@ -176,7 +176,7 @@ static ES::ESError ReqIoctlv(
             return ES::ESError::Invalid;
         }
 
-        return ES::sInstance->GetTitleContentsCount(
+        return ES::s_instance->GetTitleContentsCount(
           titleID, reinterpret_cast<u32*>(vec[1].data));
     }
 
@@ -209,7 +209,7 @@ static ES::ESError ReqIoctlv(
             return ES::ESError::Invalid;
         }
 
-        return ES::sInstance->GetTitleContents(
+        return ES::s_instance->GetTitleContents(
           titleID, (u32) count, reinterpret_cast<u32*>(vec[1].data));
     }
 
@@ -233,7 +233,7 @@ static ES::ESError ReqIoctlv(
             return ES::ESError::Invalid;
         }
 
-        return ES::sInstance->GetNumTicketViews(
+        return ES::s_instance->GetNumTicketViews(
           titleID, reinterpret_cast<u32*>(vec[1].data));
     }
 
@@ -267,7 +267,7 @@ static ES::ESError ReqIoctlv(
             return ES::ESError::Invalid;
         }
 
-        return ES::sInstance->GetTicketViews(
+        return ES::s_instance->GetTicketViews(
           titleID, count, reinterpret_cast<ES::TicketView*>(vec[2].data));
     }
 
@@ -291,7 +291,7 @@ static ES::ESError ReqIoctlv(
             return ES::ESError::Invalid;
         }
 
-        return ES::sInstance->GetTMDViewSize(
+        return ES::s_instance->GetTMDViewSize(
           titleID, reinterpret_cast<u32*>(vec[1].data));
     }
 
@@ -314,7 +314,7 @@ static ES::ESError ReqIoctlv(
             return ES::ESError::Invalid;
         }
 
-        return ES::sInstance->GetTMDView(
+        return ES::s_instance->GetTMDView(
           titleID, reinterpret_cast<u32*>(vec[1].data), vec[1].len);
     }
 
@@ -344,7 +344,7 @@ static ES::ESError ReqIoctlv(
         if (ticket == nullptr && s_useTitleCtx)
             ticket = &s_ticket;
 
-        return ES::sInstance->DIGetTicketView(
+        return ES::s_instance->DIGetTicketView(
           ticket, reinterpret_cast<ES::TicketView*>(vec[1].data));
     }
 
@@ -367,7 +367,7 @@ static ES::ESError ReqIoctlv(
             return ES::ESError::Invalid;
         }
 
-        return ES::sInstance->GetDataDir(
+        return ES::s_instance->GetDataDir(
           titleID, reinterpret_cast<char*>(vec[1].data));
     }
 
@@ -383,7 +383,7 @@ static ES::ESError ReqIoctlv(
             return ES::ESError::Invalid;
         }
 
-        return ES::sInstance->GetDeviceCert(vec[0].data);
+        return ES::s_instance->GetDeviceCert(vec[0].data);
     }
 
     case ES::ESIoctl::GetTitleID: {
@@ -403,7 +403,7 @@ static ES::ESError ReqIoctlv(
             return ES::ESError::OK;
         }
 
-        return ES::sInstance->GetTitleID(reinterpret_cast<u64*>(vec[0].data));
+        return ES::s_instance->GetTitleID(reinterpret_cast<u64*>(vec[0].data));
     }
 
     default:
@@ -445,7 +445,7 @@ s32 ThreadEntry(void* arg)
     s32 ret = IOS_RegisterResourceManager("~dev/es", queue.id());
     assert(ret == IOSError::OK);
 
-    IPCLog::sInstance->Notify();
+    IPCLog::s_instance->Notify();
     while (true) {
         IOS::Request* req = queue.receive();
         req->reply(IPCRequest(req));

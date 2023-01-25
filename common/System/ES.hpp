@@ -12,7 +12,7 @@
 class ES
 {
 public:
-    static ES* sInstance;
+    static ES* s_instance;
 
     enum class ESError : s32 {
         OK = 0,

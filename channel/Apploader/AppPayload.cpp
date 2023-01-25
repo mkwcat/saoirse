@@ -50,7 +50,7 @@ static ApploaderInfo::EntryFunction ReadApploaderFromDisc(
 
     void* payload_addr = reinterpret_cast<void*>(0x81200000);
 
-    const auto result = DI::sInstance->Read(
+    const auto result = DI::s_instance->Read(
       payload_addr, round_up(info.payload_size, 32), 0x2460 / 4);
 
     if (result != DI::DIError::OK) {

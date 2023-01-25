@@ -17,7 +17,7 @@
 class DI
 {
 public:
-    static DI* sInstance;
+    static DI* s_instance;
 
     enum class DIError : s32 {
         Unknown = 0x0,
@@ -121,81 +121,110 @@ public:
 
     static_assert(sizeof(DICommand) == 0x20);
 
-    // DVDLowInquiry; Retrieves information about the drive version.
+    /**
+     * DVDLowInquiry; Retrieves information about the drive version.
+     */
     DIError Inquiry(DriveInfo* info);
 
-    // DVDLowReadDiskID; Reads the current disc ID and initializes the drive.
+    /**
+     * DVDLowReadDiskID; Reads the current disc ID and initializes the drive.
+     */
     DIError ReadDiskID(DiskID* diskid);
 
-    // DVDLowRead; Reads and decrypts disc data. This command can only be used
-    // if hashing and encryption are enabled for the disc. DVDLowOpenPartition
-    // needs to have been called before for the keys to be read.
+    /**
+     * DVDLowRead; Reads and decrypts disc data. This command can only be used
+     * if hashing and encryption are enabled for the disc. DVDLowOpenPartition
+     * needs to have been called before for the keys to be read.
+     */
     DIError Read(void* data, u32 lenBytes, u32 wordOffset);
 
-    // DVDLowWaitForCoverClose; Waits for a disc to be inserted; if there is
-    // already a disc inserted, it must be removed first. This command does not
-    // time out; if no disc is inserted, it will wait forever.
-    // Returns DIError::CoverClosed on success.
+    /**
+     * DVDLowWaitForCoverClose; Waits for a disc to be inserted; if there is
+     * already a disc inserted, it must be removed first. This command does not
+     * time out; if no disc is inserted, it will wait forever. Returns
+     * DIError::CoverClosed on success.
+     */
     DIError WaitForCoverClose();
 
-    // DVDLowGetLength; Returns the length of the last transfer.
+    /**
+     * DVDLowGetLength; Get the length of the last transfer.
+     * @param[out] length Output length.
+     */
     DIError GetLength(u32* length);
 
-    // DVDLowReset; Resets the drive. spinup(true) is used to spinup the drive
-    // on start or once a disc is inserted. spinup(false) is used to turn it off
-    // when launching a new title.
+    /**
+     * DVDLowReset; Resets the disc drive.
+     * @param[in] spinup Set to true to spinup the drive once a disc is
+     * inserted, or false to stop the drive.
+     */
     DIError Reset(bool spinup);
 
-    // DVDLowOpenPartition; Opens a partition, including verifying it through
-    // ES. ReadDiskID needs to have been called beforehand.
-    // PARAMETERS:
-    // tmd - output (required, must be 32 byte aligned)
-    // ticket - input (optional, must be 32 byte aligned)
-    // certs - input (optional, must be 32 byte aligned)
+    /**
+     * DVDLowOpenPartition; Opens a partition, including verifying it through
+     * ES. ReadDiskID needs to have been called beforehand.
+     * @param[out] tmd Output title metadata (required, must be 32 byte aligned)
+     * @param[in] ticket Input ticket (can be nullptr, must be 32 byte aligned)
+     * @param[in] certs Input certificate chain (can be nullptr, must be 32 byte
+     * aligned)
+     */
     DIError OpenPartition(u32 wordOffset, ES::TMDFixed<512>* tmd,
       ES::ESError* esError = nullptr, const ES::Ticket* ticket = nullptr,
       const void* certs = nullptr, u32 certsLen = 0);
 
-    // DVDLowClosePartition; Closes the currently-open partition, removing
-    // information about its keys and such.
+    /**
+     * DVDLowClosePartition; Closes the currently-open partition, removing
+     * information about its keys and such.
+     */
     DIError ClosePartition();
 
-    // DVDLowUnencryptedRead; Reads raw data from the disc. Only usable in the
-    // "System Area" of the disc.
+    /**
+     * DVDLowUnencryptedRead; Reads raw data from the disc. Only usable in the
+     * "System Area" of the disc.
+     */
     DIError UnencryptedRead(void* data, u32 lenBytes, u32 wordOffset);
 
-    // DVDLowOpenPartitionWithTmdAndTicket; Opens a partition, including
-    // verifying it through ES. ReadDiskID needs to have been called beforehand.
-    // This function takes an already-read TMD and can take an already-read
-    // ticket, which means it can be faster since the ticket does not need to be
-    // read from the disc.
-    // PARAMETERS:
-    // tmd - input (required, must be 32 byte aligned)
-    // ticket - input (optional, must be 32 byte aligned)
-    // certs - input (optional, must be 32 byte aligned)
+    /**
+     * DVDLowOpenPartitionWithTmdAndTicket; Opens a partition, including
+     * verifying it through ES. ReadDiskID needs to have been called beforehand.
+     * This function takes an already-read TMD and can take an already-read
+     * ticket, which means it can be faster since the ticket does not need to be
+     * read from the disc.
+     * @param[in] tmd Input title metadata (required, must be 32 byte aligned)
+     * @param[in] ticket Input ticket (can be nullptr, must be 32 byte aligned)
+     * @param[in] certs Input certificate chain (can be nullptr, must be 32 byte
+     * aligned)
+     */
     DIError OpenPartitionWithTmdAndTicket(u32 wordOffset, ES::TMD* tmd,
       ES::ESError* esError = nullptr, const ES::Ticket* ticket = nullptr,
       const void* certs = nullptr, u32 certsLen = 0);
 
-    // DVDLowOpenPartitionWithTmdAndTicketView; Opens a partition, including
-    // verifying it through ES. ReadDiskID needs to have been called beforehand.
-    // This function takes an already-read TMD and can take an already-read
-    // ticket view, which means it can be faster since the ticket does not need
-    // to be read from the disc.
-    // PARAMETERS:
-    // tmd - input (required, must be 32 byte aligned)
-    // ticketView - input (optional, must be 32 byte aligned)
-    // certs - input (optional, must be 32 byte aligned)
+    /**
+     * DVDLowOpenPartitionWithTmdAndTicketView; Opens a partition, including
+     * verifying it through ES. ReadDiskID needs to have been called beforehand.
+     * This function takes an already-read TMD and can take an already-read
+     * ticket view, which means it can be faster since the ticket does not need
+     * to be read from the disc.
+     * @param[in] tmd Input title metadata (required, must be 32 byte aligned)
+     * @param[in] ticketView Input ticket view (can be nullptr, must be 32 byte
+     * aligned)
+     * @param[in] certs Input certificate chain (can be nullptr, must be 32 byte
+     * aligned)
+     */
     DIError OpenPartitionWithTmdAndTicketView(u32 wordOffset, ES::TMD* tmd,
       ES::ESError* esError = nullptr,
       const ES::TicketView* ticketView = nullptr, const void* certs = nullptr,
       u32 certsLen = 0);
 
-    // DVDLowSeek; Seeks to the sector containing a specific position on the
-    // disc.
+    /**
+     * DVDLowSeek; Seeks to the sector containing a specific position on the
+     * disc.
+     */
     DIError Seek(u32 wordOffset);
 
-    // DVDLowReadDiskBca; Reads the last 64 bytes of the burst cutting area.
+    /**
+     * DVDLowReadDiskBca; Reads the last 64 bytes of the BCA (burst cutting
+     * area).
+     */
     DIError ReadDiskBca(u8* out);
 
     s32 GetFd() const

@@ -355,10 +355,14 @@ namespace IOS
 
 typedef s32 (*IPCCallback)(s32 result, void* userdata);
 
-// Allocate memory for IPC. Always 32-bit aligned.
+/**
+ * Allocate memory for IPC. Always 32-bit aligned.
+ */
 static inline void* Alloc(u32 size);
 
-// Free memory allocated using IOS::Alloc.
+/**
+ * Free memory allocated using IOS::Alloc.
+ */
 static inline void Free(void* ptr);
 
 #ifdef TARGET_IOS
@@ -818,7 +822,6 @@ public:
     }
 };
 
-/* Only one IOCTL for specific files */
 enum class FileIoctl {
     GetFileStats = 11
 };

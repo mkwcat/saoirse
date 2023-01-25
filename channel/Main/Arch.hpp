@@ -10,7 +10,7 @@
 class Arch
 {
 public:
-    static Arch* sInstance;
+    static Arch* s_instance;
 
     Arch(const char* file, u32 size);
     bool getShortName(const char* name, char* out);

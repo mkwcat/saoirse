@@ -13,7 +13,7 @@ LIBOGC_SUCKS_END
 class BasicUI
 {
 public:
-    static BasicUI* sInstance;
+    static BasicUI* s_instance;
 
     BasicUI();
     void InitVideo();

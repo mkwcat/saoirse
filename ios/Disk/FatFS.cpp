@@ -13,9 +13,9 @@
 
 DSTATUS disk_status(BYTE pdrv)
 {
-    auto devId = DeviceMgr::sInstance->DRVToDevID(pdrv);
+    auto devId = DeviceMgr::s_instance->DRVToDevID(pdrv);
 
-    if (DeviceMgr::sInstance->IsMounted(devId))
+    if (DeviceMgr::s_instance->IsMounted(devId))
         return 0;
 
     return STA_NODISK;
@@ -23,9 +23,9 @@ DSTATUS disk_status(BYTE pdrv)
 
 DSTATUS disk_initialize(BYTE pdrv)
 {
-    auto devId = DeviceMgr::sInstance->DRVToDevID(pdrv);
+    auto devId = DeviceMgr::s_instance->DRVToDevID(pdrv);
 
-    if (DeviceMgr::sInstance->DeviceInit(devId))
+    if (DeviceMgr::s_instance->DeviceInit(devId))
         return 0;
 
     return STA_NOINIT;
@@ -33,9 +33,9 @@ DSTATUS disk_initialize(BYTE pdrv)
 
 DRESULT disk_read(BYTE pdrv, BYTE* buff, LBA_t sector, UINT count)
 {
-    auto devId = DeviceMgr::sInstance->DRVToDevID(pdrv);
+    auto devId = DeviceMgr::s_instance->DRVToDevID(pdrv);
 
-    if (DeviceMgr::sInstance->DeviceRead(devId, reinterpret_cast<void*>(buff),
+    if (DeviceMgr::s_instance->DeviceRead(devId, reinterpret_cast<void*>(buff),
           static_cast<u32>(sector), static_cast<u32>(count)))
         return RES_OK;
 
@@ -44,9 +44,9 @@ DRESULT disk_read(BYTE pdrv, BYTE* buff, LBA_t sector, UINT count)
 
 DRESULT disk_write(BYTE pdrv, const BYTE* buff, LBA_t sector, UINT count)
 {
-    auto devId = DeviceMgr::sInstance->DRVToDevID(pdrv);
+    auto devId = DeviceMgr::s_instance->DRVToDevID(pdrv);
 
-    if (DeviceMgr::sInstance->DeviceWrite(devId,
+    if (DeviceMgr::s_instance->DeviceWrite(devId,
           reinterpret_cast<const void*>(buff), static_cast<u32>(sector),
           static_cast<u32>(count)))
         return RES_OK;
@@ -56,11 +56,11 @@ DRESULT disk_write(BYTE pdrv, const BYTE* buff, LBA_t sector, UINT count)
 
 DRESULT disk_ioctl(BYTE pdrv, BYTE cmd, void* buff)
 {
-    auto devId = DeviceMgr::sInstance->DRVToDevID(pdrv);
+    auto devId = DeviceMgr::s_instance->DRVToDevID(pdrv);
 
     switch (cmd) {
     case CTRL_SYNC:
-        return DeviceMgr::sInstance->DeviceSync(devId) ? RES_OK : RES_ERROR;
+        return DeviceMgr::s_instance->DeviceSync(devId) ? RES_OK : RES_ERROR;
 
     case GET_SECTOR_SIZE:
         // Sectors are always 512 bytes

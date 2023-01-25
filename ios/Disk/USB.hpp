@@ -11,7 +11,7 @@
 class USB
 {
 public:
-    static USB* sInstance;
+    static USB* s_instance;
 
     enum class USBv5Ioctl {
         GetVersion = 0,
@@ -32,15 +32,15 @@ public:
     };
 
     enum class USBError {
-        /* Results from IOS or the resource manager */
+        // Results from IOS or the resource manager.
         OK = IOSError::OK,
         NoAccess = IOSError::NoAccess,
         Invalid = IOSError::Invalid,
 
-        /* Results from this interface */
+        // Results from this interface.
         ShortTransfer = -2000,
 
-        /* Results from the host controller */
+        // Results from the host controller.
         Halted = -7102,
     };
 
@@ -57,7 +57,9 @@ public:
         MassStorage_BulkOnly = 0x50,
     };
 
-    /* Common bitmasks */
+    /**
+     * Common USB bitmasks.
+     */
     struct CtrlType {
         static constexpr u32 Dir_Mask = (1 << 7);
         static constexpr u32 Dir_Host2Device = (0 << 7);
@@ -216,7 +218,7 @@ public:
 
     USB(s32 id);
 
-    /*
+    /**
      * Initialize the interface.
      */
     bool Init();
@@ -226,21 +228,21 @@ public:
         return ven.fd() >= 0;
     }
 
-    /*
+    /**
      * Aynchronous call to get the next device change. Sends 'req' to 'queue'
      * when GetDeviceChange responds.
-     * devices - Output device entries, must have USB::MaxDevices entries,
-     * 32-bit aligned, MEM2 virtual = physical address.
+     * @param[out] devices - Output device entries, must have USB::MaxDevices
+     * entries, 32-bit aligned, MEM2 virtual = physical address.
      */
     bool EnqueueDeviceChange(
       DeviceEntry* devices, Queue<IOS::Request*>* queue, IOS::Request* req);
 
-    /*
+    /**
      * Get USB descriptors for a device.
      */
     USBError GetDeviceInfo(u32 devId, DeviceInfo* outInfo, u8 alt = 0);
 
-    /*
+    /**
      * Attaches the provided device to the current handle.
      */
     USBError Attach(u32 devId);
@@ -250,18 +252,18 @@ public:
         Resume = 1,
     };
 
-    /*
+    /**
      * Suspend or resume a device. Returns Invalid if the new state is the same
      * as the current one.
      */
     USBError SuspendResume(u32 devId, State state);
 
-    /*
+    /**
      * Cancel ongoing transfer on an endpoint.
      */
     USBError CancelEndpoint(u32 devId, u8 endpoint);
 
-    /*
+    /**
      * Read interrupt transfer on the device.
      */
     USBError ReadIntrMsg(u32 devId, u8 endpoint, u16 length, void* data)
@@ -270,7 +272,7 @@ public:
           devId, USBv5Ioctl::IntrTransfer, endpoint, length, data);
     }
 
-    /*
+    /**
      * Read bulk transfer on the device.
      */
     USBError ReadBulkMsg(u32 devId, u8 endpoint, u16 length, void* data)
@@ -279,7 +281,7 @@ public:
           devId, USBv5Ioctl::BulkTransfer, endpoint, length, data);
     }
 
-    /*
+    /**
      * Read control message on the device.
      */
     USBError ReadCtrlMsg(u32 devId, u8 requestType, u8 request, u16 value,
@@ -288,7 +290,7 @@ public:
         return CtrlMsg(devId, requestType, request, value, index, length, data);
     }
 
-    /*
+    /**
      * Write interrupt transfer on the device.
      */
     USBError WriteIntrMsg(u32 devId, u8 endpoint, u16 length, void* data)
@@ -297,7 +299,7 @@ public:
           devId, USBv5Ioctl::IntrTransfer, endpoint, length, data);
     }
 
-    /*
+    /**
      * Write bulk transfer on the device.
      */
     USBError WriteBulkMsg(u32 devId, u8 endpoint, u16 length, void* data)
@@ -306,7 +308,7 @@ public:
           devId, USBv5Ioctl::BulkTransfer, endpoint, length, data);
     }
 
-    /*
+    /**
      * Read control message on the device.
      */
     USBError WriteCtrlMsg(u32 devId, u8 requestType, u8 request, u16 value,

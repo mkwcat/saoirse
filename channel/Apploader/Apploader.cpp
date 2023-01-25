@@ -46,7 +46,7 @@ static void DebugPause()
 
 static void UnencryptedRead(void* dst, u32 len, u32 ofs)
 {
-    const auto result = DI::sInstance->UnencryptedRead(dst, len, ofs);
+    const auto result = DI::s_instance->UnencryptedRead(dst, len, ofs);
 
     if (result != DI::DIError::OK) {
         PRINT(Loader, ERROR, "Failed to execute unencrypted read: %s",
@@ -57,7 +57,7 @@ static void UnencryptedRead(void* dst, u32 len, u32 ofs)
 
 static void EncryptedRead(void* dst, u32 len, u32 ofs)
 {
-    const auto result = DI::sInstance->Read(dst, len, ofs);
+    const auto result = DI::s_instance->Read(dst, len, ofs);
 
     if (result != DI::DIError::OK) {
         PRINT(Loader, ERROR, "Failed to execute encrypted read: %s",
@@ -179,7 +179,8 @@ ApploaderInfo Apploader::readAppInfo()
 void Apploader::openPartition(
   const Partition& partition, ES::TMDFixed<512>* outMeta)
 {
-    const auto result = DI::sInstance->OpenPartition(partition.offset, outMeta);
+    const auto result =
+      DI::s_instance->OpenPartition(partition.offset, outMeta);
 
     if (result != DI::DIError::OK) {
         PRINT(Loader, ERROR, "Failed to open partition: %s",

@@ -20,9 +20,9 @@
 
 EXTERN_C_START
 
-/* <----------
+/*
  * IOS Thread
- * ----------> */
+ */
 typedef s32 (*IOSThreadProc)(void* arg);
 
 s32 IOS_CreateThread(IOSThreadProc proc, void* arg, u32* stack_top,
@@ -37,36 +37,36 @@ void IOS_YieldThread(void);
 u32 IOS_GetThreadPriority(s32 threadid);
 s32 IOS_SetThreadPriority(s32 threadid, u32 priority);
 
-/* <----------
+/*
  * IOS Message
- * ----------> */
+ */
 s32 IOS_CreateMessageQueue(u32* buf, u32 msg_count);
 s32 IOS_DestroyMessageQueue(s32 queue_id);
 s32 IOS_SendMessage(s32 queue_id, u32 message, u32 flags);
 s32 IOS_JamMessage(s32 queue_id, u32 message, u32 flags);
 s32 IOS_ReceiveMessage(s32 queue_id, u32* message, u32 flags);
 
-/* <----------
+/*
  * IOS Timer
- * ----------> */
+ */
 s32 IOS_CreateTimer(s32 usec, s32 repeat_usec, s32 queue, u32 msg);
 s32 IOS_RestartTimer(s32 timer, s32 usec, s32 repeat_usec);
 s32 IOS_StopTimer(s32 timer);
 s32 IOS_DestroyTimer(s32 timer);
 u32 IOS_GetTime();
 
-/* <----------
+/*
  * IOS Memory
- * ----------> */
+ */
 s32 IOS_CreateHeap(void* ptr, s32 length);
 s32 IOS_DestroyHeap(s32 heap);
 void* IOS_Alloc(s32 heap, u32 length);
 void* IOS_AllocAligned(s32 heap, u32 length, u32 align);
 s32 IOS_Free(s32 heap, void* ptr);
 
-/* <----------
+/*
  * IPC (Inter-process communication)
- * ----------> */
+ */
 #define IOS_OPEN 1
 #define IOS_CLOSE 2
 #define IOS_READ 3
@@ -160,16 +160,16 @@ s32 IOS_IoctlvAsync(s32 fd, u32 command, u32 in_cnt, u32 out_cnt, IOVector* vec,
 s32 IOS_RegisterResourceManager(const char* device, s32 queue_id);
 s32 IOS_ResourceReply(const IOSRequest* request, s32 reply);
 
-/* <----------
+/*
  * ARM Memory and Cache
- * ----------> */
+ */
 void IOS_InvalidateDCache(void* address, u32 size);
 void IOS_FlushDCache(const void* address, u32 size);
 void* IOS_VirtualToPhysical(void* virt);
 
-/* <----------
+/*
  * Misc IOS
- * ----------> */
+ */
 s32 IOS_SetPPCACRPerms(u8 enable);
 s32 IOS_SetIpcAccessRights(u8* rights);
 s32 IOS_SetUid(u32 pid, u32 uid);

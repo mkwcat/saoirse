@@ -8,7 +8,7 @@
 #include <IOS/System.hpp>
 #include <cstring>
 
-IPCLog* IPCLog::sInstance;
+IPCLog* IPCLog::s_instance;
 
 IPCLog::IPCLog()
   : m_ipcQueue(8)
@@ -28,12 +28,19 @@ void IPCLog::Print(const char* buffer)
     req->reply(s32(Log::IPCLogReply::Print));
 }
 
+/**
+ * Notify that a resource is ready. The channel will count the number of
+ * resources to make sure everything is started.
+ */
 void IPCLog::Notify()
 {
     IOS::Request* req = m_responseQueue.receive();
     req->reply(s32(Log::IPCLogReply::Notice));
 }
 
+/**
+ * Notify the channel that a storage device was inserted.
+ */
 void IPCLog::NotifyDeviceInsertion(u8 id)
 {
     IOS::Request* req = m_responseQueue.receive();
@@ -41,11 +48,22 @@ void IPCLog::NotifyDeviceInsertion(u8 id)
     req->reply(s32(Log::IPCLogReply::DevInsert));
 }
 
+/**
+ * Notify the channel that a storage device was removed.
+ */
 void IPCLog::NotifyDeviceRemoval(u8 id)
 {
     IOS::Request* req = m_responseQueue.receive();
     System::UnalignedMemcpy(req->ioctl.io, &id, sizeof(id));
     req->reply(s32(Log::IPCLogReply::DevRemove));
+}
+
+/**
+ * Wait for the request from the channel to start.
+ */
+void IPCLog::WaitForStartRequest()
+{
+    m_startRequestQueue.receive();
 }
 
 void IPCLog::HandleRequest(IOS::Request* req)
@@ -123,9 +141,4 @@ void IPCLog::Run()
         IOS::Request* req = m_ipcQueue.receive();
         HandleRequest(req);
     }
-}
-
-void IPCLog::WaitForStartRequest()
-{
-    m_startRequestQueue.receive();
 }

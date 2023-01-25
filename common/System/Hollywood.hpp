@@ -7,14 +7,19 @@
 #include <System/Types.h>
 #include <System/Util.h>
 
-// PPC base for ACR
+/**
+ * PPC base for the hardware registers. The 0x00800000 bit gets masked out when
+ * PPC tries to access the trusted base.
+ */
 constexpr u32 HW_BASE = 0x0D000000;
-// IOP base for ACR
+/**
+ * IOP base for the hardware registers.
+ */
 constexpr u32 HW_BASE_TRUSTED = 0x0D800000;
 
-// The 0x00800000 bit gets masked out when PPC tries to access the trusted base.
-
-// ACR (Hollywood Registers)
+/**
+ * ACR (Hollywood Registers).
+ */
 enum class ACRReg {
     IPC_PPCMSG = 0x000,
     IPC_PPCCTRL = 0x004,
@@ -36,7 +41,7 @@ enum class ACRReg {
     // Bus access for the PPC and TRUSTED bases
     BUSPROT = 0x064,
 
-    // Restricted Broadway GPIO access
+    // Restricted PPC GPIO access
     GPIOB_OUT = 0x0C0,
     GPIOB_DIR = 0x0C4,
     GPIOB_IN = 0x0C8,
@@ -48,7 +53,9 @@ enum class ACRReg {
     RESETS = 0x194,
 };
 
-// Bit fields for SRNPROT
+/**
+ * Bit fields for SRNPROT.
+ */
 enum class ACRSRNPROTBit {
     // Enables the AES engine access to SRAM
     AESEN = 0x01,
@@ -65,7 +72,9 @@ enum class ACRSRNPROTBit {
     IOPDBGEN = 0x40,
 };
 
-// Bit fields for BUSPROT
+/**
+ * Bit fields for BUSPROT.
+ */
 enum class ACRBUSPROTBit : u32 {
     // Flash/NAND Engine PPC; Set/cleared by syscall_54
     PPCFLAEN = 0x00000002,
@@ -110,7 +119,9 @@ enum class ACRBUSPROTBit : u32 {
     PPCKERN = 0x80000000,
 };
 
-// GPIO pin connections
+/**
+ * GPIO pin connections.
+ */
 enum class GPIOPin {
     POWER = 0x000001,
     SHUTDOWN = 0x000002,
@@ -139,7 +150,9 @@ enum class GPIOPin {
     DEBUG7 = 0x800000,
 };
 
-// HW_RESETS flags
+/**
+ * HW_RESETS flags.
+ */
 enum class ACRResetLine {
     // System reset
     RSTBINB = 0x0000001,
@@ -195,118 +208,149 @@ enum class ACRResetLine {
     NLCKB_EDRAM = 0x2000000,
 };
 
-// Read ACR register.
-// Requires BUSPROT::PPCKERN set if used from Broadway.
+/**
+ * Read ACR register. Requires BUSPROT::PPCKERN set if used from PPC.
+ */
 static inline u32 ACRReadTrusted(ACRReg reg)
 {
     return read32(HW_BASE_TRUSTED + static_cast<u32>(reg));
 }
 
-// Read ACR register in the untrusted Broadway mirror.
+/**
+ * Read ACR register in the untrusted PPC mirror.
+ */
 static inline u32 ACRRead(ACRReg reg)
 {
     return read32(HW_BASE + static_cast<u32>(reg));
 }
 
-// Write ACR register.
-// Requires BUSPROT::PPCKERN set if used from Broadway.
+/**
+ * Write ACR register. Requires BUSPROT::PPCKERN set if used from PPC.
+ */
 static inline void ACRWriteTrusted(ACRReg reg, u32 value)
 {
     write32(HW_BASE_TRUSTED + static_cast<u32>(reg), value);
 }
 
-// Write ACR register in the untrusted Broadway mirror.
+/**
+ * Write ACR register in the untrusted PPC mirror.
+ */
 static inline void ACRWrite(ACRReg reg, u32 value)
 {
     write32(HW_BASE + static_cast<u32>(reg), value);
 }
 
-// Mask ACR register.
-// Requires BUSPROT::PPCKERN set if used from Broadway.
+/**
+ * Mask ACR register. Requires BUSPROT::PPCKERN set if used from PPC.
+ */
 static inline void ACRMaskTrusted(ACRReg reg, u32 clear, u32 set)
 {
     mask32(HW_BASE_TRUSTED + static_cast<u32>(reg), clear, set);
 }
 
-//  Mask ACR register in the untrusted Broadway mirror.
+/**
+ * Mask ACR register in the untrusted PPC mirror.
+ */
 static inline void ACRMask(ACRReg reg, u32 clear, u32 set)
 {
     mask32(HW_BASE + static_cast<u32>(reg), clear, set);
 }
 
-// Read from a GPIO pin owned by Broadway.
+/**
+ * Read from a GPIO pin owned by PPC.
+ */
 static inline bool GPIOBRead(GPIOPin pin)
 {
     return static_cast<bool>(ACRRead(ACRReg::GPIOB_IN) & static_cast<u32>(pin));
 }
 
-// Write to a GPIO pin owned by Broadway.
+/**
+ * Write to a GPIO pin owned by PPC.
+ */
 static inline void GPIOBWrite(GPIOPin pin, bool flag)
 {
     ACRMask(ACRReg::GPIOB_OUT, static_cast<u32>(pin),
       flag ? static_cast<u32>(pin) : 0);
 }
 
-// Read from a GPIO pin owned by IOP.
+/**
+ * Read from a GPIO pin owned by IOP.
+ */
 static inline bool GPIORead(GPIOPin pin)
 {
     return static_cast<bool>(
       ACRReadTrusted(ACRReg::GPIO_IN) & static_cast<u32>(pin));
 }
 
-// Write to a GPIO pin owned by IOP.
+/**
+ * Write to a GPIO pin owned by IOP.
+ */
 static inline void GPIOWrite(GPIOPin pin, bool flag)
 {
     ACRMaskTrusted(ACRReg::GPIO_OUT, static_cast<u32>(pin),
       flag ? static_cast<u32>(pin) : 0);
 }
 
-// Assert or deassert a reset line.
-// flag: false = assert/off, true = deassert/on.
+/**
+ * Assert or deassert a reset line.
+ * @param flag false = assert/off, true = deassert/on.
+ */
 static inline void ACRReset(ACRResetLine line, bool flag)
 {
     ACRMaskTrusted(ACRReg::RESETS, static_cast<u32>(line),
       flag ? static_cast<u32>(line) : 0);
 }
 
-// Get the status of a reset line.
-// return value: false = assert/off, true = deassert/on.
+/**
+ * Get the status of a reset line.
+ * @returns false = assert/off, true = deassert/on.
+ */
 static inline bool ACRCheckReset(ACRResetLine line)
 {
     return (ACRReadTrusted(ACRReg::RESETS) & static_cast<u32>(line)) != 0;
 }
 
-// Set a flag in an ACR register. Register is determined using bit type.
-// flag: false = off, true = on.
+/**
+ * Set a flag in an ACR register. Register is determined using bit type.
+ * @param flag false = off, true = on.
+ */
 static inline void ACRSetFlag(ACRSRNPROTBit bit, bool flag)
 {
     ACRMaskTrusted(
       ACRReg::SRNPROT, static_cast<u32>(bit), flag ? static_cast<u32>(bit) : 0);
 }
 
-// Get the state of an ACR register flag. Register is determined using bit type.
-// return value: false = off, true = on.
+/**
+ * Get the state of an ACR register flag. Register is determined using bit type.
+ * @returns false = off, true = on.
+ */
 static inline bool ACRReadFlag(ACRSRNPROTBit bit)
 {
     return (ACRReadTrusted(ACRReg::SRNPROT) & static_cast<u32>(bit)) != 0;
 }
 
-// Set a flag in an ACR register. Register is determined using bit type.
-// flag: false = off, true = on.
+/**
+ * Set a flag in an ACR register. Register is determined using bit type.
+ * @param flag false = off, true = on.
+ */
 static inline void ACRSetFlag(ACRBUSPROTBit bit, bool flag)
 {
     ACRMaskTrusted(
       ACRReg::BUSPROT, static_cast<u32>(bit), flag ? static_cast<u32>(bit) : 0);
 }
 
-// Get the state of an ACR register flag. Register is determined using bit type.
-// return value: false = off, true = on.
+/**
+ * Get the state of an ACR register flag. Register is determined using bit type.
+ * @returns false = off, true = on.
+ */
 static inline bool ACRReadFlag(ACRBUSPROTBit bit)
 {
     return (ACRReadTrusted(ACRReg::BUSPROT) & static_cast<u32>(bit)) != 0;
 }
 
-// Memory Controller Registers
+/**
+ * Memory Controller Registers.
+ */
 enum class MEMCRReg {
     // DDR protection enable/disable
     MEM_PROT_DDR = 0xB420A,
@@ -316,40 +360,49 @@ enum class MEMCRReg {
     MEM_PROT_DDR_END = 0xB420E,
 };
 
-// Read MEMCR register.
-// Requires BUSPROT::PPCKERN set if used from Broadway.
+/**
+ * Read MEMCR register. Requires BUSPROT::PPCKERN set if used from PPC.
+ */
 static inline u16 MEMCRReadTrusted(MEMCRReg reg)
 {
     return read16(HW_BASE_TRUSTED + static_cast<u32>(reg));
 }
 
-// Read MEMCR register in the untrusted Broadway mirror.
+/**
+ * Read MEMCR register in the untrusted PPC mirror.
+ */
 static inline u16 MEMCRRead(MEMCRReg reg)
 {
     return read16(HW_BASE + static_cast<u32>(reg));
 }
 
-// Write MEMCR register.
-// Requires BUSPROT::PPCKERN set if used from Broadway.
+/**
+ * Write MEMCR register. Requires BUSPROT::PPCKERN set if used from PPC.
+ */
 static inline void MEMCRWriteTrusted(MEMCRReg reg, u16 value)
 {
     write16(HW_BASE_TRUSTED + static_cast<u32>(reg), value);
 }
 
-// Write MEMCR register in the untrusted Broadway mirror.
+/**
+ * Write MEMCR register in the untrusted PPC mirror.
+ */
 static inline void MEMCRWrite(MEMCRReg reg, u16 value)
 {
     write16(HW_BASE + static_cast<u32>(reg), value);
 }
 
-// Mask MEMCR register.
-// Requires BUSPROT::PPCKERN set if used from Broadway.
+/**
+ * Mask MEMCR register. Requires BUSPROT::PPCKERN set if used from PPC.
+ */
 static inline void MEMCRMaskTrusted(MEMCRReg reg, u16 clear, u16 set)
 {
     mask16(HW_BASE_TRUSTED + static_cast<u32>(reg), clear, set);
 }
 
-//  Mask MEMCR register in the untrusted Broadway mirror.
+/**
+ * Mask MEMCR register in the untrusted PPC mirror.
+ */
 static inline void MEMCRMask(MEMCRReg reg, u16 clear, u16 set)
 {
     mask16(HW_BASE + static_cast<u32>(reg), clear, set);

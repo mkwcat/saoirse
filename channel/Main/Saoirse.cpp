@@ -112,7 +112,7 @@ static inline bool startupDrive()
 {
     // If ReadDiskID succeeds here, that means the drive is already started
     DI::DIError ret =
-      DI::sInstance->ReadDiskID(reinterpret_cast<DI::DiskID*>(MEM1_BASE));
+      DI::s_instance->ReadDiskID(reinterpret_cast<DI::DiskID*>(MEM1_BASE));
     if (ret == DI::DIError::OK) {
         PRINT(Core, INFO, "Drive is already spinning");
         return true;
@@ -122,11 +122,11 @@ static inline bool startupDrive()
 
     // Drive is not spinning
     PRINT(Core, INFO, "Spinning up drive...");
-    ret = DI::sInstance->Reset(true);
+    ret = DI::s_instance->Reset(true);
     if (ret != DI::DIError::OK)
         return false;
 
-    ret = DI::sInstance->ReadDiskID(reinterpret_cast<DI::DiskID*>(MEM1_BASE));
+    ret = DI::s_instance->ReadDiskID(reinterpret_cast<DI::DiskID*>(MEM1_BASE));
     return ret == DI::DIError::OK;
 }
 
@@ -151,7 +151,7 @@ void abort()
 
 static s32 UIThreadEntry([[maybe_unused]] void* arg)
 {
-    BasicUI::sInstance->Loop();
+    BasicUI::s_instance->Loop();
     return 0;
 }
 
@@ -194,9 +194,9 @@ s32 main([[maybe_unused]] s32 argc, [[maybe_unused]] char** argv)
 
     IOSBoot::Init();
 
-    Input::sInstance = new Input();
-    BasicUI::sInstance = new BasicUI();
-    BasicUI::sInstance->InitVideo();
+    Input::s_instance = new Input();
+    BasicUI::s_instance = new BasicUI();
+    BasicUI::s_instance->InitVideo();
     new Thread(UIThreadEntry, nullptr, nullptr, 0x1000, 80);
 
     PRINT(Core, WARN, "Debug console initialized");
@@ -205,7 +205,7 @@ s32 main([[maybe_unused]] s32 argc, [[maybe_unused]] char** argv)
     // Setup main data archive
     extern const char data_ar[];
     extern const char data_ar_end[];
-    Arch::sInstance = new Arch(data_ar, data_ar_end - data_ar);
+    Arch::s_instance = new Arch(data_ar, data_ar_end - data_ar);
 
     // TODO: Manage this instance
     new Riivolution();
@@ -214,9 +214,9 @@ s32 main([[maybe_unused]] s32 argc, [[maybe_unused]] char** argv)
     IOSBoot::LaunchSaoirseIOS();
 
     PRINT(Core, INFO, "Send start game IOS request!");
-    IOSBoot::IPCLog::sInstance->startGameIOS();
+    IOSBoot::IPCLog::s_instance->startGameIOS();
 
-    DI::sInstance = new DI;
+    DI::s_instance = new DI;
 
     // TODO move this to like a page based UI system or something
     if (!startupDrive()) {
@@ -251,9 +251,9 @@ s32 main([[maybe_unused]] s32 argc, [[maybe_unused]] char** argv)
     patchList.ImportPokeBranch(0x801AAAA0, 0x800018A8);
 #endif
 
-    delete DI::sInstance;
+    delete DI::s_instance;
 
-    delete IOSBoot::IPCLog::sInstance;
+    delete IOSBoot::IPCLog::s_instance;
     PRINT(Core, INFO, "Wait for UI...");
 
     LaunchState::Get()->LaunchReady.state = true;

@@ -5,4 +5,4 @@
 
 #include "SHA.hpp"
 
-SHA* SHA::sInstance = nullptr;
+SHA* SHA::s_instance = nullptr;

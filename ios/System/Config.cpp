@@ -6,7 +6,7 @@
 #include "Config.hpp"
 #include <cstring>
 
-Config* Config::sInstance;
+Config* Config::s_instance;
 
 bool Config::IsISFSPathReplaced(const char* path)
 {

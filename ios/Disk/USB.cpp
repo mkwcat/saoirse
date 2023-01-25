@@ -10,7 +10,7 @@
 #include <System/Types.h>
 #include <System/Util.h>
 
-USB* USB::sInstance = nullptr;
+USB* USB::s_instance = nullptr;
 
 USB::USB(s32 id)
 {
@@ -18,6 +18,9 @@ USB::USB(s32 id)
         new (&ven) IOS::ResourceCtrl<USBv5Ioctl>("/dev/usb/ven", id);
 }
 
+/**
+ * Initialize the interface.
+ */
 bool USB::Init()
 {
     if (ven.fd() < 0) {
@@ -44,11 +47,11 @@ bool USB::Init()
     return true;
 }
 
-/*
+/**
  * Aynchronous call to get the next device change. Sends 'req' to 'queue'
  * when GetDeviceChange responds.
- * devices - Output device entries, must have USB::MaxDevices entries,
- * 32-bit aligned, MEM2 virtual = physical address.
+ * @param[out] devices - Output device entries, must have USB::MaxDevices
+ * entries, 32-bit aligned, MEM2 virtual = physical address.
  */
 bool USB::EnqueueDeviceChange(
   DeviceEntry* devices, Queue<IOS::Request*>* queue, IOS::Request* req)
@@ -73,7 +76,7 @@ bool USB::EnqueueDeviceChange(
     return true;
 }
 
-/*
+/**
  * Get USB descriptors for a device.
  */
 USB::USBError USB::GetDeviceInfo(u32 devId, DeviceInfo* outInfo, u8 alt)
@@ -93,7 +96,7 @@ USB::USBError USB::GetDeviceInfo(u32 devId, DeviceInfo* outInfo, u8 alt)
     return static_cast<USBError>(ret);
 }
 
-/*
+/**
  * Attaches the provided device to the current handle.
  */
 USB::USBError USB::Attach(u32 devId)
@@ -107,7 +110,7 @@ USB::USBError USB::Attach(u32 devId)
     return static_cast<USBError>(ret);
 }
 
-/*
+/**
  * Suspend or resume a device. Returns Invalid if the new state is the same
  * as the current one.
  */
@@ -123,7 +126,7 @@ USB::USBError USB::SuspendResume(u32 devId, State state)
     return static_cast<USBError>(ret);
 }
 
-/*
+/**
  * Cancel ongoing transfer on an endpoint.
  */
 USB::USBError USB::CancelEndpoint(u32 devId, u8 endpoint)

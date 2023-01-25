@@ -10,7 +10,7 @@ LIBOGC_SUCKS_BEGIN
 #include <wiiuse/wpad.h>
 LIBOGC_SUCKS_END
 
-Input* Input::sInstance;
+Input* Input::s_instance;
 
 Input::Input()
 {

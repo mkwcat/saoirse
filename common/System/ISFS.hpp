@@ -6,7 +6,6 @@
 
 #pragma once
 
-// Definitions
 #define NAND_DIRECTORY_SEPARATOR_CHAR '/'
 
 #define NAND_MAX_FILEPATH_LENGTH 64 // Including the NULL terminator
@@ -45,26 +44,35 @@ struct ISFSRenameBlock {
 };
 
 struct ISFSAttrBlock {
-    u32 ownerId; // UID, title specific
-    u16 groupId; // GID, the "maker", for example 01 in RMCE01.
+    // UID, title specific
+    u32 ownerId;
+    // GID, the "maker", for example 01 in RMCE01.
+    u16 groupId;
     char path[ISFSMaxPath];
-    // Access flags (like IOS::Mode)
-    // If the caller's identifiers match UID or GID, use those
-    // permissions. Otherwise use otherPerm.
-    u8 ownerPerm; // Permissions for UID
-    u8 groupPerm; // Permissions for GID
-    u8 otherPerm; // Permissions for any other process
+    // Access flags (like IOS::Mode). If the caller's identifiers match UID or
+    // GID, use those permissions. Otherwise use otherPerm.
+    // Permissions for UID
+    u8 ownerPerm;
+    // Permissions for GID
+    u8 groupPerm;
+    // Permissions for any other process
+    u8 otherPerm;
     u8 attributes;
     u8 pad[2];
 };
 
 struct ISFSDirect_Stat {
     enum {
-        RDO = 0x01, // Read only
-        HID = 0x02, // Hidden
-        SYS = 0x04, // System
-        DIR = 0x10, // Directory
-        ARC = 0x20, // Archive
+        // Read only
+        RDO = 0x01,
+        // Hidden
+        HID = 0x02,
+        // System
+        SYS = 0x04,
+        // Directory
+        DIR = 0x10,
+        // Archive
+        ARC = 0x20,
     };
 
     u64 dirOffset;

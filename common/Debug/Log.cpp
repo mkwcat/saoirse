@@ -38,7 +38,7 @@ constexpr u32 logLevel = 0;
 bool Log::IsEnabled()
 {
 #ifdef TARGET_IOS
-    return ipcLogEnabled || DeviceMgr::sInstance->IsLogEnabled();
+    return ipcLogEnabled || DeviceMgr::s_instance->IsLogEnabled();
 #else
     return true;
 #endif
@@ -85,13 +85,13 @@ void Log::VPrint(LogSource src, const char* srcStr, const char* funcStr,
             len = snprintf(&printBuffer[0], printBuffer.size(),
               "%s[%s %s] %s\x1b[37;1m", logColors[slvl], srcStr, funcStr,
               logBuffer.data());
-            IPCLog::sInstance->Print(&printBuffer[0]);
+            IPCLog::s_instance->Print(&printBuffer[0]);
         }
 
-        if (DeviceMgr::sInstance->IsLogEnabled()) {
+        if (DeviceMgr::s_instance->IsLogEnabled()) {
             len = snprintf(&printBuffer[0], printBuffer.size(), "%c[%s %s] %s",
               logChars[slvl], srcStr, funcStr, logBuffer.data());
-            DeviceMgr::sInstance->WriteToLog(&printBuffer[0], len);
+            DeviceMgr::s_instance->WriteToLog(&printBuffer[0], len);
         }
 
 #else

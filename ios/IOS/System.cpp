@@ -210,7 +210,7 @@ u64 System::GetTime()
     return s_baseEpoch + (timeNow / 1898614);
 }
 
-/*
+/**
  * Memcpy with only word writes to work around a Wii hardware bug.
  */
 void* System::UnalignedMemcpy(void* dest, const void* src, size_t len)
@@ -264,19 +264,19 @@ void KernelWrite(u32 address, u32 value)
 
 s32 SystemThreadEntry([[maybe_unused]] void* arg)
 {
-    SHA::sInstance = new SHA();
-    AES::sInstance = new AES();
-    DI::sInstance = new DI();
-    ES::sInstance = new ES();
+    SHA::s_instance = new SHA();
+    AES::s_instance = new AES();
+    DI::s_instance = new DI();
+    ES::s_instance = new ES();
 
     ImportKoreanCommonKey();
     IOS::Resource::MakeIPCToCallbackThread();
     StaticInit();
 
-    DeviceMgr::sInstance = new DeviceMgr();
+    DeviceMgr::s_instance = new DeviceMgr();
 
     PRINT(IOS, INFO, "Wait for start request...");
-    IPCLog::sInstance->WaitForStartRequest();
+    IPCLog::s_instance->WaitForStartRequest();
     PRINT(IOS, INFO, "Starting up game IOS...");
 
     PatchIOSOpen();
@@ -298,8 +298,8 @@ extern "C" void Entry([[maybe_unused]] void* arg)
         AbortColor(YUV_YELLOW);
     System::SetHeap(ret);
 
-    Config::sInstance = new Config();
-    IPCLog::sInstance = new IPCLog();
+    Config::s_instance = new Config();
+    IPCLog::s_instance = new IPCLog();
     Log::ipcLogEnabled = true;
 
     IOS_SetThreadPriority(0, 40);
@@ -320,5 +320,5 @@ extern "C" void Entry([[maybe_unused]] void* arg)
     if (ret < 0)
         AbortColor(YUV_YELLOW);
 
-    IPCLog::sInstance->Run();
+    IPCLog::s_instance->Run();
 }

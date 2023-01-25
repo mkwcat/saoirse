@@ -5,7 +5,7 @@
 
 #include "ES.hpp"
 
-ES* ES::sInstance = nullptr;
+ES* ES::s_instance = nullptr;
 
 ES::ESError ES::GetDeviceID(u32* out)
 {

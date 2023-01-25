@@ -8,7 +8,7 @@
 #include <stdio.h>
 #include <string.h>
 
-Arch* Arch::sInstance;
+Arch* Arch::s_instance;
 
 bool Arch::getShortName(const char* name, char* out)
 {
@@ -61,7 +61,7 @@ const void* Arch::getFile(const char* name, u32* size)
 
 const void* Arch::getFileStatic(const char* name, u32* size)
 {
-    return Arch::sInstance->getFile(name, size);
+    return Arch::s_instance->getFile(name, size);
 }
 
 Arch::Arch(const char* file, u32 size)

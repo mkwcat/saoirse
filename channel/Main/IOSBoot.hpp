@@ -23,7 +23,7 @@ void DebugLaunchReport();
 class IPCLog
 {
 public:
-    static IPCLog* sInstance;
+    static IPCLog* s_instance;
 
     IPCLog();
 

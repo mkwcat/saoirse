@@ -10,7 +10,7 @@
 class Config
 {
 public:
-    static Config* sInstance;
+    static Config* s_instance;
 
     bool IsISFSPathReplaced(const char* path);
     bool IsFileLogEnabled();

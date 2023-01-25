@@ -24,6 +24,9 @@ public:
     static void SetTime(u32 hwTimerVal, u64 epoch);
     static u64 GetTime();
 
+    /**
+     * Memcpy with only word writes to work around a Wii hardware bug.
+     */
     static void* UnalignedMemcpy(void* dest, const void* src, size_t len);
 
 private:

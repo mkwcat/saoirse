@@ -16,7 +16,7 @@
 class DeviceMgr
 {
 public:
-    static DeviceMgr* sInstance;
+    static DeviceMgr* s_instance;
 
     DeviceMgr();
     ~DeviceMgr();

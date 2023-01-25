@@ -60,8 +60,8 @@ constexpr int DIRECT_HANDLE_MAX = NAND_MAX_FILE_DESCRIPTOR_AMOUNT;
 
 #define EFS_DRIVE "0:"
 
-static char efsFilepath[EFS_MAX_PATH_LEN];
-static char efsFilepath2[EFS_MAX_PATH_LEN];
+static char s_efsPath[EFS_MAX_PATH_LEN];
+static char s_efsPath2[EFS_MAX_PATH_LEN];
 
 struct ProxyFile {
     bool ipcFile;
@@ -321,86 +321,70 @@ static s32 TryCloseFileDescriptor(int fd)
     return FR_OK;
 }
 
-/*---------------------------------------------------------------------------*
- * Name        : strnlen
- * Description : Gets the number of characters in a character string, excluding
- *               the null terminator, up to maxLength characters.
- * Arguments   : string       The character string to check.
- *             : maxLength    The maximum number of characters to check.
- * Returns     : The number of characters in the character string, excluding
- *               the null terminator, up to maxLength characters.
- *---------------------------------------------------------------------------*/
-static size_t strnlen(const char* string, size_t maxLength)
+/**
+ * Gets the number of characters in a string, excluding the null terminator, up
+ * to maxLength characters.
+ */
+static size_t strnlen(const char* str, size_t max)
 {
     size_t i;
-    for (i = 0; i < maxLength && string[i]; i++)
+    for (i = 0; i < max && str[i]; i++)
         ;
     return i;
 }
 
-/*---------------------------------------------------------------------------*
- * Name        : IsFilepathValid
- * Description : Checks if a filepath valid.
- * Arguments   : filepath    The filepath to check.
- * Returns     : If the filepath is valid.
- *---------------------------------------------------------------------------*/
-static bool IsFilepathValid(const char* filepath)
+/**
+ * Checks if an ISFS path is valid.
+ */
+static bool IsPathValid(const char* path)
 {
-    if (!filepath)
+    if (!path)
         return false;
 
-    if (filepath[0] != NAND_DIRECTORY_SEPARATOR_CHAR)
+    if (path[0] != NAND_DIRECTORY_SEPARATOR_CHAR)
         return false;
 
-    return (
-      strnlen(filepath, NAND_MAX_FILEPATH_LENGTH) < NAND_MAX_FILEPATH_LENGTH);
+    return (strnlen(path, NAND_MAX_FILEPATH_LENGTH) < NAND_MAX_FILEPATH_LENGTH);
 }
 
-/*---------------------------------------------------------------------------*
- * Name        : IsReplacedFilepath
- * Description : Checks if a filepath is allowed to be replaced.
- * Arguments   : filepath    The filepath to check.
- * Returns     : If the filepath is allowed to be replaced.
- *---------------------------------------------------------------------------*/
-static bool IsReplacedFilepath(const char* filepath)
+/**
+ * Checks if a path is redirected somewhere else by the frontend.
+ */
+static bool IsPathReplaced(const char* path)
 {
-    if (!IsFilepathValid(filepath))
+    if (!IsPathValid(path))
         return false;
 
-    return Config::sInstance->IsISFSPathReplaced(filepath);
+    return Config::s_instance->IsISFSPathReplaced(path);
 }
 
-/*---------------------------------------------------------------------------*
- * Name        : GetReplacedFilepath
- * Description : Gets the replaced filepath of a filepath.
- * Arguments   : filepath    The filepath to get the replaced filepath of.
- *               out_buf     A pointer to a buffer to store the replaced
- *filepath in. out_len     The length of the output buffer. Returns     : A
- *pointer to the buffer containing the replaced filepath, or nullptr on error.
- *---------------------------------------------------------------------------*/
-static const char* GetReplacedFilepath(
-  const char* filepath, char* out_buf, size_t out_len)
+/**
+ * Get the replaced path from an ISFS path.
+ */
+static const char* GetRedirectedPath(
+  const char* path, char* out_buf, size_t out_len)
 {
-    if (!IsFilepathValid(filepath))
+    if (!IsPathValid(path))
         return nullptr;
 
     if (!out_buf)
         return nullptr;
 
-    // Create and write the replaced filepath
-    filepath = strchr(filepath, NAND_DIRECTORY_SEPARATOR_CHAR);
-    if (snprintf(out_buf, out_len, EFS_DRIVE "%s", filepath + 1) <= 0) {
-        PRINT(IOS_EmuFS, ERROR, "Failed to format the replaced filepath");
+    // Create and write the replaced path
+    path = strchr(path, NAND_DIRECTORY_SEPARATOR_CHAR);
+    if (snprintf(out_buf, out_len, EFS_DRIVE "%s", path + 1) <= 0) {
+        PRINT(IOS_EmuFS, ERROR, "Failed to format the replaced path");
         return nullptr;
     }
-
-    PRINT(IOS_EmuFS, INFO, "Replaced file path: \"%s\"", out_buf);
 
     return out_buf;
 }
 
 static u8 efsCopyBuffer[0x2000] ATTRIBUTE_ALIGN(32); // 8 KB
 
+/**
+ * Copy a file from ISFS to an external filesystem.
+ */
 static s32 CopyFromNandToEFS(const char* nandPath, FIL& fil)
 {
     // Only allow renaming files from /tmp
@@ -452,6 +436,9 @@ static s32 CopyFromNandToEFS(const char* nandPath, FIL& fil)
     return ISFSError::OK;
 }
 
+/**
+ * Reset a cached file handle.
+ */
 static s32 ReopenFile(s32 fd)
 {
     const FRESULT fret = f_lseek(&sFileArray[fd].fil, 0);
@@ -465,20 +452,20 @@ static s32 ReopenFile(s32 fd)
     return fd;
 }
 
-/*
+/**
  * Handle open file request from the filesystem proxy.
- * Returns: File descriptor, or ISFS error code.
+ * @returns File descriptor, or ISFS error code.
  */
-static s32 ReqProxyOpen(const char* filepath, u32 mode)
+static s32 ReqProxyOpen(const char* path, u32 mode)
 {
     if (mode > IOS_OPEN_RW)
         return ISFSError::Invalid;
 
-    // Get the replaced filepath
-    if (!GetReplacedFilepath(filepath, efsFilepath, sizeof(efsFilepath)))
+    // Get the replaced path
+    if (!GetRedirectedPath(path, s_efsPath, sizeof(s_efsPath)))
         return ISFSError::Invalid;
 
-    int fd = RegisterFileDescriptor(filepath);
+    int fd = RegisterFileDescriptor(path);
     if (fd < 0) {
         PRINT(IOS_EmuFS, ERROR, "Could not register file descriptor: %d", fd);
         return fd;
@@ -495,10 +482,10 @@ static s32 ReqProxyOpen(const char* filepath, u32 mode)
     }
 
     const FRESULT fret =
-      f_open(&sFileArray[fd].fil, efsFilepath, FA_READ | FA_WRITE);
+      f_open(&sFileArray[fd].fil, s_efsPath, FA_READ | FA_WRITE);
     if (fret != FR_OK) {
         PRINT(IOS_EmuFS, ERROR, "Failed to open file '%s', error: %d",
-          efsFilepath, fret);
+          s_efsPath, fret);
 
         FreeFileDescriptor(fd);
         return FResultToISFSError(fret);
@@ -507,7 +494,7 @@ static s32 ReqProxyOpen(const char* filepath, u32 mode)
     sFileArray[fd].filOpened = true;
 
     PRINT(IOS_EmuFS, INFO, "Successfully opened file '%s' (fd=%d, mode=%u)",
-      efsFilepath, fd, mode);
+      s_efsPath, fd, mode);
 
     return fd;
 }
@@ -516,7 +503,7 @@ static s32 ReqProxyOpen(const char* filepath, u32 mode)
  * Handles direct open file requests.
  * @returns File descriptor, or ISFS error code.
  */
-static s32 ReqDirectOpen(const char* filepath, u32 mode)
+static s32 ReqDirectOpen(const char* path, u32 mode)
 {
     int fd = FindAvailableFileDescriptor();
     if (fd < 0) {
@@ -529,10 +516,10 @@ static s32 ReqDirectOpen(const char* filepath, u32 mode)
     memset(sFileArray[fd].path, 0, 64);
 
     const FRESULT fret =
-      f_open(&sFileArray[fd].fil, filepath, ISFSModeToFileMode(mode));
+      f_open(&sFileArray[fd].fil, path, ISFSModeToFileMode(mode));
     if (fret != FR_OK) {
         PRINT(IOS_EmuFS, ERROR, "Failed to open file '%s', mode: %X, error: %d",
-          filepath, mode, fret);
+          path, mode, fret);
         return FResultToISFSError(fret);
     }
 
@@ -542,7 +529,7 @@ static s32 ReqDirectOpen(const char* filepath, u32 mode)
     sFileArray[fd].filOpened = true;
 
     PRINT(IOS_EmuFS, INFO, "Successfully opened file '%s' (fd=%d, mode=%u)",
-      filepath, fd, mode);
+      path, fd, mode);
 
     return fd;
 }
@@ -580,7 +567,7 @@ static s32 ReqDirectOpenDir(const char* path)
 
 /**
  * Close open file descriptor.
- * @returns 0 for success, or IOS error code.
+ * @returns IOSError::OK for success, or IOS/ISFS error code.
  */
 static s32 ReqClose(s32 fd)
 {
@@ -663,9 +650,9 @@ static s32 ReqRead(s32 fd, void* data, u32 len)
     return bytesRead;
 }
 
-/*
+/**
  * Write data to open file descriptor.
- * Returns: Amount wrote, or ISFS error code.
+ * @returns Amount wrote, or ISFS error code.
  */
 static s32 ReqWrite(s32 fd, const void* data, u32 len)
 {
@@ -693,9 +680,9 @@ static s32 ReqWrite(s32 fd, const void* data, u32 len)
     return bytesWrote;
 }
 
-/*
- * Moves the file read/write of an open file descriptor.
- * Returns: Current offset, or an ISFS error code.
+/**
+ * Moves the file read/write position of an open file descriptor.
+ * @returns New offset, or an ISFS error code.
  */
 static s32 ReqSeek(s32 fd, s32 where, s32 whence)
 {
@@ -747,9 +734,9 @@ static s32 ReqSeek(s32 fd, s32 where, s32 whence)
     return offset;
 }
 
-/*
+/**
  * Handles filesystem ioctl commands.
- * Returns: ISFSError result.
+ * @returns ISFSError result.
  */
 static s32 ReqIoctl(
   s32 fd, ISFSIoctl cmd, void* in, u32 in_len, void* io, u32 io_len)
@@ -759,7 +746,7 @@ static s32 ReqIoctl(
     if (io_len == 0)
         io = nullptr;
 
-    /* File commands */
+    // File commands
     if (IsFileDescriptorValid(fd)) {
         if (cmd == ISFSIoctl::GetFileStats) {
             if (io_len < sizeof(IOS::File::Stat))
@@ -796,8 +783,6 @@ static s32 ReqIoctl(
     // in: not used
     // out: not used
     case ISFSIoctl::Format:
-        /* Hmm, a command to remove everything in the filesystem and brick the
-         * Wii. Very good. */
         PRINT(IOS_EmuFS, ERROR, "Format: Attempt to use ISFS_Format!");
         return ISFSError::NoAccess;
 
@@ -816,27 +801,27 @@ static s32 ReqIoctl(
 
         const char* path = isfsAttrBlock->path;
 
-        // Check if the filepath is valid
-        if (!IsFilepathValid(path))
+        // Check if the path is valid
+        if (!IsPathValid(path))
             return ISFSError::Invalid;
 
-        // Check if the filepath should be replaced
-        if (!IsReplacedFilepath(path))
+        // Check if the path should be replaced
+        if (!IsPathReplaced(path))
             return mgrRes->ioctl(ISFSIoctl::CreateDir, in, in_len, io, io_len);
 
-        // Get the replaced filepath
-        if (!GetReplacedFilepath(path, efsFilepath, sizeof(efsFilepath)))
+        // Get the replaced path
+        if (!GetRedirectedPath(path, s_efsPath, sizeof(s_efsPath)))
             return ISFSError::Invalid;
 
         const FRESULT fresult = f_mkdir(path);
         if (fresult != FR_OK) {
             PRINT(IOS_EmuFS, ERROR,
-              "CreateDir: Failed to create directory '%s'", efsFilepath);
+              "CreateDir: Failed to create directory '%s'", s_efsPath);
             return FResultToISFSError(fresult);
         }
 
         PRINT(IOS_EmuFS, INFO, "CreateDir: Successfully created directory '%s'",
-          efsFilepath);
+          s_efsPath);
 
         return ISFSError::OK;
     }
@@ -857,29 +842,29 @@ static s32 ReqIoctl(
 
         const char* path = isfsAttrBlock->path;
 
-        // Check if the filepath is valid
-        if (!IsFilepathValid(path))
+        // Check if the path is valid
+        if (!IsPathValid(path))
             return ISFSError::Invalid;
 
-        // Check if the filepath should be replaced
-        if (!IsReplacedFilepath(path))
+        // Check if the path should be replaced
+        if (!IsPathReplaced(path))
             return mgrRes->ioctl(ISFSIoctl::SetAttr, in, in_len, io, io_len);
 
-        // Get the replaced filepath
-        if (!GetReplacedFilepath(path, efsFilepath, sizeof(efsFilepath)))
+        // Get the replaced path
+        if (!GetRedirectedPath(path, s_efsPath, sizeof(s_efsPath)))
             return ISFSError::Invalid;
 
-        const FRESULT fresult = f_stat(efsFilepath, nullptr);
+        const FRESULT fresult = f_stat(s_efsPath, nullptr);
         if (fresult != FR_OK) {
             PRINT(IOS_EmuFS, ERROR,
               "SetAttr: Failed to set attributes for file or directory '%s'",
-              efsFilepath);
+              s_efsPath);
             return FResultToISFSError(fresult);
         }
 
         PRINT(IOS_EmuFS, INFO,
           "SetAttr: Successfully set attributes for file or directory '%s'",
-          efsFilepath);
+          s_efsPath);
 
         return ISFSError::OK;
     }
@@ -899,32 +884,32 @@ static s32 ReqIoctl(
         if (in_len < ISFSMaxPath || io_len < sizeof(ISFSAttrBlock))
             return ISFSError::Invalid;
 
-        const char* filepath = (const char*) in;
+        const char* path = (const char*) in;
 
-        // Check if the filepath is valid
-        if (!IsFilepathValid(filepath))
+        // Check if the path is valid
+        if (!IsPathValid(path))
             return ISFSError::Invalid;
 
-        // Check if the filepath should be replaced
-        if (!IsReplacedFilepath(filepath))
+        // Check if the path should be replaced
+        if (!IsPathReplaced(path))
             return mgrRes->ioctl(ISFSIoctl::GetAttr, in, in_len, io, io_len);
 
-        // Get the replaced filepath
-        if (!GetReplacedFilepath(filepath, efsFilepath, sizeof(efsFilepath)))
+        // Get the replaced path
+        if (!GetRedirectedPath(path, s_efsPath, sizeof(s_efsPath)))
             return ISFSError::Invalid;
 
-        const FRESULT fresult = f_stat(efsFilepath, nullptr);
+        const FRESULT fresult = f_stat(s_efsPath, nullptr);
         if (fresult != FR_OK) {
             PRINT(IOS_EmuFS, ERROR,
               "GetAttr: Failed to get attributes for file or directory '%s'",
-              efsFilepath);
+              s_efsPath);
             return FResultToISFSError(fresult);
         }
 
         ISFSAttrBlock* isfsAttrBlock = (ISFSAttrBlock*) io;
         isfsAttrBlock->ownerId = IOS_GetUid();
         isfsAttrBlock->groupId = IOS_GetGid();
-        strcpy(isfsAttrBlock->path, filepath);
+        strcpy(isfsAttrBlock->path, path);
         isfsAttrBlock->ownerPerm = OWNER_PERM;
         isfsAttrBlock->groupPerm = GROUP_PERM;
         isfsAttrBlock->otherPerm = OTHER_PERM;
@@ -932,7 +917,7 @@ static s32 ReqIoctl(
 
         PRINT(IOS_EmuFS, INFO,
           "GetAttr: Successfully got attributes for file or directory '%s'",
-          efsFilepath);
+          s_efsPath);
 
         return ISFSError::OK;
     }
@@ -947,17 +932,17 @@ static s32 ReqIoctl(
         if (in_len < ISFSMaxPath)
             return ISFSError::Invalid;
 
-        const char* filepath = (const char*) in;
+        const char* path = (const char*) in;
 
-        // Check if the filepath is valid
-        if (!IsFilepathValid(filepath))
+        // Check if the path is valid
+        if (!IsPathValid(path))
             return ISFSError::Invalid;
 
-        // Check if the filepath should be replaced
-        if (!IsReplacedFilepath(filepath))
+        // Check if the path should be replaced
+        if (!IsPathReplaced(path))
             return mgrRes->ioctl(ISFSIoctl::Delete, in, in_len, io, io_len);
 
-        s32 ret = FindOpenFileDescriptor(filepath);
+        s32 ret = FindOpenFileDescriptor(path);
         if (ret < 0) {
             return ret;
         }
@@ -969,19 +954,19 @@ static s32 ReqIoctl(
             }
         }
 
-        // Get the replaced filepath
-        if (!GetReplacedFilepath(filepath, efsFilepath, sizeof(efsFilepath)))
+        // Get the replaced path
+        if (!GetRedirectedPath(path, s_efsPath, sizeof(s_efsPath)))
             return ISFSError::Invalid;
 
-        const FRESULT fresult = f_unlink(efsFilepath);
+        const FRESULT fresult = f_unlink(s_efsPath);
         if (fresult != FR_OK) {
             PRINT(IOS_EmuFS, ERROR,
-              "Delete: Failed to delete file or directory '%s'", efsFilepath);
+              "Delete: Failed to delete file or directory '%s'", s_efsPath);
             return FResultToISFSError(fresult);
         }
 
         PRINT(IOS_EmuFS, INFO,
-          "Delete: Successfully deleted file or directory '%s'", efsFilepath);
+          "Delete: Successfully deleted file or directory '%s'", s_efsPath);
 
         return ISFSError::OK;
     }
@@ -1003,35 +988,34 @@ static s32 ReqIoctl(
         PRINT(IOS_EmuFS, INFO, "Rename: ISFS_Rename(\"%s\", \"%s\")", pathOld,
           pathNew);
 
-        // Check if the old and new filepaths are valid
-        if (!IsFilepathValid(pathOld) || !IsFilepathValid(pathNew))
+        // Check if the old and new paths are valid
+        if (!IsPathValid(pathOld) || !IsPathValid(pathNew))
             return ISFSError::Invalid;
 
-        const bool isOldFilepathReplaced = IsReplacedFilepath(pathOld);
-        const bool isNewFilepathReplaced = IsReplacedFilepath(pathNew);
+        const bool isOldPathReplaced = IsPathReplaced(pathOld);
+        const bool isNewPathReplaced = IsPathReplaced(pathNew);
 
-        // Neither of the filepaths are replaced
-        if (!isOldFilepathReplaced && !isNewFilepathReplaced)
+        // Neither of the paths are replaced
+        if (!isOldPathReplaced && !isNewPathReplaced)
             return mgrRes->ioctl(ISFSIoctl::Rename, in, in_len, io, io_len);
 
-        char* efsOldFilepath = efsFilepath;
-        char* efsNewFilepath = efsFilepath2;
+        char* efsOldPath = s_efsPath;
+        char* efsNewPath = s_efsPath2;
 
         // Rename from NAND to EFS file
-        if (!isOldFilepathReplaced && isNewFilepathReplaced) {
+        if (!isOldPathReplaced && isNewPathReplaced) {
             // Check if the file is already open somewhere
             int openFd = FindOpenFileDescriptor(pathNew);
 
             s32 ret;
             if (openFd < 0 || openFd >= static_cast<int>(sFileArray.size())) {
                 // File is not open
-                if (!GetReplacedFilepath(
-                      pathNew, efsNewFilepath, EFS_MAX_PATH_LEN))
+                if (!GetRedirectedPath(pathNew, efsNewPath, EFS_MAX_PATH_LEN))
                     return ISFSError::Invalid;
 
                 FIL destFil;
                 auto fret =
-                  f_open(&destFil, efsNewFilepath, FA_WRITE | FA_CREATE_ALWAYS);
+                  f_open(&destFil, efsNewPath, FA_WRITE | FA_CREATE_ALWAYS);
                 if (fret != FR_OK)
                     return FResultToISFSError(fret);
 
@@ -1069,28 +1053,28 @@ static s32 ReqIoctl(
         }
 
         // Other way not supported (yet?)
-        if (isOldFilepathReplaced ^ isNewFilepathReplaced) {
+        if (isOldPathReplaced ^ isNewPathReplaced) {
             return ISFSError::Invalid;
         }
 
-        // Both of the filepaths are replaced
+        // Both of the paths are replaced
 
-        // Get the replaced filepaths
-        if (!GetReplacedFilepath(pathOld, efsOldFilepath, EFS_MAX_PATH_LEN) ||
-            !GetReplacedFilepath(pathNew, efsNewFilepath, EFS_MAX_PATH_LEN))
+        // Get the replaced paths
+        if (!GetRedirectedPath(pathOld, efsOldPath, EFS_MAX_PATH_LEN) ||
+            !GetRedirectedPath(pathNew, efsNewPath, EFS_MAX_PATH_LEN))
             return ISFSError::Invalid;
 
-        const FRESULT fresult = f_rename(efsOldFilepath, efsNewFilepath);
+        const FRESULT fresult = f_rename(efsOldPath, efsNewPath);
         if (fresult != FR_OK) {
             PRINT(IOS_EmuFS, ERROR,
               "Rename: Failed to rename file or directory '%s' to '%s'",
-              efsOldFilepath, efsNewFilepath);
+              efsOldPath, efsNewPath);
             return FResultToISFSError(fresult);
         }
 
         PRINT(IOS_EmuFS, INFO,
           "Rename: Successfully renamed file or directory '%s' to '%s'",
-          efsOldFilepath, efsNewFilepath);
+          efsOldPath, efsNewPath);
 
         return ISFSError::OK;
     }
@@ -1112,24 +1096,24 @@ static s32 ReqIoctl(
 
         PRINT(IOS_EmuFS, INFO, "CreateFile: ISFS_CreateFile(\"%s\")", path);
 
-        // Check if the filepath is valid
-        if (!IsFilepathValid(path))
+        // Check if the path is valid
+        if (!IsPathValid(path))
             return ISFSError::Invalid;
 
-        // Check if the filepath should be replaced
-        if (!IsReplacedFilepath(path))
+        // Check if the path should be replaced
+        if (!IsPathReplaced(path))
             return mgrRes->ioctl(ISFSIoctl::CreateFile, in, in_len, io, io_len);
 
-        // Get the replaced filepath
-        if (!GetReplacedFilepath(path, efsFilepath, sizeof(efsFilepath)))
+        // Get the replaced path
+        if (!GetRedirectedPath(path, s_efsPath, sizeof(s_efsPath)))
             return ISFSError::Invalid;
 
         FIL fil;
         const FRESULT fresult =
-          f_open(&fil, efsFilepath, FA_CREATE_NEW | FA_READ | FA_WRITE);
+          f_open(&fil, s_efsPath, FA_CREATE_NEW | FA_READ | FA_WRITE);
         if (fresult != FR_OK) {
             PRINT(IOS_EmuFS, ERROR, "CreateFile: Failed to create file '%s'",
-              efsFilepath);
+              s_efsPath);
             return FResultToISFSError(fresult);
         }
 
@@ -1142,7 +1126,7 @@ static s32 ReqIoctl(
         }
 
         PRINT(IOS_EmuFS, INFO, "CreateFile: Successfully created file '%s'",
-          efsFilepath);
+          s_efsPath);
 
         return ISFSError::OK;
     }
@@ -1161,9 +1145,9 @@ static s32 ReqIoctl(
     }
 }
 
-/*
+/**
  * Handles filesystem ioctlv commands.
- * Returns: ISFSError result.
+ * @returns ISFSError result.
  */
 static s32 ReqIoctlv(
   s32 fd, ISFSIoctl cmd, u32 in_count, u32 out_count, IOS::Vector* vec)
@@ -1391,16 +1375,16 @@ static s32 ReqIoctlv(
             outCountPtr = reinterpret_cast<u32*>(vec[1].data);
         }
 
-        // Check if the filepath should be replaced
-        if (!IsReplacedFilepath(path))
+        // Check if the path should be replaced
+        if (!IsPathReplaced(path))
             return mgrRes->ioctlv(ISFSIoctl::ReadDir, in_count, out_count, vec);
 
-        // Get the replaced filepath
-        if (!GetReplacedFilepath(path, efsFilepath, sizeof(efsFilepath)))
+        // Get the replaced path
+        if (!GetRedirectedPath(path, s_efsPath, sizeof(s_efsPath)))
             return ISFSError::Invalid;
 
         DIR dir;
-        auto fret = f_opendir(&dir, efsFilepath);
+        auto fret = f_opendir(&dir, s_efsPath);
         if (fret != FR_OK) {
             PRINT(IOS_EmuFS, ERROR,
               "ReadDir: Failed to open replaced directory: %d", fret);
@@ -1558,7 +1542,7 @@ static s32 OpenReplaced(IOS::Request* req)
         return IOSError::NotFound;
     }
 
-    if (IsReplacedFilepath(path)) {
+    if (IsPathReplaced(path)) {
         return ReqProxyOpen(path, req->open.mode);
     }
 
@@ -1707,12 +1691,13 @@ s32 ThreadEntry([[maybe_unused]] void* arg)
         abort();
     }
 
-    IPCLog::sInstance->Notify();
+    IPCLog::s_instance->Notify();
     while (true) {
         IOS::Request* req = queue.receive();
         IOS_ResourceReply(reinterpret_cast<IOSRequest*>(req), IPCRequest(req));
     }
-    /* Can never reach here */
+
+    // Can never reach here
     return 0;
 }
 

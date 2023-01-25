@@ -10,7 +10,7 @@
 class Input
 {
 public:
-    static Input* sInstance;
+    static Input* s_instance;
 
     Input();
 

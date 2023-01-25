@@ -62,12 +62,12 @@ static DI::DIError WriteOutputStruct(void* out, u32 outLen, const T* data)
       out, outLen, reinterpret_cast<const void*>(data), sizeof(T));
 }
 
-/*
+/**
  * IOCTL for the emulated disc drive.
- * block: Input DVD command
- * cmd: IOCTL number
- * out: Output buffer
- * outLen: Length of the output buffer
+ * @param[in] block Input DVD command.
+ * @param[in] cmd IOCTL number.
+ * @param[out] out Output buffer.
+ * @param outLen Length of the output buffer.
  */
 static DI::DIError EmuIoctl(
   DVDCommand* block, DI::DIIoctl cmd, void* out, u32 outLen)
@@ -87,7 +87,7 @@ static DI::DIError EmuIoctl(
             return DI::DIError::Security;
         }
 
-        return DI::sInstance->Inquiry(reinterpret_cast<DI::DriveInfo*>(out));
+        return DI::s_instance->Inquiry(reinterpret_cast<DI::DriveInfo*>(out));
     }
 
     case DI::DIIoctl::GetStatusRegister: {
@@ -184,13 +184,13 @@ static DI::DIError EmuIoctl(
     }
 }
 
-/*
+/**
  * IOCTLV for the emulated disc drive.
- * block: Input DVD command
- * cmd: IOCTL number
- * inCount: Input vector count
- * ioCount: Output buffer count
- * vec: I/O vectors
+ * @param[in] block Input DVD command.
+ * @param[in] cmd IOCTL number.
+ * @param[in] inCount Input vector count.
+ * @param[out] ioCount Output buffer count.
+ * @param[in,out] vec I/O vectors.
  */
 static DI::DIError EmuIoctlv(DVDCommand* block, DI::DIIoctl cmd, u32 inCount,
   u32 ioCount, IOS::Vector* vec)
@@ -251,18 +251,18 @@ static DI::DIError EmuIoctlv(DVDCommand* block, DI::DIIoctl cmd, u32 inCount,
     }
 }
 
-/*
+/**
  * Open a patch file by its identifier.
- * fp: (out) FATFS file pointer
- * patch: (in) DVD patch to open
+ * @param[out] fp FATFS file pointer
+ * @param[in] patch DVD patch to open.
  */
 static void OpenPatchFile(FIL* fp, DVDPatch* patch)
 {
     memset(fp, 0, sizeof(FIL));
 
     // Get FATFS object
-    auto devId = DeviceMgr::sInstance->DRVToDevID(patch->drv);
-    auto fatfs = DeviceMgr::sInstance->GetFilesystem(devId);
+    auto devId = DeviceMgr::s_instance->DRVToDevID(patch->drv);
+    auto fatfs = DeviceMgr::s_instance->GetFilesystem(devId);
 
     fp->obj.fs = fatfs;
     fp->obj.id = fatfs->id;
@@ -285,11 +285,11 @@ static inline u32 SearchPatch(u32 offset)
         if (offset > p_start) {
             if (p_end > offset)
                 return k;
-            /* Move right */
+            // Move right
             j = k + 1;
             i--;
         }
-        /* offset < p_start */
+        // offset < p_start
     }
     return DiNumPatches;
 }
@@ -306,7 +306,7 @@ static s32 RealRead(void* outbuf, u32 offset, u32 length)
           EmuIoctl(&rblock, DI::DIIoctl::Read, outbuf, length));
     }
 
-    return static_cast<s32>(DI::sInstance->Read(outbuf, length, offset));
+    return static_cast<s32>(DI::s_instance->Read(outbuf, length, offset));
 }
 
 static inline bool IsPatchedOffset(u32 wordOffset)
@@ -318,16 +318,15 @@ static s32 Read(u8* outbuf, u32 offset, u32 length)
 {
     if (!IsPatchedOffset(offset)) {
         if (!IsPatchedOffset(offset + (length >> 2) - 1)) {
-            /* Not patched read, forward to real DI */
+            // Not patched read, forward to real DI
             return RealRead(outbuf, offset, length);
         }
-        /*
-         * Part DVD read, part SD read
-         */
+
+        // Part DVD read, part SD read
         const s32 ret = RealRead(outbuf, offset, (0x80000000 - offset) << 2);
         if (ret != DI_EOK) {
-            PRINT(IOS_EmuDI, ERROR, "DI_Read: Partial read failed: %d", ret);
-            /* If it fails, just memset 0 the output buffer */
+            PRINT(IOS_EmuDI, ERROR, "Partial read failed: %d", ret);
+            // If it fails, just memset 0 the output buffer
             memset(outbuf, 0, (0x80000000 - offset) << 2);
         }
 
@@ -336,10 +335,9 @@ static s32 Read(u8* outbuf, u32 offset, u32 length)
     }
 
     for (u32 idx = SearchPatch(offset); length != 0; idx++) {
-        PRINT(
-          IOS_EmuDI, INFO, "DI_Read: Read patch %d of %d", idx, DiNumPatches);
+        PRINT(IOS_EmuDI, INFO, "Read patch %d of %d", idx, DiNumPatches);
         if (idx >= DiNumPatches) {
-            PRINT(IOS_EmuDI, WARN, "DI_Read: Out of bounds DVD read");
+            PRINT(IOS_EmuDI, WARN, "Out of bounds DVD read");
             memset(outbuf, 0, length);
             return DI_EOK; // Just success, I guess?
         }
@@ -352,7 +350,7 @@ static s32 Read(u8* outbuf, u32 offset, u32 length)
             const FRESULT fret =
               f_lseek(&f, (offset - DiPatches[idx].disc_offset) << 2);
             if (fret != FR_OK) {
-                PRINT(IOS_EmuDI, ERROR, "DI_Read: FS_LSeek failed: %d", fret);
+                PRINT(IOS_EmuDI, ERROR, "FS_LSeek failed: %d", fret);
                 abort();
             }
             read_len -= (offset - DiPatches[idx].disc_offset) << 2;
@@ -361,10 +359,10 @@ static s32 Read(u8* outbuf, u32 offset, u32 length)
         if (read_len > length)
             read_len = length;
         UINT read = 0;
-        PRINT(IOS_EmuDI, INFO, "doing read!");
+
         const FRESULT fret = f_read(&f, outbuf, read_len, &read);
         if (fret != FR_OK) {
-            PRINT(IOS_EmuDI, ERROR, "DI_Read: FS_Read failed: %d", fret);
+            PRINT(IOS_EmuDI, ERROR, "FS_Read failed: %d", fret);
             memset(outbuf + read, 0, read_len - read);
         }
 
@@ -376,7 +374,7 @@ static s32 Read(u8* outbuf, u32 offset, u32 length)
     return DI_EOK;
 }
 
-/*
+/**
  * Handle DI IOCTLs for patched games, returning false forwards the command to
  * the actual disc image.
  */
@@ -415,10 +413,8 @@ static bool DI_DoNewIOCTL(IOSRequest* req)
 
     switch (req->ioctl.cmd) {
     case DI_PROXY_IOCTL_PATCHDVD: {
-        /*
-         * Assuming patches are valid, this could only
-         * be called from secure code
-         */
+        // Assuming patches are valid, this could only be called from secure
+        // code
         if (GameStarted)
             return false;
         if (req->ioctl.in_len == 0) {
@@ -494,7 +490,7 @@ static inline void ReqIoctl(IOSRequest* req)
     }
 
     // Real drive
-    const s32 ret = IOS_Ioctl(DI::sInstance->GetFd(), req->ioctl.cmd,
+    const s32 ret = IOS_Ioctl(DI::s_instance->GetFd(), req->ioctl.cmd,
       req->ioctl.in, req->ioctl.in_len, req->ioctl.io, req->ioctl.io_len);
     IOS_ResourceReply(req, ret);
 }
@@ -521,7 +517,7 @@ static inline void ReqIoctlv(IOSRequest* req)
     }
 
     // Real drive
-    const s32 ret = IOS_Ioctlv(DI::sInstance->GetFd(), req->ioctlv.cmd,
+    const s32 ret = IOS_Ioctlv(DI::s_instance->GetFd(), req->ioctlv.cmd,
       req->ioctlv.in_count, req->ioctlv.io_count, req->ioctlv.vec);
     IOS_ResourceReply(req, ret);
 }
@@ -542,14 +538,14 @@ void HandleRequest(IOSRequest* req)
         ReqIoctlv(req);
         break;
 
-    /* Reply from forwarded commands */
+    // Reply from forwarded commands
     case IOS_IPC_REPLY:
         IOS_ResourceReply(req, req->result);
         break;
 
     default:
         PRINT(IOS_EmuDI, ERROR, "Received unhandled command: %d", req->cmd);
-        /* Real DI just... does not reply to unknown commands? [check] */
+        // Real DI just... does not reply to unknown commands?
         break;
     }
 }
@@ -564,29 +560,26 @@ s32 ThreadEntry([[maybe_unused]] void* arg)
 
     s32 ret = IOS_CreateMessageQueue(__diMsgData, 8);
     if (ret < 0) {
-        PRINT(IOS_EmuDI, ERROR,
-          "DI_ThreadEntry: IOS_CreateMessageQueue failed: %d", ret);
+        PRINT(IOS_EmuDI, ERROR, "IOS_CreateMessageQueue failed: %d", ret);
         abort();
     }
     DiMsgQueue = ret;
 
     ret = IOS_RegisterResourceManager("~dev/di", DiMsgQueue);
     if (ret != IOS_SUCCESS) {
-        PRINT(IOS_EmuDI, ERROR,
-          "DI_ThreadEntry: IOS_RegisterResourceManager failed: %d", ret);
+        PRINT(IOS_EmuDI, ERROR, "IOS_RegisterResourceManager failed: %d", ret);
         abort();
     }
 
     PRINT(IOS_EmuDI, INFO, "DI started");
 
     DiStarted = true;
-    IPCLog::sInstance->Notify();
+    IPCLog::s_instance->Notify();
     while (1) {
         IOSRequest* req;
         ret = IOS_ReceiveMessage(DiMsgQueue, (u32*) &req, 0);
         if (ret != IOS_SUCCESS) {
-            PRINT(IOS_EmuDI, ERROR,
-              "DI_ThreadEntry: IOS_ReceiveMessage failed: %d", ret);
+            PRINT(IOS_EmuDI, ERROR, "IOS_ReceiveMessage failed: %d", ret);
             abort();
         }
 

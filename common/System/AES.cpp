@@ -5,4 +5,4 @@
 
 #include "AES.hpp"
 
-AES* AES::sInstance = nullptr;
+AES* AES::s_instance = nullptr;

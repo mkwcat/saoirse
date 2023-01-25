@@ -10,7 +10,7 @@
 #include <System/Config.hpp>
 #include <System/Types.h>
 
-DeviceMgr* DeviceMgr::sInstance;
+DeviceMgr* DeviceMgr::s_instance;
 
 DeviceMgr::DeviceMgr()
 {
@@ -21,8 +21,8 @@ DeviceMgr::DeviceMgr()
     bool ret = SDCard::Open();
     assert(ret);
 
-    USB::sInstance = new USB(0);
-    ret = USB::sInstance->Init();
+    USB::s_instance = new USB(0);
+    ret = USB::s_instance->Init();
     assert(ret);
 
     // Reset everything to default.
@@ -231,7 +231,7 @@ void DeviceMgr::Run()
     auto usbDevices = (USB::DeviceEntry*) IOS::Alloc(
       sizeof(USB::DeviceEntry) * USB::MaxDevices);
     IOS::Request usbReq = {};
-    if (!USB::sInstance->EnqueueDeviceChange(
+    if (!USB::s_instance->EnqueueDeviceChange(
           usbDevices, &m_timerQueue, &usbReq))
         USBFatal();
 
@@ -246,7 +246,7 @@ void DeviceMgr::Run()
             u32 count = req->result;
             USBChange(usbDevices, count);
             usbReq = {};
-            if (!USB::sInstance->EnqueueDeviceChange(
+            if (!USB::s_instance->EnqueueDeviceChange(
                   usbDevices, &m_timerQueue, &usbReq))
                 USBFatal();
         }
@@ -332,7 +332,7 @@ void DeviceMgr::USBChange(USB::DeviceEntry* devices, u32 count)
         m_usbDevices[j].usbId = devices[i].devId;
         m_usbDevices[j].intId = DeviceCount; // Invalid
 
-        if (USB::sInstance->Attach(devices[i].devId) != USB::USBError::OK) {
+        if (USB::s_instance->Attach(devices[i].devId) != USB::USBError::OK) {
             PRINT(IOS_DevMgr, ERROR, "Failed to attach device %X",
               devices[i].devId);
             continue;
@@ -341,7 +341,7 @@ void DeviceMgr::USBChange(USB::DeviceEntry* devices, u32 count)
         USB::DeviceInfo info;
         u8 alt = 0;
         for (; alt < devices[i].altSetCount; alt++)
-            if (USB::sInstance->GetDeviceInfo(devices[i].devId, &info, alt) ==
+            if (USB::s_instance->GetDeviceInfo(devices[i].devId, &info, alt) ==
                 USB::USBError::OK)
                 break;
         if (alt == devices[i].altSetCount) {
@@ -375,7 +375,7 @@ void DeviceMgr::USBChange(USB::DeviceEntry* devices, u32 count)
         PRINT(IOS_DevMgr, INFO, "Using device %u", k);
 
         auto dev = &m_devices[k];
-        dev->disk = USBStorage(USB::sInstance, info);
+        dev->disk = USBStorage(USB::s_instance, info);
 
         m_usbDevices[j].intId = k;
         dev->inserted = true;
@@ -442,7 +442,7 @@ void DeviceMgr::UpdateHandle(u32 devId)
             dev->enabled = false;
         }
 
-        IPCLog::sInstance->NotifyDeviceRemoval(devId);
+        IPCLog::s_instance->NotifyDeviceRemoval(devId);
     }
 
     if (dev->inserted && !dev->mounted && !dev->error) {
@@ -470,13 +470,13 @@ void DeviceMgr::UpdateHandle(u32 devId)
         dev->error = false;
 
         // Open log file if it's enabled
-        if (!m_logEnabled && Config::sInstance->IsFileLogEnabled() &&
+        if (!m_logEnabled && Config::s_instance->IsFileLogEnabled() &&
             std::holds_alternative<SDCard>(dev->disk)) {
             m_logDevice = devId;
             OpenLogFile();
         }
 
-        IPCLog::sInstance->NotifyDeviceInsertion(devId);
+        IPCLog::s_instance->NotifyDeviceInsertion(devId);
     }
 }
 

@@ -72,7 +72,7 @@ ISO::~ISO()
 
 bool ISO::IsInserted()
 {
-    return DeviceMgr::sInstance->IsInserted(m_devId);
+    return DeviceMgr::s_instance->IsInserted(m_devId);
 }
 
 bool ISO::ReadRaw(void* buffer, u32 wordOffset, u32 byteLen)
@@ -151,7 +151,7 @@ bool ISO::ReadAndDecryptBlock(u32 wordOffset)
     }
 
     // Decrypt the block using the unique title key
-    s32 ret = AES::sInstance->Decrypt(m_titleKey, &m_dataBlock[0x3D0],
+    s32 ret = AES::s_instance->Decrypt(m_titleKey, &m_dataBlock[0x3D0],
       &m_dataBlock[BlockHeaderSize], BlockDataSize, m_dataBlockDecrypted);
     assert(ret == IOSError::OK);
     return true;
@@ -312,7 +312,7 @@ DI::DIError ISO::OpenPartition(u32 wordOffset, ES::TMDFixed<512>* tmdOut)
     u8 iv[16] = {0};
     memcpy(iv, &m_partition.ticket.info.titleID, 8);
 
-    auto ret2 = AES::sInstance->Decrypt(
+    auto ret2 = AES::s_instance->Decrypt(
       key, iv, titleKeyBuffer, sizeof(titleKeyBuffer), titleKeyBuffer);
     assert(ret2 == IOSError::OK);
     memcpy(m_titleKey, titleKeyBuffer, 16);

@@ -78,7 +78,7 @@ extern "C" char* IOSOpenStrncpy(char* dest, const char* src, u32 num, s32 pid)
     }
 
     // ISFS path
-    if (Config::sInstance->IsISFSPathReplaced(src))
+    if (Config::s_instance->IsISFSPathReplaced(src))
         dest[0] = '$';
 
     return dest;
@@ -258,10 +258,11 @@ bool IsWiiU()
     return (read32(0x0D8005A0) >> 16) == 0xCAFE;
 }
 
-// Credit: marcan
-// https://fail0verflow.com/blog/2013/espresso/
 bool ResetEspresso(u32 entry)
 {
+    // Credit: marcan
+    // https://fail0verflow.com/blog/2013/espresso/
+
     PRINT(IOS, WARN, "Resetting Espresso...");
 
     DASSERT(IsWiiU());

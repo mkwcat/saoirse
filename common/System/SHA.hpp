@@ -11,7 +11,7 @@
 class SHA
 {
 public:
-    static SHA* sInstance;
+    static SHA* s_instance;
 
     struct Context {
         u32 state[5];
@@ -45,7 +45,7 @@ public:
         return Command(SHAIoctl::Init, ctx, nullptr, 0, nullptr);
     }
 
-    /*
+    /**
      * Update hash in the SHA-1 context.
      */
     s32 Update(Context* ctx, const void* data, u32 len)
@@ -53,7 +53,7 @@ public:
         return Command(SHAIoctl::Update, ctx, data, len, nullptr);
     }
 
-    /*
+    /**
      * Finalize the SHA-1 context and get the result hash.
      */
     s32 Final(Context* ctx, u8* hashOut)
@@ -61,7 +61,7 @@ public:
         return Command(SHAIoctl::Final, ctx, nullptr, 0, hashOut);
     }
 
-    /*
+    /**
      * Finalize the SHA-1 context and get the result hash.
      */
     s32 Final(Context* ctx, const void* data, u32 len, u8* hashOut)
@@ -72,20 +72,20 @@ public:
         return Command(SHAIoctl::Final, ctx, data, len, hashOut);
     }
 
-    /*
+    /**
      * Quick full hash calculate.
      */
     static s32 Calculate(const void* data, u32 len, u8* hashOut)
     {
-        ASSERT(sInstance != nullptr);
+        ASSERT(s_instance != nullptr);
 
         Context ctx PPC_ALIGN;
 
-        s32 ret = sInstance->Init(&ctx);
+        s32 ret = s_instance->Init(&ctx);
         if (ret != IOSError::OK)
             return ret;
 
-        return sInstance->Final(&ctx, data, len, hashOut);
+        return s_instance->Final(&ctx, data, len, hashOut);
     }
 
 private:

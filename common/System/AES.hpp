@@ -11,7 +11,7 @@
 class AES
 {
 public:
-    static AES* sInstance;
+    static AES* s_instance;
 
 private:
     enum class AESIoctl {
@@ -20,8 +20,15 @@ private:
     };
 
 public:
-    /*
+    /**
      * AES-128 CBC encrypt a block using the AES hardware engine.
+     * @param[in] key 128-bit AES encryption key.
+     * @param[in,out] iv 128-bit AES initialization vector.
+     * @param[in] input Pointer to input data.
+     * @param[in] size Input/output data size in bytes. Cannot be larger than
+     * 0x10000.
+     * @param[out] output Pointer to output data. Can be the same as the input
+     * pointer.
      */
     s32 Encrypt(
       const u8* key, u8* iv, const void* input, u32 size, void* output)
@@ -38,8 +45,15 @@ public:
         return m_rm.ioctlv(AESIoctl::Encrypt, vec);
     }
 
-    /*
+    /**
      * AES-128 CBC decrypt a block using the AES hardware engine.
+     * @param[in] key 128-bit AES encryption key.
+     * @param[in,out] iv 128-bit AES initialization vector.
+     * @param[in] input Pointer to input data.
+     * @param[in] size Input/output data size in bytes. Cannot be larger than
+     * 0x10000.
+     * @param[out] output Pointer to output data. Can be the same as the input
+     * pointer.
      */
     s32 Decrypt(
       const u8* key, u8* iv, const void* input, u32 size, void* output)

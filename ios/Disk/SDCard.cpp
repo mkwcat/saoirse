@@ -1,5 +1,5 @@
 /*
- * sdcard.cpp - Wii SD Card slot I/O
+ * SDCard.cpp - Wii SD Card slot I/O
  *
  * wiisd.c from libogc:
  * Copyright (c) 2008

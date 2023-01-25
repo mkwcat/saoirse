@@ -61,13 +61,13 @@ void LoaderAssertFail(int line)
     }
 }
 
-static s32 gFileRMQueue = -1;
-static bool gIsOpened = false;
+static s32 s_fileRMQueue = -1;
+static bool s_isOpened = false;
 
 // Memory file information.
-static u8* gFileAddr = nullptr;
-static u32 gFileSize = 0;
-static u32 gFilePos = 0;
+static u8* s_fileAddr = nullptr;
+static u32 s_fileSize = 0;
+static u32 s_filePos = 0;
 
 static s32 ReqOpen(const char* path, u32 mode)
 {
@@ -77,7 +77,7 @@ static s32 ReqOpen(const char* path, u32 mode)
     }
 
     // Check if the device has already been opened.
-    if (gIsOpened) {
+    if (s_isOpened) {
         return ISFSError::Locked;
     }
 
@@ -87,7 +87,7 @@ static s32 ReqOpen(const char* path, u32 mode)
         return ISFSError::Invalid;
     }
 
-    gIsOpened = true;
+    s_isOpened = true;
     return 0;
 }
 
@@ -95,7 +95,7 @@ static s32 ReqClose(s32 fd)
 {
     LOADER_ASSERT(fd == 0);
 
-    gIsOpened = false;
+    s_isOpened = false;
     return IOSError::OK;
 }
 
@@ -104,10 +104,10 @@ static s32 ReqRead(s32 fd, void* data, u32 len)
     LOADER_ASSERT(fd == 0);
 
     // Check if the size overflows.
-    if (gFilePos + len > gFileSize) {
+    if (s_filePos + len > s_fileSize) {
         LOADER_PRINT(ERROR,
-          "Read off the end of the file (size: 0x%X, read: 0x%X)", gFileSize,
-          gFilePos + len);
+          "Read off the end of the file (size: 0x%X, read: 0x%X)", s_fileSize,
+          s_filePos + len);
         return ISFSError::Invalid;
     }
 
@@ -115,8 +115,8 @@ static s32 ReqRead(s32 fd, void* data, u32 len)
     LOADER_PRINT(INFO, "Enter memcpy");
 
     // Read from the memory file.
-    memcpy(data, gFileAddr + gFilePos, len);
-    gFilePos += len;
+    memcpy(data, s_fileAddr + s_filePos, len);
+    s_filePos += len;
     LOADER_PRINT(INFO, "Exit memcpy");
 
     return len;
@@ -136,15 +136,15 @@ static s32 ReqSeek(s32 fd, s32 where, s32 whence)
 
     switch (whence) {
     case NAND_SEEK_SET:
-        gFilePos = where;
+        s_filePos = where;
         break;
 
     case NAND_SEEK_CUR:
-        gFilePos += where;
+        s_filePos += where;
         break;
 
     case NAND_SEEK_END:
-        gFilePos = gFileSize + where;
+        s_filePos = s_fileSize + where;
         break;
 
     default:
@@ -152,8 +152,8 @@ static s32 ReqSeek(s32 fd, s32 where, s32 whence)
         return ISFSError::Invalid;
     }
 
-    LOADER_PRINT(INFO, "Seeked to position 0x%X", gFilePos);
-    return gFilePos;
+    LOADER_PRINT(INFO, "Seeked to position 0x%X", s_filePos);
+    return s_filePos;
 }
 
 static s32 ReqIoctl(
@@ -175,8 +175,8 @@ static s32 ReqIoctl(
 
     // In case the output buffer is not aligned (somehow), memcpy into it.
     IOS::File::Stat stats;
-    stats.size = gFileSize;
-    stats.pos = gFilePos;
+    stats.size = s_fileSize;
+    stats.pos = s_filePos;
     LOADER_PRINT(INFO, "ISFS_GetFileStats: size: 0x%08X, pos: 0x%08X",
       stats.size, stats.pos);
     memcpy(io, &stats, sizeof(stats));
@@ -228,13 +228,13 @@ static s32 FileRMThreadEntry([[maybe_unused]] void* arg)
 {
     LOADER_PRINT(INFO, "File RM thread entry");
 
-    gFileSize = read32(0x11000004);
-    gFileAddr = reinterpret_cast<u8*>(0x11000020);
+    s_fileSize = read32(0x11000004);
+    s_fileAddr = reinterpret_cast<u8*>(0x11000020);
 
     while (true) {
         IOSRequest* req;
         s32 ret =
-          IOS_ReceiveMessage(gFileRMQueue, reinterpret_cast<u32*>(&req), 0);
+          IOS_ReceiveMessage(s_fileRMQueue, reinterpret_cast<u32*>(&req), 0);
         LOADER_ASSERT(ret == IOSError::OK);
 
         // Error to reply to the request with.
@@ -247,7 +247,7 @@ static s32 FileRMThreadEntry([[maybe_unused]] void* arg)
 
         // First request should always be IOS_Open, so this will always be true
         // if the file is opened.
-        if (!gIsOpened)
+        if (!s_isOpened)
             break;
     }
 
@@ -271,7 +271,7 @@ static s32 LoaderThreadEntry([[maybe_unused]] void* arg)
     LOADER_PRINT(INFO, "Registered resource manager");
 
     // Pass on the queue to another thread to handle the file operations.
-    gFileRMQueue = queue;
+    s_fileRMQueue = queue;
 
     // New stack derived from current stack pointer.
     u32 stackTop = round_down(GetStackPointer() - 0x400, 32);
@@ -302,16 +302,16 @@ static s32 LoaderThreadEntry([[maybe_unused]] void* arg)
 
 static s32 IPCLogThreadEntry([[maybe_unused]] void* arg)
 {
-    IPCLog::sInstance->Run();
+    IPCLog::s_instance->Run();
     // Will return on close.
-    delete IPCLog::sInstance;
+    delete IPCLog::s_instance;
     return 0;
 }
 
 static void MakeIPCLog()
 {
     // Create and enable the IPC log.
-    IPCLog::sInstance = new IPCLog();
+    IPCLog::s_instance = new IPCLog();
     Log::ipcLogEnabled = true;
 
     // New stack pointer derived from current stack.

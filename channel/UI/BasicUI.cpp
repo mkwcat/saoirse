@@ -17,7 +17,7 @@ LIBOGC_SUCKS_BEGIN
 #include <wiiuse/wpad.h>
 LIBOGC_SUCKS_END
 
-BasicUI* BasicUI::sInstance;
+BasicUI* BasicUI::s_instance;
 
 struct OptionDisplay {
     const char* title;
@@ -25,19 +25,19 @@ struct OptionDisplay {
 };
 
 OptionDisplay options[] = {
-    {
-        "Start Game",
-        BasicUI::OptionType::StartGame,
-    },
-    {
-        "Exit",
-        BasicUI::OptionType::Exit,
-    },
+  {
+    "Start Game",
+    BasicUI::OptionType::StartGame,
+  },
+  {
+    "Exit",
+    BasicUI::OptionType::Exit,
+  },
 };
 
 static int GetOptionCount()
 {
-    return (OptionDisplay*)((u32)(&options) + sizeof(options)) - options;
+    return (OptionDisplay*) ((u32) (&options) + sizeof(options)) - options;
 }
 
 BasicUI::BasicUI()
@@ -61,7 +61,7 @@ void BasicUI::InitVideo()
 
     // Initialize debug console.
     console_init(m_xfbConsole, 20, 20, m_rmode->fbWidth, m_rmode->xfbHeight,
-                 m_rmode->fbWidth * VI_DISPLAY_PIX_SZ);
+      m_rmode->fbWidth * VI_DISPLAY_PIX_SZ);
 
     // Configure render mode.
     VIDEO_Configure(m_rmode);
@@ -102,9 +102,9 @@ void BasicUI::Loop()
             OnSelect(options[m_selectedOption].type);
         }
 
-        Input::sInstance->ScanButton();
-        u32 buttonDown = Input::sInstance->GetButtonDown();
-        u32 buttonUp = Input::sInstance->GetButtonUp();
+        Input::s_instance->ScanButton();
+        u32 buttonDown = Input::s_instance->GetButtonDown();
+        u32 buttonUp = Input::s_instance->GetButtonUp();
 
         if (buttonDown & Input::BTN_DEBUG) {
             // Switch XFB to console.
@@ -154,8 +154,8 @@ void BasicUI::DrawTitle()
         return;
     }
 
-    DebugPrint_Printf(3, 3, "Game ID: %.6s           ",
-                      (const char*)0x80000000);
+    DebugPrint_Printf(
+      3, 3, "Game ID: %.6s           ", (const char*) 0x80000000);
 }
 
 BasicUI::OptionStatus BasicUI::GetOptionStatus(OptionType opt)
@@ -220,8 +220,8 @@ void BasicUI::DrawOptions()
         }
 
         DebugPrint_Printf(line, 3, "%c %s %s",
-                          m_cursorEnabled && m_selectedOption == i ? '>' : ' ',
-                          options[i].title, statusStr);
+          m_cursorEnabled && m_selectedOption == i ? '>' : ' ',
+          options[i].title, statusStr);
 
         line++;
     }
@@ -232,7 +232,7 @@ void BasicUI::UpdateOptions()
     if (!m_cursorEnabled)
         return;
 
-    u32 btn = Input::sInstance->GetButtonDown();
+    u32 btn = Input::s_instance->GetButtonDown();
 
     if (btn & Input::BTN_UP) {
         for (int selection = m_selectedOption - 1;

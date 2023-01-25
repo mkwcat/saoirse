@@ -82,7 +82,7 @@ struct VFile {
     u8 m_data[TSize];
 };
 
-/*
+/**
  * Performs an IOS exploit and branches to the entrypoint in system mode.
  *
  * Exploit summary:
@@ -171,7 +171,7 @@ void IOSBoot::LaunchSaoirseIOS()
     PRINT(Core, INFO, "IOSBoot::Launch result: %d", ret);
 
     if (ret == IOSError::OK) {
-        IPCLog::sInstance = new IPCLog();
+        IPCLog::s_instance = new IPCLog();
     }
 
 #ifdef IOS_LAUNCH_FAIL_DEBUG
@@ -369,7 +369,7 @@ void IOSBoot::DebugLaunchReport()
     DebugCodeDump(0x13620000);
 }
 
-IOSBoot::IPCLog* IOSBoot::IPCLog::sInstance;
+IOSBoot::IPCLog* IOSBoot::IPCLog::s_instance;
 
 void IOSBoot::IPCLog::startGameIOS()
 {

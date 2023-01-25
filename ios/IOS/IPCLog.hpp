@@ -10,7 +10,7 @@
 class IPCLog
 {
 public:
-    static IPCLog* sInstance;
+    static IPCLog* s_instance;
 
     static constexpr int printSize = 256;
 
