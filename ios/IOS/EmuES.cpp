@@ -1,7 +1,6 @@
 // EmuFS.cpp - Proxy ES RM
 //   Written by Palapeli
 //
-// Copyright (C) 2022 Team Saoirse
 // SPDX-License-Identifier: MIT
 
 #include "EmuES.hpp"
@@ -36,8 +35,8 @@ ES::ESError DIVerify(u64 titleID, const ES::Ticket* ticket)
 /*
  * Handles ES ioctlv commands.
  */
-static ES::ESError ReqIoctlv(ES::ESIoctl cmd, u32 inCount, u32 outCount,
-                             IOS::Vector* vec)
+static ES::ESError ReqIoctlv(
+  ES::ESIoctl cmd, u32 inCount, u32 outCount, IOS::Vector* vec)
 {
     if (inCount >= 32 || outCount >= 32)
         return ES::ESError::Invalid;
@@ -57,7 +56,7 @@ static ES::ESError ReqIoctlv(ES::ESIoctl cmd, u32 inCount, u32 outCount,
 
         if (vec[0].len != sizeof(u32) || !aligned(vec[0].data, 4)) {
             PRINT(IOS_EmuES, ERROR,
-                  "GetDeviceID: Wrong device ID size or alignment");
+              "GetDeviceID: Wrong device ID size or alignment");
             return ES::ESError::Invalid;
         }
 
@@ -72,13 +71,13 @@ static ES::ESError ReqIoctlv(ES::ESIoctl cmd, u32 inCount, u32 outCount,
 
         if (vec[0].len != sizeof(u64) || !aligned(vec[0].data, 4)) {
             PRINT(IOS_EmuES, ERROR,
-                  "LaunchTitle: Wrong title ID size or alignment");
+              "LaunchTitle: Wrong title ID size or alignment");
             return ES::ESError::Invalid;
         }
 
         if (vec[1].len != sizeof(ES::TicketView) || !aligned(vec[1].data, 4)) {
             PRINT(IOS_EmuES, ERROR,
-                  "LaunchTitle: Wrong ticket view size or alignment");
+              "LaunchTitle: Wrong ticket view size or alignment");
             return ES::ESError::Invalid;
         }
 
@@ -89,7 +88,7 @@ static ES::ESError ReqIoctlv(ES::ESIoctl cmd, u32 inCount, u32 outCount,
         if (Config::sInstance->BlockIOSReload() && u64Hi(titleID) == 1 &&
             u64Lo(titleID) != 2) {
             PRINT(IOS_EmuES, WARN,
-                  "LaunchTitle: Attempt to launch IOS title %016llX", titleID);
+              "LaunchTitle: Attempt to launch IOS title %016llX", titleID);
             titleID = 0x0000000100000002;
             auto ret = ES::sInstance->GetTicketViews(titleID, 1, &view);
             assert(ret == ES::ESError::OK);
@@ -107,12 +106,12 @@ static ES::ESError ReqIoctlv(ES::ESIoctl cmd, u32 inCount, u32 outCount,
 
         if (vec[0].len != sizeof(u32) || !aligned(vec[0].data, 4)) {
             PRINT(IOS_EmuES, ERROR,
-                  "GetOwnedTitlesCount: Wrong count vector size or alignment");
+              "GetOwnedTitlesCount: Wrong count vector size or alignment");
             return ES::ESError::Invalid;
         }
 
         return ES::sInstance->GetOwnedTitlesCount(
-            reinterpret_cast<u32*>(vec[0].data));
+          reinterpret_cast<u32*>(vec[0].data));
     }
 
     case ES::ESIoctl::GetTitlesCount: {
@@ -123,12 +122,12 @@ static ES::ESError ReqIoctlv(ES::ESIoctl cmd, u32 inCount, u32 outCount,
 
         if (vec[0].len != sizeof(u32) || !aligned(vec[0].data, 4)) {
             PRINT(IOS_EmuES, ERROR,
-                  "GetTitlesCount: Wrong count vector size or alignment");
+              "GetTitlesCount: Wrong count vector size or alignment");
             return ES::ESError::Invalid;
         }
 
         return ES::sInstance->GetTitlesCount(
-            reinterpret_cast<u32*>(vec[0].data));
+          reinterpret_cast<u32*>(vec[0].data));
     }
 
     case ES::ESIoctl::GetTitles: {
@@ -139,7 +138,7 @@ static ES::ESError ReqIoctlv(ES::ESIoctl cmd, u32 inCount, u32 outCount,
 
         if (vec[0].len != sizeof(u32) || !aligned(vec[0].data, 4)) {
             PRINT(IOS_EmuES, ERROR,
-                  "GetTitles: Wrong count vector size or alignment");
+              "GetTitles: Wrong count vector size or alignment");
             return ES::ESError::Invalid;
         }
 
@@ -148,38 +147,37 @@ static ES::ESError ReqIoctlv(ES::ESIoctl cmd, u32 inCount, u32 outCount,
 
         if (vec[1].len != count * sizeof(u64) || !aligned(vec[1].data, 4)) {
             PRINT(IOS_EmuES, ERROR,
-                  "GetTitles: Wrong title ID vector size or alignment");
+              "GetTitles: Wrong title ID vector size or alignment");
             return ES::ESError::Invalid;
         }
 
-        return ES::sInstance->GetTitles((u32)count,
-                                        reinterpret_cast<u64*>(vec[1].data));
+        return ES::sInstance->GetTitles(
+          (u32) count, reinterpret_cast<u64*>(vec[1].data));
     }
 
     case ES::ESIoctl::GetTitleContentsCount: {
         if (inCount != 1 || outCount != 1) {
-            PRINT(IOS_EmuES, ERROR,
-                  "GetTitleContentsCount: Wrong vector count");
+            PRINT(
+              IOS_EmuES, ERROR, "GetTitleContentsCount: Wrong vector count");
             return ES::ESError::Invalid;
         }
 
         if (vec[0].len != sizeof(u64) || !aligned(vec[0].data, 4)) {
             PRINT(IOS_EmuES, ERROR,
-                  "GetTitleContentsCount: Wrong title ID size or alignment");
+              "GetTitleContentsCount: Wrong title ID size or alignment");
             return ES::ESError::Invalid;
         }
 
         u64 titleID = *reinterpret_cast<u64*>(vec[0].data);
 
         if (vec[1].len != sizeof(u32) || !aligned(vec[1].data, 4)) {
-            PRINT(
-                IOS_EmuES, ERROR,
-                "GetTitleContentsCount: Wrong count vector size or alignment");
+            PRINT(IOS_EmuES, ERROR,
+              "GetTitleContentsCount: Wrong count vector size or alignment");
             return ES::ESError::Invalid;
         }
 
         return ES::sInstance->GetTitleContentsCount(
-            titleID, reinterpret_cast<u32*>(vec[1].data));
+          titleID, reinterpret_cast<u32*>(vec[1].data));
     }
 
     case ES::ESIoctl::GetTitleContents: {
@@ -190,7 +188,7 @@ static ES::ESError ReqIoctlv(ES::ESIoctl cmd, u32 inCount, u32 outCount,
 
         if (vec[0].len != sizeof(u64) || !aligned(vec[0].data, 4)) {
             PRINT(IOS_EmuES, ERROR,
-                  "GetTitleContents: Wrong title ID size or alignment");
+              "GetTitleContents: Wrong title ID size or alignment");
             return ES::ESError::Invalid;
         }
 
@@ -198,7 +196,7 @@ static ES::ESError ReqIoctlv(ES::ESIoctl cmd, u32 inCount, u32 outCount,
 
         if (vec[1].len != sizeof(u32) || !aligned(vec[1].data, 4)) {
             PRINT(IOS_EmuES, ERROR,
-                  "GetTitleContents: Wrong count vector size or alignment");
+              "GetTitleContents: Wrong count vector size or alignment");
             return ES::ESError::Invalid;
         }
 
@@ -207,12 +205,12 @@ static ES::ESError ReqIoctlv(ES::ESIoctl cmd, u32 inCount, u32 outCount,
 
         if (vec[2].len != count * sizeof(u32) || !aligned(vec[2].data, 4)) {
             PRINT(IOS_EmuES, ERROR,
-                  "GetTitleContents: Wrong content vector size or alignment");
+              "GetTitleContents: Wrong content vector size or alignment");
             return ES::ESError::Invalid;
         }
 
         return ES::sInstance->GetTitleContents(
-            titleID, (u32)count, reinterpret_cast<u32*>(vec[1].data));
+          titleID, (u32) count, reinterpret_cast<u32*>(vec[1].data));
     }
 
     case ES::ESIoctl::GetNumTicketViews: {
@@ -223,7 +221,7 @@ static ES::ESError ReqIoctlv(ES::ESIoctl cmd, u32 inCount, u32 outCount,
 
         if (vec[0].len != sizeof(u64) || !aligned(vec[0].data, 4)) {
             PRINT(IOS_EmuES, ERROR,
-                  "GetNumTicketViews: Wrong title ID size or alignment");
+              "GetNumTicketViews: Wrong title ID size or alignment");
             return ES::ESError::Invalid;
         }
 
@@ -231,12 +229,12 @@ static ES::ESError ReqIoctlv(ES::ESIoctl cmd, u32 inCount, u32 outCount,
 
         if (vec[1].len != sizeof(u32) || !aligned(vec[1].data, 4)) {
             PRINT(IOS_EmuES, ERROR,
-                  "GetNumTicketViews: Wrong count vector size or alignment");
+              "GetNumTicketViews: Wrong count vector size or alignment");
             return ES::ESError::Invalid;
         }
 
         return ES::sInstance->GetNumTicketViews(
-            titleID, reinterpret_cast<u32*>(vec[1].data));
+          titleID, reinterpret_cast<u32*>(vec[1].data));
     }
 
     case ES::ESIoctl::GetTicketViews: {
@@ -247,7 +245,7 @@ static ES::ESError ReqIoctlv(ES::ESIoctl cmd, u32 inCount, u32 outCount,
 
         if (vec[0].len != sizeof(u64) || !aligned(vec[0].data, 4)) {
             PRINT(IOS_EmuES, ERROR,
-                  "GetTicketViews: Wrong title ID size or alignment");
+              "GetTicketViews: Wrong title ID size or alignment");
             return ES::ESError::Invalid;
         }
 
@@ -255,7 +253,7 @@ static ES::ESError ReqIoctlv(ES::ESIoctl cmd, u32 inCount, u32 outCount,
 
         if (vec[1].len != sizeof(u32) || !aligned(vec[1].data, 4)) {
             PRINT(IOS_EmuES, ERROR,
-                  "GetTicketViews: Wrong count vector size or alignment");
+              "GetTicketViews: Wrong count vector size or alignment");
             return ES::ESError::Invalid;
         }
 
@@ -265,12 +263,12 @@ static ES::ESError ReqIoctlv(ES::ESIoctl cmd, u32 inCount, u32 outCount,
         if (vec[2].len != count * sizeof(ES::TicketView) ||
             !aligned(vec[2].data, 4)) {
             PRINT(IOS_EmuES, ERROR,
-                  "GetTicketViews: Wrong ticket view vector size or alignment");
+              "GetTicketViews: Wrong ticket view vector size or alignment");
             return ES::ESError::Invalid;
         }
 
         return ES::sInstance->GetTicketViews(
-            titleID, count, reinterpret_cast<ES::TicketView*>(vec[2].data));
+          titleID, count, reinterpret_cast<ES::TicketView*>(vec[2].data));
     }
 
     case ES::ESIoctl::GetTMDViewSize: {
@@ -281,7 +279,7 @@ static ES::ESError ReqIoctlv(ES::ESIoctl cmd, u32 inCount, u32 outCount,
 
         if (vec[0].len != sizeof(u64) || !aligned(vec[0].data, 4)) {
             PRINT(IOS_EmuES, ERROR,
-                  "GetTMDViewSize: Wrong title ID size or alignment");
+              "GetTMDViewSize: Wrong title ID size or alignment");
             return ES::ESError::Invalid;
         }
 
@@ -289,12 +287,12 @@ static ES::ESError ReqIoctlv(ES::ESIoctl cmd, u32 inCount, u32 outCount,
 
         if (vec[1].len != sizeof(u32) || !aligned(vec[1].data, 4)) {
             PRINT(IOS_EmuES, ERROR,
-                  "GetTMDViewSize: Wrong size vector size or alignment");
+              "GetTMDViewSize: Wrong size vector size or alignment");
             return ES::ESError::Invalid;
         }
 
         return ES::sInstance->GetTMDViewSize(
-            titleID, reinterpret_cast<u32*>(vec[1].data));
+          titleID, reinterpret_cast<u32*>(vec[1].data));
     }
 
     case ES::ESIoctl::GetTMDView: {
@@ -304,8 +302,8 @@ static ES::ESError ReqIoctlv(ES::ESIoctl cmd, u32 inCount, u32 outCount,
         }
 
         if (vec[0].len != sizeof(u64) || !aligned(vec[0].data, 4)) {
-            PRINT(IOS_EmuES, ERROR,
-                  "GetTMDView: Wrong title ID size or alignment");
+            PRINT(
+              IOS_EmuES, ERROR, "GetTMDView: Wrong title ID size or alignment");
             return ES::ESError::Invalid;
         }
 
@@ -317,7 +315,7 @@ static ES::ESError ReqIoctlv(ES::ESIoctl cmd, u32 inCount, u32 outCount,
         }
 
         return ES::sInstance->GetTMDView(
-            titleID, reinterpret_cast<u32*>(vec[1].data), vec[1].len);
+          titleID, reinterpret_cast<u32*>(vec[1].data), vec[1].len);
     }
 
     case ES::ESIoctl::DIGetTicketView: {
@@ -331,16 +329,15 @@ static ES::ESError ReqIoctlv(ES::ESIoctl cmd, u32 inCount, u32 outCount,
         if (vec[0].len != 0) {
             if (vec[0].len != sizeof(ES::Ticket) || !aligned(vec[0].data, 4)) {
                 PRINT(IOS_EmuES, ERROR,
-                      "DIGetTicketView: Wrong input ticket size or alignment");
+                  "DIGetTicketView: Wrong input ticket size or alignment");
                 return ES::ESError::Invalid;
             }
             ticket = reinterpret_cast<ES::Ticket*>(vec[0].data);
         }
 
         if (vec[1].len != sizeof(ES::TicketView) || !aligned(vec[0].data, 4)) {
-            PRINT(
-                IOS_EmuES, ERROR,
-                "DIGetTicketView: Wrong output ticket view size or alignment");
+            PRINT(IOS_EmuES, ERROR,
+              "DIGetTicketView: Wrong output ticket view size or alignment");
             return ES::ESError::Invalid;
         }
 
@@ -348,7 +345,7 @@ static ES::ESError ReqIoctlv(ES::ESIoctl cmd, u32 inCount, u32 outCount,
             ticket = &s_ticket;
 
         return ES::sInstance->DIGetTicketView(
-            ticket, reinterpret_cast<ES::TicketView*>(vec[1].data));
+          ticket, reinterpret_cast<ES::TicketView*>(vec[1].data));
     }
 
     case ES::ESIoctl::GetDataDir: {
@@ -358,8 +355,8 @@ static ES::ESError ReqIoctlv(ES::ESIoctl cmd, u32 inCount, u32 outCount,
         }
 
         if (vec[0].len != sizeof(u64) || !aligned(vec[0].data, 4)) {
-            PRINT(IOS_EmuES, ERROR,
-                  "GetDataDir: Wrong title ID size or alignment");
+            PRINT(
+              IOS_EmuES, ERROR, "GetDataDir: Wrong title ID size or alignment");
             return ES::ESError::Invalid;
         }
 
@@ -370,8 +367,8 @@ static ES::ESError ReqIoctlv(ES::ESIoctl cmd, u32 inCount, u32 outCount,
             return ES::ESError::Invalid;
         }
 
-        return ES::sInstance->GetDataDir(titleID,
-                                         reinterpret_cast<char*>(vec[1].data));
+        return ES::sInstance->GetDataDir(
+          titleID, reinterpret_cast<char*>(vec[1].data));
     }
 
     case ES::ESIoctl::GetDeviceCert: {
@@ -382,7 +379,7 @@ static ES::ESError ReqIoctlv(ES::ESIoctl cmd, u32 inCount, u32 outCount,
 
         if (vec[0].len != 0x180 || !aligned(vec[0].data, 4)) {
             PRINT(IOS_EmuES, ERROR,
-                  "GetDeviceCert: Wrong device cert size or alignment");
+              "GetDeviceCert: Wrong device cert size or alignment");
             return ES::ESError::Invalid;
         }
 
@@ -396,8 +393,8 @@ static ES::ESError ReqIoctlv(ES::ESIoctl cmd, u32 inCount, u32 outCount,
         }
 
         if (vec[0].len != sizeof(u64) || !aligned(vec[0].data, 4)) {
-            PRINT(IOS_EmuES, ERROR,
-                  "GetTitleID: Wrong title ID size or alignment");
+            PRINT(
+              IOS_EmuES, ERROR, "GetTitleID: Wrong title ID size or alignment");
             return ES::ESError::Invalid;
         }
 
@@ -410,8 +407,8 @@ static ES::ESError ReqIoctlv(ES::ESIoctl cmd, u32 inCount, u32 outCount,
     }
 
     default:
-        PRINT(IOS_EmuES, ERROR, "Invalid ioctlv cmd: %d",
-              static_cast<s32>(cmd));
+        PRINT(
+          IOS_EmuES, ERROR, "Invalid ioctlv cmd: %d", static_cast<s32>(cmd));
         return ES::ESError::Invalid;
     }
 }
@@ -429,9 +426,9 @@ static s32 IPCRequest(IOS::Request* req)
         return IOSError::OK;
 
     case IOS::Command::Ioctlv:
-        return static_cast<s32>(ReqIoctlv(
-            static_cast<ES::ESIoctl>(req->ioctlv.cmd), req->ioctlv.in_count,
-            req->ioctlv.io_count, req->ioctlv.vec));
+        return static_cast<s32>(
+          ReqIoctlv(static_cast<ES::ESIoctl>(req->ioctlv.cmd),
+            req->ioctlv.in_count, req->ioctlv.io_count, req->ioctlv.vec));
 
     default:
         PRINT(IOS_EmuES, ERROR, "Invalid cmd: %d", static_cast<s32>(req->cmd));

@@ -1,7 +1,6 @@
 // Hollywood.hpp - Wii Hardware I/O
 //   Written by Palapeli
 //
-// Copyright (C) 2022 Team Saoirse
 // SPDX-License-Identifier: MIT
 
 #pragma once
@@ -16,8 +15,7 @@ constexpr u32 HW_BASE_TRUSTED = 0x0D800000;
 // The 0x00800000 bit gets masked out when PPC tries to access the trusted base.
 
 // ACR (Hollywood Registers)
-enum class ACRReg
-{
+enum class ACRReg {
     IPC_PPCMSG = 0x000,
     IPC_PPCCTRL = 0x004,
     IPC_ARMMSG = 0x008,
@@ -51,8 +49,7 @@ enum class ACRReg
 };
 
 // Bit fields for SRNPROT
-enum class ACRSRNPROTBit
-{
+enum class ACRSRNPROTBit {
     // Enables the AES engine access to SRAM
     AESEN = 0x01,
     // Enables the SHA-1 engine access to SRAM
@@ -69,8 +66,7 @@ enum class ACRSRNPROTBit
 };
 
 // Bit fields for BUSPROT
-enum class ACRBUSPROTBit : u32
-{
+enum class ACRBUSPROTBit : u32 {
     // Flash/NAND Engine PPC; Set/cleared by syscall_54
     PPCFLAEN = 0x00000002,
     // AES Engine PPC; Set/cleared by syscall_54
@@ -115,8 +111,7 @@ enum class ACRBUSPROTBit : u32
 };
 
 // GPIO pin connections
-enum class GPIOPin
-{
+enum class GPIOPin {
     POWER = 0x000001,
     SHUTDOWN = 0x000002,
     FAN = 0x000004,
@@ -145,8 +140,7 @@ enum class GPIOPin
 };
 
 // HW_RESETS flags
-enum class ACRResetLine
-{
+enum class ACRResetLine {
     // System reset
     RSTBINB = 0x0000001,
     // CRST reset?
@@ -250,21 +244,21 @@ static inline bool GPIOBRead(GPIOPin pin)
 static inline void GPIOBWrite(GPIOPin pin, bool flag)
 {
     ACRMask(ACRReg::GPIOB_OUT, static_cast<u32>(pin),
-            flag ? static_cast<u32>(pin) : 0);
+      flag ? static_cast<u32>(pin) : 0);
 }
 
 // Read from a GPIO pin owned by IOP.
 static inline bool GPIORead(GPIOPin pin)
 {
-    return static_cast<bool>(ACRReadTrusted(ACRReg::GPIO_IN) &
-                             static_cast<u32>(pin));
+    return static_cast<bool>(
+      ACRReadTrusted(ACRReg::GPIO_IN) & static_cast<u32>(pin));
 }
 
 // Write to a GPIO pin owned by IOP.
 static inline void GPIOWrite(GPIOPin pin, bool flag)
 {
     ACRMaskTrusted(ACRReg::GPIO_OUT, static_cast<u32>(pin),
-                   flag ? static_cast<u32>(pin) : 0);
+      flag ? static_cast<u32>(pin) : 0);
 }
 
 // Assert or deassert a reset line.
@@ -272,7 +266,7 @@ static inline void GPIOWrite(GPIOPin pin, bool flag)
 static inline void ACRReset(ACRResetLine line, bool flag)
 {
     ACRMaskTrusted(ACRReg::RESETS, static_cast<u32>(line),
-                   flag ? static_cast<u32>(line) : 0);
+      flag ? static_cast<u32>(line) : 0);
 }
 
 // Get the status of a reset line.
@@ -286,8 +280,8 @@ static inline bool ACRCheckReset(ACRResetLine line)
 // flag: false = off, true = on.
 static inline void ACRSetFlag(ACRSRNPROTBit bit, bool flag)
 {
-    ACRMaskTrusted(ACRReg::SRNPROT, static_cast<u32>(bit),
-                   flag ? static_cast<u32>(bit) : 0);
+    ACRMaskTrusted(
+      ACRReg::SRNPROT, static_cast<u32>(bit), flag ? static_cast<u32>(bit) : 0);
 }
 
 // Get the state of an ACR register flag. Register is determined using bit type.
@@ -301,8 +295,8 @@ static inline bool ACRReadFlag(ACRSRNPROTBit bit)
 // flag: false = off, true = on.
 static inline void ACRSetFlag(ACRBUSPROTBit bit, bool flag)
 {
-    ACRMaskTrusted(ACRReg::BUSPROT, static_cast<u32>(bit),
-                   flag ? static_cast<u32>(bit) : 0);
+    ACRMaskTrusted(
+      ACRReg::BUSPROT, static_cast<u32>(bit), flag ? static_cast<u32>(bit) : 0);
 }
 
 // Get the state of an ACR register flag. Register is determined using bit type.
@@ -313,8 +307,7 @@ static inline bool ACRReadFlag(ACRBUSPROTBit bit)
 }
 
 // Memory Controller Registers
-enum class MEMCRReg
-{
+enum class MEMCRReg {
     // DDR protection enable/disable
     MEM_PROT_DDR = 0xB420A,
     // DDR protection base address

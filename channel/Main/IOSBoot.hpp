@@ -1,7 +1,6 @@
 // IOSBoot.hpp - IOS startup code
 //   Written by Palapeli
 //
-// Copyright (C) 2022 Team Saoirse
 // SPDX-License-Identifier: MIT
 
 #pragma once
@@ -59,6 +58,7 @@ protected:
         Log::IPCLogReply cmd;
         char buffer[256];
     };
+
     Queue<HandlerReq*> m_handlerQueue;
 
     Thread m_thread;

@@ -1,7 +1,6 @@
 // System.hpp - Saoirse IOS system
 //   Written by Palapeli
 //
-// Copyright (C) 2022 Team Saoirse
 // SPDX-License-Identifier: MIT
 
 #pragma once
@@ -69,5 +68,5 @@ void usleep(u32 usec);
 EXTERN_C_END
 
 #define assert(expr)                                                           \
-    (((expr) ? (void)0 : AssertFail(#expr, __FILE__, __LINE__)))
+  (((expr) ? (void) 0 : AssertFail(#expr, __FILE__, __LINE__)))
 #define ASSERT assert

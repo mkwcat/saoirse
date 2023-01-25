@@ -1,7 +1,6 @@
 // ES.hpp - ES interface
 //   Written by Palapeli
 //
-// Copyright (C) 2022 Team Saoirse
 // SPDX-License-Identifier: MIT
 
 #pragma once
@@ -15,8 +14,7 @@ class ES
 public:
     static ES* sInstance;
 
-    enum class ESError : s32
-    {
+    enum class ESError : s32 {
         OK = 0,
         InvalidPubKeyType = -1005,
         ReadError = -1009,
@@ -39,8 +37,7 @@ public:
         NoTMD = -1039,
     };
 
-    enum class ESIoctl
-    {
+    enum class ESIoctl {
         AddTicket = 0x01,
         AddTitleStart = 0x02,
         AddContentStart = 0x03,
@@ -104,14 +101,12 @@ public:
         DeleteStreamKey = 0x3D,
     };
 
-    enum class SigType : u32
-    {
+    enum class SigType : u32 {
         RSA_2048 = 0x00010001,
         RSA_4096 = 0x00010000,
     };
 
-    enum class Region : u16
-    {
+    enum class Region : u16 {
         Japan = 0,
         USA = 1,
         Europe = 2,
@@ -119,19 +114,18 @@ public:
         Korea = 4,
     };
 
-    enum AccessFlag
-    {
+    enum AccessFlag {
         Flag_Hardware = 0x1,
         Flag_DVDVideo = 0x2,
     };
 
     struct TMDContent {
-        enum Flags
-        {
+        enum Flags {
             Flag_Default = 0x1,
             Flag_Normal = 0x4000,
             Flag_DLC = 0x8000,
         };
+
         u32 cid;
         u16 index;
         u16 flags;
@@ -164,10 +158,12 @@ public:
         u16 bootIndex;
         u16 fill2;
     } ATTRIBUTE_PACKED;
+
     static_assert(sizeof(TMDHeader) == 0x1E4);
 
     struct TMD {
         TMDHeader header;
+
         TMDContent* getContents()
         {
             return reinterpret_cast<TMDContent*>(this + 1);
@@ -193,6 +189,7 @@ public:
         u32 tag;
         u32 value;
     } ATTRIBUTE_PACKED;
+
     static_assert(sizeof(TicketLimit) == 0x8);
 
     struct TicketInfo {
@@ -211,6 +208,7 @@ public:
         TicketLimit limits[8];
         u16 fill8;
     } ATTRIBUTE_PACKED;
+
     static_assert(sizeof(TicketInfo) == 0xD4);
 
     struct Ticket {
@@ -223,12 +221,14 @@ public:
         u8 fill3;
         TicketInfo info;
     } ATTRIBUTE_PACKED;
+
     static_assert(sizeof(Ticket) == 0x2A4);
 
     struct TicketView {
         u32 view;
         TicketInfo info;
     } ATTRIBUTE_PACKED;
+
     static_assert(sizeof(TicketView) == 0xD8);
 
 public:

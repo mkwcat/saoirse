@@ -1,7 +1,6 @@
 // AES.hpp - AES engine interface
 //   Written by Palapeli
 //
-// Copyright (C) 2022 Team Saoirse
 // SPDX-License-Identifier: MIT
 
 #pragma once
@@ -15,8 +14,7 @@ public:
     static AES* sInstance;
 
 private:
-    enum class AESIoctl
-    {
+    enum class AESIoctl {
         Encrypt = 2,
         Decrypt = 3,
     };
@@ -25,8 +23,8 @@ public:
     /*
      * AES-128 CBC encrypt a block using the AES hardware engine.
      */
-    s32 Encrypt(const u8* key, u8* iv, const void* input, u32 size,
-                void* output)
+    s32 Encrypt(
+      const u8* key, u8* iv, const void* input, u32 size, void* output)
     {
         IOS::IOVector<2, 2> vec;
         vec.in[0].data = input;
@@ -43,8 +41,8 @@ public:
     /*
      * AES-128 CBC decrypt a block using the AES hardware engine.
      */
-    s32 Decrypt(const u8* key, u8* iv, const void* input, u32 size,
-                void* output)
+    s32 Decrypt(
+      const u8* key, u8* iv, const void* input, u32 size, void* output)
     {
         IOS::IOVector<2, 2> vec;
         vec.in[0].data = input;

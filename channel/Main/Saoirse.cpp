@@ -1,7 +1,6 @@
 // Saoirse.cpp
 //   Written by Palapeli
 //
-// Copyright (C) 2022 Team Saoirse
 // SPDX-License-Identifier: MIT
 
 #include "Saoirse.hpp"
@@ -100,8 +99,8 @@ bool WiiUEnableHoldPower()
     return true;
 }
 
-static void PIErrorHandler([[maybe_unused]] u32 nIrq,
-                           [[maybe_unused]] void* pCtx)
+static void PIErrorHandler(
+  [[maybe_unused]] u32 nIrq, [[maybe_unused]] void* pCtx)
 {
     // u32 cause = read32(0x0C003000); // INTSR
     write32(0x0C003000, 1); // Reset
@@ -113,7 +112,7 @@ static inline bool startupDrive()
 {
     // If ReadDiskID succeeds here, that means the drive is already started
     DI::DIError ret =
-        DI::sInstance->ReadDiskID(reinterpret_cast<DI::DiskID*>(MEM1_BASE));
+      DI::sInstance->ReadDiskID(reinterpret_cast<DI::DiskID*>(MEM1_BASE));
     if (ret == DI::DIError::OK) {
         PRINT(Core, INFO, "Drive is already spinning");
         return true;
@@ -191,7 +190,7 @@ s32 main([[maybe_unused]] s32 argc, [[maybe_unused]] char** argv)
     WiiUEnableHoldPower();
 
     // Start of the game apploader
-    SYS_SetArena1Hi((void*)0x81200000);
+    SYS_SetArena1Hi((void*) 0x81200000);
 
     IOSBoot::Init();
 

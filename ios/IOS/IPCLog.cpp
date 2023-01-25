@@ -1,7 +1,6 @@
 // IPCLog.cpp - IOS to PowerPC logging through IPC
 //   Written by Palapeli
 //
-// Copyright (C) 2022 Team Saoirse
 // SPDX-License-Identifier: MIT
 
 #include "IPCLog.hpp"
@@ -11,7 +10,10 @@
 
 IPCLog* IPCLog::sInstance;
 
-IPCLog::IPCLog() : m_ipcQueue(8), m_responseQueue(1), m_startRequestQueue(1)
+IPCLog::IPCLog()
+  : m_ipcQueue(8)
+  , m_responseQueue(1)
+  , m_startRequestQueue(1)
 {
     s32 ret = IOS_RegisterResourceManager("/dev/saoirse", m_ipcQueue.id());
     if (ret < 0) {
@@ -99,7 +101,7 @@ void IPCLog::HandleRequest(IOS::Request* req)
             }
 
             System::SetTime(*reinterpret_cast<u32*>(req->ioctl.in),
-                            *reinterpret_cast<u64*>(req->ioctl.in + 4));
+              *reinterpret_cast<u64*>(req->ioctl.in + 4));
             req->reply(IOSError::OK);
             break;
 

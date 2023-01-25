@@ -1,7 +1,6 @@
 // USB.hpp - USB2 Device I/O
 //   Written by Palapeli
 //
-// Copyright (C) 2022 Team Saoirse
 // SPDX-License-Identifier: MIT
 
 #pragma once
@@ -14,8 +13,7 @@ class USB
 public:
     static USB* sInstance;
 
-    enum class USBv5Ioctl
-    {
+    enum class USBv5Ioctl {
         GetVersion = 0,
         GetDeviceChange = 1,
         Shutdown = 2,
@@ -33,8 +31,7 @@ public:
         BulkTransfer = 21,
     };
 
-    enum class USBError
-    {
+    enum class USBError {
         /* Results from IOS or the resource manager */
         OK = IOSError::OK,
         NoAccess = IOSError::NoAccess,
@@ -47,19 +44,16 @@ public:
         Halted = -7102,
     };
 
-    enum class ClassCode : u8
-    {
+    enum class ClassCode : u8 {
         HID = 0x03,
         MassStorage = 0x8,
     };
 
-    enum class SubClass : u8
-    {
+    enum class SubClass : u8 {
         MassStorage_SCSI = 0x06,
     };
 
-    enum class Protocol : u8
-    {
+    enum class Protocol : u8 {
         MassStorage_BulkOnly = 0x50,
     };
 
@@ -102,11 +96,13 @@ public:
         u8 ifNum;
         u8 altSetCount;
     };
+
     static_assert(sizeof(DeviceEntry) == 0xC);
 
     struct Input {
         u32 fd;
         u32 heapBuffers;
+
         union {
             struct {
                 u8 requestType;
@@ -163,6 +159,7 @@ public:
         u8 numConfigs;
         u8 _12[0x14 - 0x12];
     };
+
     static_assert(sizeof(DeviceDescriptor) == 0x14);
 
     struct ConfigDescriptor {
@@ -176,6 +173,7 @@ public:
         u8 maxPower;
         u8 _9[0xC - 0x9];
     };
+
     static_assert(sizeof(ConfigDescriptor) == 0xC);
 
     struct InterfaceDescriptor {
@@ -190,6 +188,7 @@ public:
         u8 interface;
         u8 _9[0xC - 0x9];
     };
+
     static_assert(sizeof(InterfaceDescriptor) == 0xC);
 
     struct EndpointDescriptor {
@@ -201,6 +200,7 @@ public:
         u8 interval;
         u8 _7[0x8 - 0x7];
     };
+
     static_assert(sizeof(EndpointDescriptor) == 0x8);
 
     struct DeviceInfo {
@@ -211,6 +211,7 @@ public:
         InterfaceDescriptor interface;
         EndpointDescriptor endpoint[16];
     };
+
     static_assert(sizeof(DeviceInfo) == 0xC0);
 
     USB(s32 id);
@@ -231,8 +232,8 @@ public:
      * devices - Output device entries, must have USB::MaxDevices entries,
      * 32-bit aligned, MEM2 virtual = physical address.
      */
-    bool EnqueueDeviceChange(DeviceEntry* devices, Queue<IOS::Request*>* queue,
-                             IOS::Request* req);
+    bool EnqueueDeviceChange(
+      DeviceEntry* devices, Queue<IOS::Request*>* queue, IOS::Request* req);
 
     /*
      * Get USB descriptors for a device.
@@ -244,8 +245,7 @@ public:
      */
     USBError Attach(u32 devId);
 
-    enum class State
-    {
+    enum class State {
         Suspend = 0,
         Resume = 1,
     };
@@ -266,8 +266,8 @@ public:
      */
     USBError ReadIntrMsg(u32 devId, u8 endpoint, u16 length, void* data)
     {
-        return IntrBulkMsg(devId, USBv5Ioctl::IntrTransfer, endpoint, length,
-                           data);
+        return IntrBulkMsg(
+          devId, USBv5Ioctl::IntrTransfer, endpoint, length, data);
     }
 
     /*
@@ -275,15 +275,15 @@ public:
      */
     USBError ReadBulkMsg(u32 devId, u8 endpoint, u16 length, void* data)
     {
-        return IntrBulkMsg(devId, USBv5Ioctl::BulkTransfer, endpoint, length,
-                           data);
+        return IntrBulkMsg(
+          devId, USBv5Ioctl::BulkTransfer, endpoint, length, data);
     }
 
     /*
      * Read control message on the device.
      */
     USBError ReadCtrlMsg(u32 devId, u8 requestType, u8 request, u16 value,
-                         u16 index, u16 length, void* data)
+      u16 index, u16 length, void* data)
     {
         return CtrlMsg(devId, requestType, request, value, index, length, data);
     }
@@ -293,8 +293,8 @@ public:
      */
     USBError WriteIntrMsg(u32 devId, u8 endpoint, u16 length, void* data)
     {
-        return IntrBulkMsg(devId, USBv5Ioctl::IntrTransfer, endpoint, length,
-                           data);
+        return IntrBulkMsg(
+          devId, USBv5Ioctl::IntrTransfer, endpoint, length, data);
     }
 
     /*
@@ -302,25 +302,25 @@ public:
      */
     USBError WriteBulkMsg(u32 devId, u8 endpoint, u16 length, void* data)
     {
-        return IntrBulkMsg(devId, USBv5Ioctl::BulkTransfer, endpoint, length,
-                           data);
+        return IntrBulkMsg(
+          devId, USBv5Ioctl::BulkTransfer, endpoint, length, data);
     }
 
     /*
      * Read control message on the device.
      */
     USBError WriteCtrlMsg(u32 devId, u8 requestType, u8 request, u16 value,
-                          u16 index, u16 length, void* data)
+      u16 index, u16 length, void* data)
     {
         return CtrlMsg(devId, requestType, request, value, index, length, data);
     }
 
 private:
     USBError CtrlMsg(u32 devId, u8 requestType, u8 request, u16 value,
-                     u16 index, u16 length, void* data);
+      u16 index, u16 length, void* data);
 
-    USBError IntrBulkMsg(u32 devId, USBv5Ioctl ioctl, u8 endpoint, u16 length,
-                         void* data);
+    USBError IntrBulkMsg(
+      u32 devId, USBv5Ioctl ioctl, u8 endpoint, u16 length, void* data);
 
     IOS::ResourceCtrl<USBv5Ioctl> ven{-1};
     Thread m_thread;

@@ -1,6 +1,5 @@
 // USBStorage.hpp
 //
-// Copyright (C) 2022 Team Saoirse
 // SPDX-License-Identifier: MIT
 
 #pragma once
@@ -13,15 +12,14 @@ public:
     USBStorage(USB* usb, USB::DeviceInfo info);
 
 private:
-    enum class USBStorageError
-    {
+    enum class USBStorageError {
         OK = 0,
         USBHalted = int(USB::USBError::Halted),
     };
 
     bool GetLunCount(u8* lunCount);
-    bool SCSITransfer(bool isWrite, u32 size, void* data, u8 lun, u8 cbSize,
-                      void* cb);
+    bool SCSITransfer(
+      bool isWrite, u32 size, void* data, u8 lun, u8 cbSize, void* cb);
     bool TestUnitReady(u8 lun);
     bool Inquiry(u8 lun, u8* type);
     bool InitLun(u8 lun);

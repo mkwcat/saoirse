@@ -1,7 +1,6 @@
 // Syscalls.h - IOS system call definitions
 //   Written by Palapeli
 //
-// Copyright (C) 2022 Team Saoirse
 // SPDX-License-Identifier: MIT
 
 #pragma once
@@ -27,7 +26,7 @@ EXTERN_C_START
 typedef s32 (*IOSThreadProc)(void* arg);
 
 s32 IOS_CreateThread(IOSThreadProc proc, void* arg, u32* stack_top,
-                     u32 stacksize, s32 priority, bool detached);
+  u32 stacksize, s32 priority, bool detached);
 s32 IOS_JoinThread(s32 threadid, void** value);
 s32 IOS_CancelThread(s32 threadid, void* value);
 s32 IOS_GetThreadId(void);
@@ -94,10 +93,12 @@ typedef struct {
 typedef struct {
     u32 cmd;
     s32 result;
+
     union {
         s32 fd;
         s32 handle;
     };
+
     union {
         struct {
             char* path;
@@ -145,16 +146,16 @@ s32 IOS_SeekAsync(s32 fd, s32 where, s32 whence, s32 queue_id, IOSRequest* msg);
 s32 IOS_Read(s32 fd, void* buf, s32 len);
 s32 IOS_ReadAsync(s32 fd, void* buf, s32 len, s32 queue_id, IOSRequest* msg);
 s32 IOS_Write(s32 fd, const void* buf, s32 len);
-s32 IOS_WriteAsync(s32 fd, const void* buf, s32 len, s32 queue_id,
-                   IOSRequest* msg);
+s32 IOS_WriteAsync(
+  s32 fd, const void* buf, s32 len, s32 queue_id, IOSRequest* msg);
 
 s32 IOS_Ioctl(s32 fd, u32 command, void* in, u32 in_len, void* io, u32 io_len);
 s32 IOS_IoctlAsync(s32 fd, u32 command, void* in, u32 in_len, void* io,
-                   u32 io_len, s32 queue_id, IOSRequest* msg);
+  u32 io_len, s32 queue_id, IOSRequest* msg);
 
 s32 IOS_Ioctlv(s32 fd, u32 command, u32 in_cnt, u32 out_cnt, IOVector* vec);
 s32 IOS_IoctlvAsync(s32 fd, u32 command, u32 in_cnt, u32 out_cnt, IOVector* vec,
-                    s32 queue_id, IOSRequest* msg);
+  s32 queue_id, IOSRequest* msg);
 
 s32 IOS_RegisterResourceManager(const char* device, s32 queue_id);
 s32 IOS_ResourceReply(const IOSRequest* request, s32 reply);

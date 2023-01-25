@@ -1,7 +1,6 @@
 // Input.cpp - User input manager
 //   Written by Palapeli
 //
-// Copyright (C) 2022 Team Saoirse
 // SPDX-License-Identifier: MIT
 
 #include "Input.hpp"
@@ -77,7 +76,7 @@ u32 Input::GetButtonRaw()
     if (down & PAD_BUTTON_RIGHT || wiimotedown & WPAD_BUTTON_RIGHT)
         result |= BTN_RIGHT;
 
-    if (down & PAD_BUTTON_A  || wiimotedown & WPAD_BUTTON_A)
+    if (down & PAD_BUTTON_A || wiimotedown & WPAD_BUTTON_A)
         result |= BTN_SELECT;
 
     if (down & PAD_BUTTON_B || wiimotedown & WPAD_BUTTON_B)

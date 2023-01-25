@@ -1,7 +1,6 @@
 // FatFS.cpp - FatFS Disk I/O Layer
 //   Written by Palapeli
 //
-// Copyright (C) 2022 Team Saoirse
 // SPDX-License-Identifier: MIT
 
 #include <Debug/Log.hpp>
@@ -37,8 +36,7 @@ DRESULT disk_read(BYTE pdrv, BYTE* buff, LBA_t sector, UINT count)
     auto devId = DeviceMgr::sInstance->DRVToDevID(pdrv);
 
     if (DeviceMgr::sInstance->DeviceRead(devId, reinterpret_cast<void*>(buff),
-                                         static_cast<u32>(sector),
-                                         static_cast<u32>(count)))
+          static_cast<u32>(sector), static_cast<u32>(count)))
         return RES_OK;
 
     return RES_ERROR;
@@ -48,9 +46,9 @@ DRESULT disk_write(BYTE pdrv, const BYTE* buff, LBA_t sector, UINT count)
 {
     auto devId = DeviceMgr::sInstance->DRVToDevID(pdrv);
 
-    if (DeviceMgr::sInstance->DeviceWrite(
-            devId, reinterpret_cast<const void*>(buff),
-            static_cast<u32>(sector), static_cast<u32>(count)))
+    if (DeviceMgr::sInstance->DeviceWrite(devId,
+          reinterpret_cast<const void*>(buff), static_cast<u32>(sector),
+          static_cast<u32>(count)))
         return RES_OK;
 
     return RES_ERROR;
@@ -79,17 +77,15 @@ DRESULT disk_ioctl(BYTE pdrv, BYTE cmd, void* buff)
 template <class Int>
 constexpr std::tuple<Int, unsigned, unsigned> civil_from_days(Int z) noexcept
 {
-    static_assert(
-        std::numeric_limits<unsigned>::digits >= 18,
-        "This algorithm has not been ported to a 16 bit unsigned integer");
-    static_assert(
-        std::numeric_limits<Int>::digits >= 20,
-        "This algorithm has not been ported to a 16 bit signed integer");
+    static_assert(std::numeric_limits<unsigned>::digits >= 18,
+      "This algorithm has not been ported to a 16 bit unsigned integer");
+    static_assert(std::numeric_limits<Int>::digits >= 20,
+      "This algorithm has not been ported to a 16 bit signed integer");
     z += 719468;
     const Int era = (z >= 0 ? z : z - 146096) / 146097;
     const unsigned doe = static_cast<unsigned>(z - era * 146097); // [0, 146096]
     const unsigned yoe =
-        (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365; // [0, 399]
+      (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365; // [0, 399]
     const Int y = static_cast<Int>(yoe) + era * 400;
     const unsigned doy = doe - (365 * yoe + yoe / 4 - yoe / 100); // [0, 365]
     const unsigned mp = (5 * doy + 2) / 153; // [0, 11]
@@ -116,12 +112,12 @@ DWORD get_fattime()
     auto date = civil_from_days(days);
 
     fattime = {
-        .year = std::get<0>(date) - 1980,
-        .month = std::get<1>(date),
-        .day = std::get<2>(date),
-        .hour = (time32 / 60 / 60) % 24,
-        .minute = (time32 / 60) % 60,
-        .second = time32 % 60,
+      .year = std::get<0>(date) - 1980,
+      .month = std::get<1>(date),
+      .day = std::get<2>(date),
+      .hour = (time32 / 60 / 60) % 24,
+      .minute = (time32 / 60) % 60,
+      .second = time32 % 60,
     };
 
     return *reinterpret_cast<DWORD*>(&fattime);

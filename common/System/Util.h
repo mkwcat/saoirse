@@ -1,77 +1,76 @@
 // Util.h - Common Saoirse utils
 //
-// Copyright (C) 2022 Team Saoirse
 // SPDX-License-Identifier: MIT
 
 #pragma once
 #include "Types.h"
 
 #ifndef ATTRIBUTE_ALIGN
-#define ATTRIBUTE_ALIGN(v) __attribute__((aligned(v)))
+#  define ATTRIBUTE_ALIGN(v) __attribute__((aligned(v)))
 #endif
 #ifndef ATTRIBUTE_PACKED
-#define ATTRIBUTE_PACKED __attribute__((packed))
+#  define ATTRIBUTE_PACKED __attribute__((packed))
 #endif
 #ifndef ATTRIBUTE_TARGET
-#define ATTRIBUTE_TARGET(t) __attribute__((target(#t)))
+#  define ATTRIBUTE_TARGET(t) __attribute__((target(#t)))
 #endif
 #ifndef ATTRIBUTE_SECTION
-#define ATTRIBUTE_SECTION(t) __attribute__((section(#t)))
+#  define ATTRIBUTE_SECTION(t) __attribute__((section(#t)))
 #endif
 #ifndef ATTRIBUTE_NOINLINE
-#define ATTRIBUTE_NOINLINE __attribute__((noinline))
+#  define ATTRIBUTE_NOINLINE __attribute__((noinline))
 #endif
 
 #ifndef TARGET_IOS
-#define PPC_ALIGN ATTRIBUTE_ALIGN(32)
+#  define PPC_ALIGN ATTRIBUTE_ALIGN(32)
 #else
-#define PPC_ALIGN
+#  define PPC_ALIGN
 #endif
 
 #ifdef __cplusplus
-#define EXTERN_C_START extern "C" {
-#define EXTERN_C_END }
+#  define EXTERN_C_START extern "C" {
+#  define EXTERN_C_END }
 #else
-#define EXTERN_C_START
-#define EXTERN_C_END
+#  define EXTERN_C_START
+#  define EXTERN_C_END
 #endif
 
 #define LIBOGC_SUCKS_BEGIN                                                     \
-    _Pragma("GCC diagnostic push")                                             \
-        _Pragma("GCC diagnostic ignored \"-Wpedantic\"")
+  _Pragma("GCC diagnostic push")                                               \
+    _Pragma("GCC diagnostic ignored \"-Wpedantic\"")
 
 #define LIBOGC_SUCKS_END _Pragma("GCC diagnostic pop")
 
 #define ASM(...) asm volatile(#__VA_ARGS__)
 
 #define ASM_FUNCTION(_PROTOTYPE, ...)                                          \
-    __attribute__((naked)) _PROTOTYPE                                          \
-    {                                                                          \
-        ASM(__VA_ARGS__);                                                      \
-    }
+  __attribute__((naked)) _PROTOTYPE                                            \
+  {                                                                            \
+    ASM(__VA_ARGS__);                                                          \
+  }
 
 #ifdef __cplusplus
 template <typename T>
 constexpr T round_up(T num, unsigned int align)
 {
-    u32 raw = (u32)num;
-    return (T)((raw + align - 1) & -align);
+    u32 raw = (u32) num;
+    return (T) ((raw + align - 1) & -align);
 }
 
 template <typename T>
 constexpr T round_down(T num, unsigned int align)
 {
-    u32 raw = (u32)num;
-    return (T)(raw & -align);
+    u32 raw = (u32) num;
+    return (T) (raw & -align);
 }
 
 template <class T>
 constexpr bool aligned(T addr, unsigned int align)
 {
-    return !((u32)addr & (align - 1));
+    return !((u32) addr & (align - 1));
 }
 
-#include <cstddef>
+#  include <cstddef>
 
 template <class T1, class T2>
 constexpr bool check_bounds(T1 bounds, size_t bound_len, T2 buffer, size_t len)
@@ -127,7 +126,7 @@ static inline u32 u64Lo(u64 value)
 
 #ifndef TARGET_IOS
 LIBOGC_SUCKS_BEGIN
-#include <ogc/machine/processor.h>
+#  include <ogc/machine/processor.h>
 LIBOGC_SUCKS_END
 #else
 
@@ -144,60 +143,60 @@ static inline u16 bswap16(u16 val)
 
 static inline u32 _read8(u32 address)
 {
-    return *(vu8*)address;
+    return *(vu8*) address;
 }
 
 static inline u32 _read16(u32 address)
 {
-    return *(vu16*)address;
+    return *(vu16*) address;
 }
 
 static inline u32 _read32(u32 address)
 {
-    return *(vu32*)address;
+    return *(vu32*) address;
 }
 
 static inline void _write8(u32 address, u8 value)
 {
-    *(vu8*)address = value;
+    *(vu8*) address = value;
 }
 
 static inline void _write16(u32 address, u16 value)
 {
-    *(vu16*)address = value;
+    *(vu16*) address = value;
 }
 
 static inline void _write32(u32 address, u32 value)
 {
-    *(vu32*)address = value;
+    *(vu32*) address = value;
 }
 
 static inline void _mask32(u32 address, u32 clear, u32 set)
 {
-    *(vu32*)address = ((*(vu32*)address) & ~clear) | set;
+    *(vu32*) address = ((*(vu32*) address) & ~clear) | set;
 }
 
-#define write8(_ADDRESS, _VALUE) _write8((u32)(_ADDRESS), (u8)(_VALUE))
-#define write16(_ADDRESS, _VALUE) _write16((u32)(_ADDRESS), (u16)(_VALUE))
-#define write32(_ADDRESS, _VALUE) _write32((u32)(_ADDRESS), (u32)(_VALUE))
-#define read8(_ADDRESS) _read8((u32)(_ADDRESS))
-#define read16(_ADDRESS) _read16((u32)(_ADDRESS))
-#define read32(_ADDRESS) _read32((u32)(_ADDRESS))
+#  define write8(_ADDRESS, _VALUE) _write8((u32) (_ADDRESS), (u8) (_VALUE))
+#  define write16(_ADDRESS, _VALUE) _write16((u32) (_ADDRESS), (u16) (_VALUE))
+#  define write32(_ADDRESS, _VALUE) _write32((u32) (_ADDRESS), (u32) (_VALUE))
+#  define read8(_ADDRESS) _read8((u32) (_ADDRESS))
+#  define read16(_ADDRESS) _read16((u32) (_ADDRESS))
+#  define read32(_ADDRESS) _read32((u32) (_ADDRESS))
 
-#define mask32(_ADDRESS, _CLEAR, _SET)                                         \
-    _mask32((u32)(_ADDRESS), (u32)(_CLEAR), (u32)(_SET))
+#  define mask32(_ADDRESS, _CLEAR, _SET)                                       \
+    _mask32((u32) (_ADDRESS), (u32) (_CLEAR), (u32) (_SET))
 
 #endif
 
-#define read16_le(_ADDRESS) bswap16(read16((u32)(_ADDRESS)))
-#define read32_le(_ADDRESS) bswap32(read32((u32)(_ADDRESS)))
+#define read16_le(_ADDRESS) bswap16(read16((u32) (_ADDRESS)))
+#define read32_le(_ADDRESS) bswap32(read32((u32) (_ADDRESS)))
 #define write16_le(_ADDRESS, _VALUE)                                           \
-    write16((u32)(_ADDRESS), bswap16((u16)(_VALUE)))
+  write16((u32) (_ADDRESS), bswap16((u16) (_VALUE)))
 #define write32_le(_ADDRESS, _VALUE)                                           \
-    write32((u32)(_ADDRESS), bswap32((u32)(_VALUE)))
+  write32((u32) (_ADDRESS), bswap32((u32) (_VALUE)))
 
 // libogc doesn't have this for some reason?
 static inline void mask16(u32 address, u16 clear, u16 set)
 {
-    *(vu16*)address = ((*(vu16*)address) & ~clear) | set;
+    *(vu16*) address = ((*(vu16*) address) & ~clear) | set;
 }

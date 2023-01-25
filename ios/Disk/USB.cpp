@@ -1,7 +1,6 @@
 // USB.cpp - USB2 Device I/O
 //   Written by Palapeli
 //
-// Copyright (C) 2022 Team Saoirse
 // SPDX-License-Identifier: MIT
 
 #include "USB.hpp"
@@ -27,7 +26,7 @@ bool USB::Init()
     }
 
     // Check USB RM version.
-    u32* verBuffer = (u32*)IOS::Alloc(32);
+    u32* verBuffer = (u32*) IOS::Alloc(32);
     s32 ret = ven.ioctl(USBv5Ioctl::GetVersion, nullptr, 0, verBuffer, 32);
     u32 ver = verBuffer[0];
     IOS::Free(verBuffer);
@@ -51,8 +50,8 @@ bool USB::Init()
  * devices - Output device entries, must have USB::MaxDevices entries,
  * 32-bit aligned, MEM2 virtual = physical address.
  */
-bool USB::EnqueueDeviceChange(DeviceEntry* devices, Queue<IOS::Request*>* queue,
-                              IOS::Request* req)
+bool USB::EnqueueDeviceChange(
+  DeviceEntry* devices, Queue<IOS::Request*>* queue, IOS::Request* req)
 {
     if (m_reqSent) {
         s32 ret = ven.ioctl(USBv5Ioctl::AttachFinish, nullptr, 0, nullptr, 0);
@@ -64,7 +63,7 @@ bool USB::EnqueueDeviceChange(DeviceEntry* devices, Queue<IOS::Request*>* queue,
 
     m_reqSent = false;
     s32 ret = ven.ioctlAsync(USBv5Ioctl::GetDeviceChange, nullptr, 0, devices,
-                             sizeof(DeviceEntry) * MaxDevices, queue, req);
+      sizeof(DeviceEntry) * MaxDevices, queue, req);
     if (ret != IOSError::OK) {
         PRINT(IOS_USB, ERROR, "GetDeviceChange async error: %d", ret);
         return false;
@@ -79,14 +78,14 @@ bool USB::EnqueueDeviceChange(DeviceEntry* devices, Queue<IOS::Request*>* queue,
  */
 USB::USBError USB::GetDeviceInfo(u32 devId, DeviceInfo* outInfo, u8 alt)
 {
-    u8* input = (u8*)IOS::Alloc(32);
+    u8* input = (u8*) IOS::Alloc(32);
     write32(input, devId);
     write8(input + 0x8, alt);
 
     void* tempInfo = IOS::Alloc(sizeof(DeviceInfo));
 
-    s32 ret = ven.ioctl(USBv5Ioctl::GetDeviceInfo, input, 32, tempInfo,
-                        sizeof(DeviceInfo));
+    s32 ret = ven.ioctl(
+      USBv5Ioctl::GetDeviceInfo, input, 32, tempInfo, sizeof(DeviceInfo));
     memcpy(outInfo, tempInfo, sizeof(DeviceInfo));
 
     IOS::Free(input);
@@ -99,7 +98,7 @@ USB::USBError USB::GetDeviceInfo(u32 devId, DeviceInfo* outInfo, u8 alt)
  */
 USB::USBError USB::Attach(u32 devId)
 {
-    u8* input = (u8*)IOS::Alloc(32);
+    u8* input = (u8*) IOS::Alloc(32);
     write32(input, devId);
 
     s32 ret = ven.ioctl(USBv5Ioctl::Attach, input, 32, nullptr, 0);
@@ -114,7 +113,7 @@ USB::USBError USB::Attach(u32 devId)
  */
 USB::USBError USB::SuspendResume(u32 devId, State state)
 {
-    u8* input = (u8*)IOS::Alloc(32);
+    u8* input = (u8*) IOS::Alloc(32);
     write32(input, devId);
     write8(input + 0xB, state == State::Resume ? 1 : 0);
 
@@ -129,7 +128,7 @@ USB::USBError USB::SuspendResume(u32 devId, State state)
  */
 USB::USBError USB::CancelEndpoint(u32 devId, u8 endpoint)
 {
-    u8* input = (u8*)IOS::Alloc(32);
+    u8* input = (u8*) IOS::Alloc(32);
 
     // Cancel all control messages
     write32(input, devId);
@@ -141,10 +140,10 @@ USB::USBError USB::CancelEndpoint(u32 devId, u8 endpoint)
 }
 
 USB::USBError USB::CtrlMsg(u32 devId, u8 requestType, u8 request, u16 value,
-                           u16 index, u16 length, void* data)
+  u16 index, u16 length, void* data)
 {
     // Must be in a physical = virtual region.
-    assert((u32)data >= 0x10000000 && (u32)data < 0x14000000);
+    assert((u32) data >= 0x10000000 && (u32) data < 0x14000000);
 
     if (!aligned(data, 32))
         return USBError::Invalid;
@@ -153,15 +152,15 @@ USB::USBError USB::CtrlMsg(u32 devId, u8 requestType, u8 request, u16 value,
     if (!length && data)
         return USBError::Invalid;
 
-    Input* msg = (Input*)IOS::Alloc(sizeof(Input));
+    Input* msg = (Input*) IOS::Alloc(sizeof(Input));
     msg->fd = devId;
     msg->ctrl = {
-        .requestType = requestType,
-        .request = request,
-        .value = value,
-        .index = index,
-        .length = length,
-        .data = data,
+      .requestType = requestType,
+      .request = request,
+      .value = value,
+      .index = index,
+      .length = length,
+      .data = data,
     };
 
     s32 ret;
@@ -193,11 +192,11 @@ USB::USBError USB::CtrlMsg(u32 devId, u8 requestType, u8 request, u16 value,
     return static_cast<USBError>(ret);
 }
 
-USB::USBError USB::IntrBulkMsg(u32 devId, USBv5Ioctl ioctl, u8 endpoint,
-                               u16 length, void* data)
+USB::USBError USB::IntrBulkMsg(
+  u32 devId, USBv5Ioctl ioctl, u8 endpoint, u16 length, void* data)
 {
     // Must be in a physical = virtual region.
-    assert((u32)data >= 0x10000000 && (u32)data < 0x14000000);
+    assert((u32) data >= 0x10000000 && (u32) data < 0x14000000);
 
     if (!aligned(data, 32))
         return USBError::Invalid;
@@ -206,21 +205,21 @@ USB::USBError USB::IntrBulkMsg(u32 devId, USBv5Ioctl ioctl, u8 endpoint,
     if (!length && data)
         return USBError::Invalid;
 
-    Input* msg = (Input*)IOS::Alloc(sizeof(Input));
+    Input* msg = (Input*) IOS::Alloc(sizeof(Input));
     msg->fd = devId;
 
     if (ioctl == USBv5Ioctl::IntrTransfer) {
         msg->intr = {
-            .data = data,
-            .length = length,
-            .endpoint = endpoint,
+          .data = data,
+          .length = length,
+          .endpoint = endpoint,
         };
     } else if (ioctl == USBv5Ioctl::BulkTransfer) {
         msg->bulk = {
-            .data = data,
-            .length = length,
-            .pad = {0},
-            .endpoint = endpoint,
+          .data = data,
+          .length = length,
+          .pad = {0},
+          .endpoint = endpoint,
         };
     } else {
         IOS::Free(msg);

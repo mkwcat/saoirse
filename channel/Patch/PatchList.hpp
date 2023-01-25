@@ -1,7 +1,6 @@
 // PatchList.hpp - Game patch list
 //   Written by Palapeli
 //
-// Copyright (C) 2022 Team Saoirse
 // SPDX-License-Identifier: MIT
 
 #pragma once
@@ -12,15 +11,13 @@
 class PatchList
 {
 public:
-    enum class PatchError
-    {
+    enum class PatchError {
         OK,
         MemoryOutOfBounds,
         EmptyPatch,
     };
 
-    enum class BranchType
-    {
+    enum class BranchType {
         B,
         BL,
     };

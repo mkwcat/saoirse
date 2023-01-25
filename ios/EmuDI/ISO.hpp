@@ -1,7 +1,6 @@
 // ISO.hpp - ISO virtual disc
 //   Written by Palapeli
 //
-// Copyright (C) 2022 Team Saoirse
 // SPDX-License-Identifier: MIT
 
 #pragma once
@@ -70,6 +69,6 @@ public:
     bool ReadFromPartition(void* out, u32 wordOffset, u32 byteLen) override;
     bool ReadDiskID(DI::DiskID* out) override;
     DI::DIError ReadTMD(ES::TMDFixed<512>* out) override;
-    DI::DIError OpenPartition(u32 wordOffset,
-                              ES::TMDFixed<512>* tmdOut) override;
+    DI::DIError OpenPartition(
+      u32 wordOffset, ES::TMDFixed<512>* tmdOut) override;
 };

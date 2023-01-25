@@ -1,7 +1,6 @@
 // BasicUI.hpp - Simple text-based UI
 //   Written by Palapeli
 //
-// Copyright (C) 2022 Team Saoirse
 // SPDX-License-Identifier: MIT
 
 #pragma once
@@ -20,15 +19,13 @@ public:
     void InitVideo();
     void Loop();
 
-    enum class OptionType
-    {
+    enum class OptionType {
         StartGame,
         Exit,
     };
 
 private:
-    enum class OptionStatus
-    {
+    enum class OptionStatus {
         Disabled,
         Hidden,
         Enabled,

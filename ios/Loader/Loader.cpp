@@ -1,7 +1,6 @@
 // Loader.cpp - IOS module loader
 //   Written by Palapeli
 //
-// Copyright (C) 2022 Team Saoirse
 // SPDX-License-Identifier: MIT
 
 #include <IOS/Syscalls.h>
@@ -17,17 +16,17 @@
 
 #ifdef LOADER_DEBUG
 
-#include <Debug/Log.hpp>
-#include <IOS/IPCLog.hpp>
+#  include <Debug/Log.hpp>
+#  include <IOS/IPCLog.hpp>
 
-#define LOADER_PRINT(...) PRINT(IOS_Loader, __VA_ARGS__)
-#define LOADER_ASSERT(...) assert(__VA_ARGS__)
+#  define LOADER_PRINT(...) PRINT(IOS_Loader, __VA_ARGS__)
+#  define LOADER_ASSERT(...) assert(__VA_ARGS__)
 
 #else
 
 // To prevent linking the enormous print functions in.
-#define LOADER_PRINT(...)
-#define LOADER_ASSERT(expr) (((expr) ? (void)0 : LoaderAssertFail(__LINE__)))
+#  define LOADER_PRINT(...)
+#  define LOADER_ASSERT(expr) (((expr) ? (void) 0 : LoaderAssertFail(__LINE__)))
 
 #endif
 
@@ -41,6 +40,7 @@ ASM_FUNCTION(static u32 GetStackPointer(),
     mov     r0, sp;
     bx      lr;
 )
+
 // clang-format on
 
 void LoaderAssertFail(int line)
@@ -106,8 +106,8 @@ static s32 ReqRead(s32 fd, void* data, u32 len)
     // Check if the size overflows.
     if (gFilePos + len > gFileSize) {
         LOADER_PRINT(ERROR,
-                     "Read off the end of the file (size: 0x%X, read: 0x%X)",
-                     gFileSize, gFilePos + len);
+          "Read off the end of the file (size: 0x%X, read: 0x%X)", gFileSize,
+          gFilePos + len);
         return ISFSError::Invalid;
     }
 
@@ -156,8 +156,8 @@ static s32 ReqSeek(s32 fd, s32 where, s32 whence)
     return gFilePos;
 }
 
-static s32 ReqIoctl(s32 fd, u32 cmd, const void* in, u32 in_len, void* io,
-                    u32 io_len)
+static s32 ReqIoctl(
+  s32 fd, u32 cmd, const void* in, u32 in_len, void* io, u32 io_len)
 {
     LOADER_ASSERT(fd == 0);
 
@@ -178,7 +178,7 @@ static s32 ReqIoctl(s32 fd, u32 cmd, const void* in, u32 in_len, void* io,
     stats.size = gFileSize;
     stats.pos = gFilePos;
     LOADER_PRINT(INFO, "ISFS_GetFileStats: size: 0x%08X, pos: 0x%08X",
-                 stats.size, stats.pos);
+      stats.size, stats.pos);
     memcpy(io, &stats, sizeof(stats));
 
     return IOSError::OK;
@@ -188,8 +188,8 @@ static s32 HandleRequest(IOSRequest* req)
 {
     switch (req->cmd) {
     case IOS_OPEN:
-        LOADER_PRINT(INFO, "IOS_Open(\"%s\", 0x%X)", req->open.path,
-                     req->open.mode);
+        LOADER_PRINT(
+          INFO, "IOS_Open(\"%s\", 0x%X)", req->open.path, req->open.mode);
         return ReqOpen(req->open.path, req->open.mode);
 
     case IOS_CLOSE:
@@ -198,25 +198,25 @@ static s32 HandleRequest(IOSRequest* req)
 
     case IOS_READ:
         LOADER_PRINT(INFO, "IOS_Read(%d, 0x%08X, 0x%X)", req->fd,
-                     req->read.data, req->read.len);
+          req->read.data, req->read.len);
         return ReqRead(req->fd, req->read.data, req->read.len);
 
     case IOS_WRITE:
         LOADER_PRINT(INFO, "IOS_Read(%d, 0x%08X, 0x%X)", req->fd,
-                     req->write.data, req->write.len);
+          req->write.data, req->write.len);
         return ReqWrite(req->fd, req->write.data, req->write.len);
 
     case IOS_SEEK:
         LOADER_PRINT(INFO, "IOS_Seek(%d, %d, %d)", req->fd, req->seek.where,
-                     req->seek.whence);
+          req->seek.whence);
         return ReqSeek(req->fd, req->seek.where, req->seek.whence);
 
     case IOS_IOCTL:
         LOADER_PRINT(INFO, "IOS_Ioctl(%d, %d, 0x%08X, 0x%X, 0x%08X, 0x%X)",
-                     req->fd, req->ioctl.cmd, req->ioctl.in, req->ioctl.in_len,
-                     req->ioctl.io, req->ioctl.io_len);
+          req->fd, req->ioctl.cmd, req->ioctl.in, req->ioctl.in_len,
+          req->ioctl.io, req->ioctl.io_len);
         return ReqIoctl(req->fd, req->ioctl.cmd, req->ioctl.in,
-                        req->ioctl.in_len, req->ioctl.io, req->ioctl.io_len);
+          req->ioctl.in_len, req->ioctl.io, req->ioctl.io_len);
 
     default:
         LOADER_PRINT(ERROR, "Received unknown command: %d", req->cmd);
@@ -234,7 +234,7 @@ static s32 FileRMThreadEntry([[maybe_unused]] void* arg)
     while (true) {
         IOSRequest* req;
         s32 ret =
-            IOS_ReceiveMessage(gFileRMQueue, reinterpret_cast<u32*>(&req), 0);
+          IOS_ReceiveMessage(gFileRMQueue, reinterpret_cast<u32*>(&req), 0);
         LOADER_ASSERT(ret == IOSError::OK);
 
         // Error to reply to the request with.
@@ -278,9 +278,9 @@ static s32 LoaderThreadEntry([[maybe_unused]] void* arg)
 
     // Create the thread.
     s32 thread = IOS_CreateThread(FileRMThreadEntry, nullptr,
-                                  reinterpret_cast<u32*>(stackTop),
-                                  0x400, // 1 KB stack
-                                  80, true);
+      reinterpret_cast<u32*>(stackTop),
+      0x400, // 1 KB stack
+      80, true);
     LOADER_ASSERT(thread >= 0);
     LOADER_PRINT(INFO, "Created file RM thread (%d)", thread);
 
@@ -319,9 +319,9 @@ static void MakeIPCLog()
 
     // Create the IPC log thread.
     s32 thread = IOS_CreateThread(IPCLogThreadEntry, nullptr,
-                                  reinterpret_cast<u32*>(stackTop),
-                                  0x400, // 1 KB stack
-                                  80, true);
+      reinterpret_cast<u32*>(stackTop),
+      0x400, // 1 KB stack
+      80, true);
     LOADER_ASSERT(thread >= 0);
 
     // Begin execution on the IPC log thread.
@@ -333,6 +333,7 @@ static void MakeIPCLog()
 
 extern "C" {
 ATTRIBUTE_SECTION(.start)
+
 void LoaderEntry()
 {
     // The main IOS heap. Should be fine to use as long as we always free
@@ -358,10 +359,10 @@ void LoaderEntry()
 
     // Create the main loader thread.
     s32 thread = IOS_CreateThread(LoaderThreadEntry, nullptr,
-                                  reinterpret_cast<u32*>(stackTop),
-                                  0x400, // 1 KB stack
-                                  127, // Max priority
-                                  true);
+      reinterpret_cast<u32*>(stackTop),
+      0x400, // 1 KB stack
+      127, // Max priority
+      true);
     LOADER_ASSERT(thread >= 0);
 
     // Begin execution on the main loader thread.

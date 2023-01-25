@@ -1,7 +1,6 @@
 // Apploader.hpp - Wii disc apploader
 //   Written by riidefi
 //
-// Copyright (C) 2022 Team Saoirse
 // SPDX-License-Identifier: MIT
 
 #include "AppPayload.hpp"
@@ -32,6 +31,7 @@ public:
     {
         m_resultOut = result;
     }
+
     ~Apploader() = default;
 
 protected:
@@ -46,12 +46,11 @@ private:
 
     ApploaderInfo readAppInfo();
 
-    void openPartition(const Partition& boot_partition,
-                       ES::TMDFixed<512>* outMeta);
+    void openPartition(
+      const Partition& boot_partition, ES::TMDFixed<512>* outMeta);
 
-    const Partition*
-    findBootPartition(const Volume& main_volume,
-                      const std::array<Partition, 4>& partitions);
+    const Partition* findBootPartition(
+      const Volume& main_volume, const std::array<Partition, 4>& partitions);
 
     void prepareDisc();
     std::array<Volume, 4> readVolumes();

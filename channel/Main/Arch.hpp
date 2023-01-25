@@ -1,7 +1,6 @@
 // Arch.hpp - Archive data reader
 //   Written by Palapeli
 //
-// Copyright (C) 2022 Team Saoirse
 // SPDX-License-Identifier: MIT
 
 #pragma once
@@ -21,12 +20,14 @@ public:
 private:
     const char* m_file;
     bool m_valid;
+
     struct Subfile {
         const char* name;
         u32 nameLen;
         u32 size;
         const char* data;
     };
+
     std::vector<Subfile> m_subfiles;
     const char* m_lfnFile;
     u32 m_lfnFileSize;

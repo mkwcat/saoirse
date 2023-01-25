@@ -1,15 +1,14 @@
 // Log.cpp - Debug log
 //   Written by Palapeli
 //
-// Copyright (C) 2022 Team Saoirse
 // SPDX-License-Identifier: MIT
 
 #include "Log.hpp"
 #include <System/OS.hpp>
 #include <System/Types.h>
 #ifdef TARGET_IOS
-#include <Disk/DeviceMgr.hpp>
-#include <IOS/IPCLog.hpp>
+#  include <Disk/DeviceMgr.hpp>
+#  include <IOS/IPCLog.hpp>
 #endif
 #include <array>
 #include <cstring>
@@ -23,14 +22,14 @@ bool Log::ipcLogEnabled = false;
 Mutex* Log::logMutex;
 
 static constexpr std::array<const char*, 3> logColors = {
-    "\x1b[37;1m",
-    "\x1b[33;1m",
-    "\x1b[31;1m",
+  "\x1b[37;1m",
+  "\x1b[33;1m",
+  "\x1b[31;1m",
 };
 static constexpr std::array<char, 3> logChars = {
-    'I',
-    'W',
-    'E',
+  'I',
+  'W',
+  'E',
 };
 
 constexpr u32 logMask = 0xFFFFFFFF;
@@ -46,7 +45,7 @@ bool Log::IsEnabled()
 }
 
 void Log::VPrint(LogSource src, const char* srcStr, const char* funcStr,
-                 LogLevel level, const char* format, va_list args)
+  LogLevel level, const char* format, va_list args)
 {
     if (!IsEnabled())
         return;
@@ -84,27 +83,27 @@ void Log::VPrint(LogSource src, const char* srcStr, const char* funcStr,
 
         if (ipcLogEnabled) {
             len = snprintf(&printBuffer[0], printBuffer.size(),
-                           "%s[%s %s] %s\x1b[37;1m", logColors[slvl], srcStr,
-                           funcStr, logBuffer.data());
+              "%s[%s %s] %s\x1b[37;1m", logColors[slvl], srcStr, funcStr,
+              logBuffer.data());
             IPCLog::sInstance->Print(&printBuffer[0]);
         }
 
         if (DeviceMgr::sInstance->IsLogEnabled()) {
             len = snprintf(&printBuffer[0], printBuffer.size(), "%c[%s %s] %s",
-                           logChars[slvl], srcStr, funcStr, logBuffer.data());
+              logChars[slvl], srcStr, funcStr, logBuffer.data());
             DeviceMgr::sInstance->WriteToLog(&printBuffer[0], len);
         }
 
 #else
         printf("%s[%s %s] %s\n\x1b[37;1m", logColors[slvl], srcStr, funcStr,
-               logBuffer.data());
+          logBuffer.data());
 #endif
         logMutex->unlock();
     }
 }
 
 void Log::Print(LogSource src, const char* srcStr, const char* funcStr,
-                LogLevel level, const char* format, ...)
+  LogLevel level, const char* format, ...)
 {
     va_list args;
     va_start(args, format);

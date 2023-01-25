@@ -2,7 +2,6 @@
 //   Written by riidefi
 //   Based on BrainSlug, by Chadderz
 //
-// Copyright (C) 2022 Team Saoirse
 // SPDX-License-Identifier: MIT
 
 #pragma once
@@ -33,6 +32,7 @@ inline void* operator new(uint32_t size, mem::arena_high)
 {
     return mem::AllocFromArenaHigh(size);
 }
+
 inline void* operator new[](uint32_t size, mem::arena_high)
 {
     return mem::AllocFromArenaHigh(size);

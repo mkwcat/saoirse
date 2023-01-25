@@ -1,7 +1,6 @@
 // DeviceMgr.cpp - I/O storage device manager
 //   Written by Palapeli
 //
-// Copyright (C) 2022 Team Saoirse
 // SPDX-License-Identifier: MIT
 
 #include "DeviceMgr.hpp"
@@ -38,8 +37,8 @@ DeviceMgr::DeviceMgr()
     m_devices[0].disk = SDCard();
     m_devices[0].enabled = true;
 
-    m_thread.create(ThreadEntry, reinterpret_cast<void*>(this), nullptr, 0x800,
-                    40);
+    m_thread.create(
+      ThreadEntry, reinterpret_cast<void*>(this), nullptr, 0x800, 40);
 }
 
 bool DeviceMgr::IsInserted(u32 devId)
@@ -229,11 +228,11 @@ void DeviceMgr::Run()
     PRINT(IOS_DevMgr, INFO, "Entering DeviceMgr...");
     PRINT(IOS_DevMgr, INFO, "DevMgr thread ID: %d", IOS_GetThreadId());
 
-    auto usbDevices = (USB::DeviceEntry*)IOS::Alloc(sizeof(USB::DeviceEntry) *
-                                                    USB::MaxDevices);
+    auto usbDevices = (USB::DeviceEntry*) IOS::Alloc(
+      sizeof(USB::DeviceEntry) * USB::MaxDevices);
     IOS::Request usbReq = {};
-    if (!USB::sInstance->EnqueueDeviceChange(usbDevices, &m_timerQueue,
-                                             &usbReq))
+    if (!USB::sInstance->EnqueueDeviceChange(
+          usbDevices, &m_timerQueue, &usbReq))
         USBFatal();
 
     while (true) {
@@ -247,8 +246,8 @@ void DeviceMgr::Run()
             u32 count = req->result;
             USBChange(usbDevices, count);
             usbReq = {};
-            if (!USB::sInstance->EnqueueDeviceChange(usbDevices, &m_timerQueue,
-                                                     &usbReq))
+            if (!USB::sInstance->EnqueueDeviceChange(
+                  usbDevices, &m_timerQueue, &usbReq))
                 USBFatal();
         }
 
@@ -274,7 +273,7 @@ void DeviceMgr::USBFatal()
 void DeviceMgr::USBChange(USB::DeviceEntry* devices, u32 count)
 {
     if (count > USB::MaxDevices) {
-        PRINT(IOS_DevMgr, ERROR, "USB GetDeviceChange error: %d", (s32)count);
+        PRINT(IOS_DevMgr, ERROR, "USB GetDeviceChange error: %d", (s32) count);
         USBFatal();
         return;
     }
@@ -294,7 +293,7 @@ void DeviceMgr::USBChange(USB::DeviceEntry* devices, u32 count)
         u32 j = 0;
         // Sometimes the first 16 bits "device index?" will change
         while (j < count && (m_usbDevices[i].usbId & 0xFFFF) !=
-                                (devices[j].devId & 0xFFFF)) {
+                              (devices[j].devId & 0xFFFF)) {
             j++;
         }
 
@@ -304,7 +303,7 @@ void DeviceMgr::USBChange(USB::DeviceEntry* devices, u32 count)
         }
 
         PRINT(IOS_DevMgr, INFO, "Device with id %X was removed",
-              m_usbDevices[i].usbId);
+          m_usbDevices[i].usbId);
 
         // Set device to not inserted
         if (intId < DeviceCount)
@@ -318,8 +317,8 @@ void DeviceMgr::USBChange(USB::DeviceEntry* devices, u32 count)
         if (foundMap[i] == true)
             continue;
 
-        PRINT(IOS_DevMgr, INFO, "Device with id %X was added",
-              devices[i].devId);
+        PRINT(
+          IOS_DevMgr, INFO, "Device with id %X was added", devices[i].devId);
 
         // Search for an open handle
         u32 j = 0;
@@ -335,7 +334,7 @@ void DeviceMgr::USBChange(USB::DeviceEntry* devices, u32 count)
 
         if (USB::sInstance->Attach(devices[i].devId) != USB::USBError::OK) {
             PRINT(IOS_DevMgr, ERROR, "Failed to attach device %X",
-                  devices[i].devId);
+              devices[i].devId);
             continue;
         }
 
@@ -347,7 +346,7 @@ void DeviceMgr::USBChange(USB::DeviceEntry* devices, u32 count)
                 break;
         if (alt == devices[i].altSetCount) {
             PRINT(IOS_DevMgr, ERROR, "Failed to get info from device %X",
-                  devices[i].devId);
+              devices[i].devId);
             continue;
         }
         assert(info.devId == devices[i].devId);
@@ -356,9 +355,9 @@ void DeviceMgr::USBChange(USB::DeviceEntry* devices, u32 count)
             info.interface.ifSubClass != USB::SubClass::MassStorage_SCSI ||
             info.interface.ifProtocol != USB::Protocol::MassStorage_BulkOnly) {
             PRINT(IOS_DevMgr, WARN,
-                  "USB device is not a (compatible) storage device (%X:%X:%X)",
-                  info.interface.ifClass, info.interface.ifSubClass,
-                  info.interface.ifProtocol);
+              "USB device is not a (compatible) storage device (%X:%X:%X)",
+              info.interface.ifClass, info.interface.ifSubClass,
+              info.interface.ifProtocol);
             continue;
         }
 
@@ -432,7 +431,7 @@ void DeviceMgr::UpdateHandle(u32 devId)
         FRESULT fret = f_unmount(str);
         if (fret != FR_OK) {
             PRINT(IOS_DevMgr, ERROR, "Failed to unmount device %d: %d", devId,
-                  fret);
+              fret);
             dev->error = true;
             return;
         }
@@ -458,8 +457,8 @@ void DeviceMgr::UpdateHandle(u32 devId)
 
         FRESULT fret = f_mount(&dev->fs, str, 0);
         if (fret != FR_OK) {
-            PRINT(IOS_DevMgr, ERROR, "Failed to mount device %d: %d", devId,
-                  fret);
+            PRINT(
+              IOS_DevMgr, ERROR, "Failed to mount device %d: %d", devId, fret);
             dev->error = true;
             dev->enabled = false;
             return;

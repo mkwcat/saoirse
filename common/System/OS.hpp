@@ -1,23 +1,22 @@
 // OS.hpp - libogc-IOS compatible types and functions
 //   Written by Palapeli
 //
-// Copyright (C) 2022 Team Saoirse
 // SPDX-License-Identifier: MIT
 
 #pragma once
 #include <System/Types.h>
 #include <System/Util.h>
 #ifdef TARGET_IOS
-#include <IOS/Syscalls.h>
-#include <IOS/System.hpp>
+#  include <IOS/Syscalls.h>
+#  include <IOS/System.hpp>
 #else
 LIBOGC_SUCKS_BEGIN
-#include <ogc/ipc.h>
-#include <ogc/lwp.h>
-#include <ogc/message.h>
-#include <ogc/mutex.h>
+#  include <ogc/ipc.h>
+#  include <ogc/lwp.h>
+#  include <ogc/message.h>
+#  include <ogc/mutex.h>
 LIBOGC_SUCKS_END
-#include <cassert>
+#  include <cassert>
 #endif
 #include <new>
 
@@ -25,9 +24,9 @@ LIBOGC_SUCKS_END
 #define ASSERT assert
 
 #ifdef TARGET_IOS
-#define MEM1_BASE ((void*)0x00000000)
+#  define MEM1_BASE ((void*) 0x00000000)
 #else
-#define MEM1_BASE ((void*)0x80000000)
+#  define MEM1_BASE ((void*) 0x80000000)
 #endif
 
 namespace IOSError
@@ -84,14 +83,14 @@ public:
 
     void send(T msg, u32 flags = 0)
     {
-        const s32 ret = IOS_SendMessage(this->m_queue, (u32)(msg), flags);
+        const s32 ret = IOS_SendMessage(this->m_queue, (u32) (msg), flags);
         ASSERT(ret == IOSError::OK);
     }
 
     T receive(u32 flags = 0)
     {
         T msg;
-        const s32 ret = IOS_ReceiveMessage(this->m_queue, (u32*)(&msg), flags);
+        const s32 ret = IOS_ReceiveMessage(this->m_queue, (u32*) (&msg), flags);
         ASSERT(ret == IOSError::OK);
         return reinterpret_cast<T>(msg);
     }
@@ -137,21 +136,21 @@ public:
 
     void send(T msg, u32 flags = 0)
     {
-        const BOOL ret = MQ_Send(this->m_queue, (mqmsg_t)(msg), flags);
+        const BOOL ret = MQ_Send(this->m_queue, (mqmsg_t) (msg), flags);
         ASSERT(ret == TRUE);
     }
 
     T receive()
     {
         T msg;
-        const BOOL ret = MQ_Receive(this->m_queue, (mqmsg_t*)(&msg), 0);
+        const BOOL ret = MQ_Receive(this->m_queue, (mqmsg_t*) (&msg), 0);
         ASSERT(ret == TRUE);
         return msg;
     }
 
     bool tryreceive(T& msg)
     {
-        const BOOL ret = MQ_Receive(this->m_queue, (mqmsg_t*)(&msg), 1);
+        const BOOL ret = MQ_Receive(this->m_queue, (mqmsg_t*) (&msg), 1);
         return ret;
     }
 
@@ -174,7 +173,8 @@ class Mutex
 public:
     Mutex(const Mutex& from) = delete;
 
-    Mutex() : m_queue(1)
+    Mutex()
+      : m_queue(1)
     {
         m_queue.send(0);
     }
@@ -243,13 +243,13 @@ public:
         m_arg = arg;
 
         if (stack == nullptr) {
-            stack = new ((std::align_val_t)32) u8[stackSize];
+            stack = new ((std::align_val_t) 32) u8[stackSize];
             m_ownedStack = stack;
         }
         u32* stackTop = reinterpret_cast<u32*>(stack + stackSize);
 
         m_ret = IOS_CreateThread(__threadProc, reinterpret_cast<void*>(this),
-                                 stackTop, stackSize, prio, true);
+          stackTop, stackSize, prio, true);
         if (m_ret < 0)
             return;
 
@@ -324,8 +324,8 @@ public:
     {
         f_proc = proc;
         m_arg = arg;
-        const s32 ret = LWP_CreateThread(
-            &m_tid, &__threadProc, reinterpret_cast<void*>(this),
+        const s32 ret =
+          LWP_CreateThread(&m_tid, &__threadProc, reinterpret_cast<void*>(this),
             reinterpret_cast<void*>(stack), stackSize, prio);
         ASSERT(ret == 0);
         m_valid = true;
@@ -428,6 +428,7 @@ struct IOVector {
         const void* data;
         u32 len;
     } in[in_count];
+
     struct {
         void* data;
         u32 len;
@@ -455,11 +456,14 @@ struct Request {
         Command cmd;
         Queue<IOS::Request*>* cbQueue;
     };
+
     s32 result;
+
     union {
         s32 fd;
         u32 req_cmd;
     };
+
     union {
         struct {
             char* path;
@@ -533,20 +537,20 @@ public:
         return reinterpret_cast<void*>(req);
     }
 
-#define IPC_TO_QUEUE(queue, req)                                               \
+#  define IPC_TO_QUEUE(queue, req)                                             \
     &IOS::Resource::ipcToQueueCb, makeToQueueUserdata((req), (queue))
 
-#define IPC_TO_CALLBACK_INIT()
+#  define IPC_TO_CALLBACK_INIT()
 
-#define IPC_TO_CALLBACK(cb, userdata) (cb), (userdata)
+#  define IPC_TO_CALLBACK(cb, userdata) (cb), (userdata)
 
-#define IPC_TO_CB_CHECK_DELETE(ret)
+#  define IPC_TO_CB_CHECK_DELETE(ret)
 
 #else
     // IOS Queue to Callback
 
-    static IOSRequest* makeToCallbackReq(Request* req, IPCCallback cb,
-                                         void* userdata)
+    static IOSRequest* makeToCallbackReq(
+      Request* req, IPCCallback cb, void* userdata)
     {
         req->cb = cb;
         req->userdata = userdata;
@@ -558,15 +562,15 @@ public:
 
     static s32 s_toCbQueue;
 
-#define IPC_TO_QUEUE(queue, req)                                               \
+#  define IPC_TO_QUEUE(queue, req)                                             \
     (queue)->id(), reinterpret_cast<IOSRequest*>((req))
 
-#define IPC_TO_CALLBACK_INIT() IOS::Request* req = new IOS::Request
+#  define IPC_TO_CALLBACK_INIT() IOS::Request* req = new IOS::Request
 
-#define IPC_TO_CALLBACK(cb, userdata)                                          \
+#  define IPC_TO_CALLBACK(cb, userdata)                                        \
     IOS::Resource::s_toCbQueue, makeToCallbackReq(req, cb, userdata)
 
-#define IPC_TO_CB_CHECK_DELETE(ret)                                            \
+#  define IPC_TO_CB_CHECK_DELETE(ret)                                          \
     if ((ret) < 0)                                                             \
     delete req
 
@@ -627,8 +631,8 @@ public:
     s32 readAsync(void* data, u32 length, IPCCallback cb, void* userdata)
     {
         IPC_TO_CALLBACK_INIT();
-        s32 ret = IOS_ReadAsync(this->m_fd, data, length,
-                                IPC_TO_CALLBACK(cb, userdata));
+        s32 ret = IOS_ReadAsync(
+          this->m_fd, data, length, IPC_TO_CALLBACK(cb, userdata));
         IPC_TO_CB_CHECK_DELETE(ret);
         return ret;
     }
@@ -636,8 +640,8 @@ public:
     s32 writeAsync(const void* data, u32 length, IPCCallback cb, void* userdata)
     {
         IPC_TO_CALLBACK_INIT();
-        s32 ret = IOS_WriteAsync(this->m_fd, data, length,
-                                 IPC_TO_CALLBACK(cb, userdata));
+        s32 ret = IOS_WriteAsync(
+          this->m_fd, data, length, IPC_TO_CALLBACK(cb, userdata));
         IPC_TO_CB_CHECK_DELETE(ret);
         return ret;
     }
@@ -645,29 +649,31 @@ public:
     s32 seekAsync(s32 where, s32 whence, IPCCallback cb, void* userdata)
     {
         IPC_TO_CALLBACK_INIT();
-        s32 ret = IOS_SeekAsync(this->m_fd, where, whence,
-                                IPC_TO_CALLBACK(cb, userdata));
+        s32 ret = IOS_SeekAsync(
+          this->m_fd, where, whence, IPC_TO_CALLBACK(cb, userdata));
         IPC_TO_CB_CHECK_DELETE(ret);
         return ret;
     }
 
-    s32 readAsync(void* data, u32 length, Queue<IOS::Request*>* queue,
-                  IOS::Request* req)
+    s32 readAsync(
+      void* data, u32 length, Queue<IOS::Request*>* queue, IOS::Request* req)
     {
-        return IOS_ReadAsync(this->m_fd, data, length,
-                             IPC_TO_QUEUE(queue, req));
+        return IOS_ReadAsync(
+          this->m_fd, data, length, IPC_TO_QUEUE(queue, req));
     }
+
     s32 writeAsync(const void* data, u32 length, Queue<IOS::Request*>* queue,
-                   IOS::Request* req)
+      IOS::Request* req)
     {
-        return IOS_WriteAsync(this->m_fd, data, length,
-                              IPC_TO_QUEUE(queue, req));
+        return IOS_WriteAsync(
+          this->m_fd, data, length, IPC_TO_QUEUE(queue, req));
     }
-    s32 seekAsync(s32 where, s32 whence, Queue<IOS::Request*>* queue,
-                  IOS::Request* req)
+
+    s32 seekAsync(
+      s32 where, s32 whence, Queue<IOS::Request*>* queue, IOS::Request* req)
     {
-        return IOS_SeekAsync(this->m_fd, where, whence,
-                             IPC_TO_QUEUE(queue, req));
+        return IOS_SeekAsync(
+          this->m_fd, where, whence, IPC_TO_QUEUE(queue, req));
     }
 
 protected:
@@ -683,135 +689,127 @@ public:
     s32 ioctl(Ioctl cmd, void* input, u32 inputLen, void* output, u32 outputLen)
     {
         return IOS_Ioctl(this->m_fd, static_cast<u32>(cmd), input, inputLen,
-                         output, outputLen);
+          output, outputLen);
     }
 
     s32 ioctlv(Ioctl cmd, u32 inputCnt, u32 outputCnt, Vector* vec)
     {
-        return IOS_Ioctlv(this->m_fd, static_cast<u32>(cmd), inputCnt,
-                          outputCnt, vec);
+        return IOS_Ioctlv(
+          this->m_fd, static_cast<u32>(cmd), inputCnt, outputCnt, vec);
     }
 
     template <u32 in_count, u32 out_count>
     s32 ioctlv(Ioctl cmd, IOVector<in_count, out_count>& vec)
     {
         return IOS_Ioctlv(this->m_fd, static_cast<u32>(cmd), in_count,
-                          out_count, reinterpret_cast<Vector*>(&vec));
+          out_count, reinterpret_cast<Vector*>(&vec));
     }
 
     template <u32 in_count>
     s32 ioctlv(Ioctl cmd, IVector<in_count>& vec)
     {
         return IOS_Ioctlv(this->m_fd, static_cast<u32>(cmd), in_count, 0,
-                          reinterpret_cast<Vector*>(&vec));
+          reinterpret_cast<Vector*>(&vec));
     }
 
     template <u32 out_count>
     s32 ioctlv(Ioctl cmd, OVector<out_count>& vec)
     {
         return IOS_Ioctlv(this->m_fd, static_cast<u32>(cmd), 0, out_count,
-                          reinterpret_cast<Vector*>(&vec));
+          reinterpret_cast<Vector*>(&vec));
     }
 
     s32 ioctlAsync(Ioctl cmd, void* input, u32 inputLen, void* output,
-                   u32 outputLen, IPCCallback cb, void* userdata)
+      u32 outputLen, IPCCallback cb, void* userdata)
     {
         IPC_TO_CALLBACK_INIT();
-        s32 ret =
-            IOS_IoctlAsync(this->m_fd, static_cast<u32>(cmd), input, inputLen,
-                           output, outputLen, IPC_TO_CALLBACK(cb, userdata));
+        s32 ret = IOS_IoctlAsync(this->m_fd, static_cast<u32>(cmd), input,
+          inputLen, output, outputLen, IPC_TO_CALLBACK(cb, userdata));
         IPC_TO_CB_CHECK_DELETE(ret);
         return ret;
     }
 
     s32 ioctlvAsync(Ioctl cmd, u32 inputCnt, u32 outputCnt, Vector* vec,
-                    IPCCallback cb, void* userdata)
+      IPCCallback cb, void* userdata)
     {
         IPC_TO_CALLBACK_INIT();
-        s32 ret =
-            IOS_IoctlvAsync(this->m_fd, static_cast<u32>(cmd), inputCnt,
-                            outputCnt, vec, IPC_TO_CALLBACK(cb, userdata));
+        s32 ret = IOS_IoctlvAsync(this->m_fd, static_cast<u32>(cmd), inputCnt,
+          outputCnt, vec, IPC_TO_CALLBACK(cb, userdata));
         IPC_TO_CB_CHECK_DELETE(ret);
         return ret;
     }
 
     template <u32 in_count, u32 out_count>
     s32 ioctlvAsync(Ioctl cmd, IOVector<in_count, out_count>& vec,
-                    IPCCallback cb, void* userdata)
+      IPCCallback cb, void* userdata)
     {
         IPC_TO_CALLBACK_INIT();
         s32 ret = IOS_IoctlvAsync(this->m_fd, static_cast<u32>(cmd), in_count,
-                                  out_count, reinterpret_cast<Vector*>(&vec),
-                                  IPC_TO_CALLBACK(cb, userdata));
+          out_count, reinterpret_cast<Vector*>(&vec),
+          IPC_TO_CALLBACK(cb, userdata));
         IPC_TO_CB_CHECK_DELETE(ret);
         return ret;
     }
 
     template <u32 in_count>
-    s32 ioctlvAsync(Ioctl cmd, IVector<in_count>& vec, IPCCallback cb,
-                    void* userdata)
+    s32 ioctlvAsync(
+      Ioctl cmd, IVector<in_count>& vec, IPCCallback cb, void* userdata)
     {
         IPC_TO_CALLBACK_INIT();
         s32 ret = IOS_IoctlvAsync(this->m_fd, static_cast<u32>(cmd), in_count,
-                                  0, reinterpret_cast<Vector*>(&vec),
-                                  IPC_TO_CALLBACK(cb, userdata));
+          0, reinterpret_cast<Vector*>(&vec), IPC_TO_CALLBACK(cb, userdata));
         IPC_TO_CB_CHECK_DELETE(ret);
         return ret;
     }
 
     template <u32 out_count>
-    s32 ioctlvAsync(Ioctl cmd, OVector<out_count>& vec, IPCCallback cb,
-                    void* userdata)
+    s32 ioctlvAsync(
+      Ioctl cmd, OVector<out_count>& vec, IPCCallback cb, void* userdata)
     {
         IPC_TO_CALLBACK_INIT();
-        s32 ret = IOS_IoctlvAsync(this->m_fd, static_cast<u32>(cmd), 0,
-                                  out_count, reinterpret_cast<Vector*>(&vec),
-                                  IPC_TO_CALLBACK(cb, userdata));
+        s32 ret =
+          IOS_IoctlvAsync(this->m_fd, static_cast<u32>(cmd), 0, out_count,
+            reinterpret_cast<Vector*>(&vec), IPC_TO_CALLBACK(cb, userdata));
         IPC_TO_CB_CHECK_DELETE(ret);
         return ret;
     }
 
     s32 ioctlAsync(Ioctl cmd, void* input, u32 inputLen, void* output,
-                   u32 outputLen, Queue<IOS::Request*>* queue,
-                   IOS::Request* req)
+      u32 outputLen, Queue<IOS::Request*>* queue, IOS::Request* req)
     {
         return IOS_IoctlAsync(this->m_fd, static_cast<u32>(cmd), input,
-                              inputLen, output, outputLen,
-                              IPC_TO_QUEUE(queue, req));
+          inputLen, output, outputLen, IPC_TO_QUEUE(queue, req));
     }
 
     s32 ioctlvAsync(Ioctl cmd, u32 inputCnt, u32 outputCnt, Vector* vec,
-                    Queue<IOS::Request*>* queue, IOS::Request* req)
+      Queue<IOS::Request*>* queue, IOS::Request* req)
     {
         return IOS_IoctlvAsync(this->m_fd, static_cast<u32>(cmd), inputCnt,
-                               outputCnt, vec, IPC_TO_QUEUE(queue, req));
+          outputCnt, vec, IPC_TO_QUEUE(queue, req));
     }
 
     template <u32 in_count, u32 out_count>
     s32 ioctlvAsync(Ioctl cmd, IOVector<in_count, out_count>& vec,
-                    Queue<IOS::Request*>* queue, IOS::Request* req)
+      Queue<IOS::Request*>* queue, IOS::Request* req)
     {
         return IOS_IoctlvAsync(this->m_fd, static_cast<u32>(cmd), in_count,
-                               out_count, reinterpret_cast<Vector*>(&vec),
-                               IPC_TO_QUEUE(queue, req));
+          out_count, reinterpret_cast<Vector*>(&vec), IPC_TO_QUEUE(queue, req));
     }
 
     template <u32 in_count>
     s32 ioctlvAsync(Ioctl cmd, IVector<in_count>& vec,
-                    Queue<IOS::Request*>* queue, IOS::Request* req)
+      Queue<IOS::Request*>* queue, IOS::Request* req)
     {
         return IOS_IoctlvAsync(this->m_fd, static_cast<u32>(cmd), in_count, 0,
-                               reinterpret_cast<Vector*>(&vec),
-                               IPC_TO_QUEUE(queue, req));
+          reinterpret_cast<Vector*>(&vec), IPC_TO_QUEUE(queue, req));
     }
 
     template <u32 out_count>
     s32 ioctlvAsync(Ioctl cmd, OVector<out_count>& vec,
-                    Queue<IOS::Request*>* queue, IOS::Request* req)
+      Queue<IOS::Request*>* queue, IOS::Request* req)
     {
         return IOS_IoctlvAsync(this->m_fd, static_cast<u32>(cmd), 0, out_count,
-                               reinterpret_cast<Vector*>(&vec),
-                               IPC_TO_QUEUE(queue, req));
+          reinterpret_cast<Vector*>(&vec), IPC_TO_QUEUE(queue, req));
     }
 
     s32 fd() const
@@ -854,21 +852,19 @@ public:
     s32 stats(Stat* stat)
     {
         return this->ioctl(FileIoctl::GetFileStats, nullptr, 0,
-                           reinterpret_cast<void*>(stat), sizeof(Stat));
+          reinterpret_cast<void*>(stat), sizeof(Stat));
     }
 
     s32 statsAsync(Stat* stat, IPCCallback cb, void* userdata)
     {
         return this->ioctlAsync(FileIoctl::GetFileStats, nullptr, 0,
-                                reinterpret_cast<void*>(stat), sizeof(Stat), cb,
-                                userdata);
+          reinterpret_cast<void*>(stat), sizeof(Stat), cb, userdata);
     }
 
     s32 statsAsync(Stat* stat, Queue<IOS::Request*>* queue, IOS::Request* req)
     {
         return this->ioctlAsync(FileIoctl::GetFileStats, nullptr, 0,
-                                reinterpret_cast<void*>(stat), sizeof(Stat),
-                                queue, req);
+          reinterpret_cast<void*>(stat), sizeof(Stat), queue, req);
     }
 };
 

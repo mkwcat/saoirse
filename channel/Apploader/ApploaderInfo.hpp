@@ -1,7 +1,6 @@
 // ApploaderInfo.hpp - Apploader payload info
 //   Written by riidefi
 //
-// Copyright (C) 2022 Team Saoirse
 // SPDX-License-Identifier: MIT
 
 #pragma once
@@ -14,8 +13,8 @@ struct ApploaderInfo {
     using InitFunction = void (*)(LogFunction log_callback);
     using MainFunction = int (*)(void** dest, int* size, int* offset);
     using FinalFunction = EntryPoint (*)();
-    using EntryFunction = void (*)(InitFunction*, MainFunction*,
-                                   FinalFunction*);
+    using EntryFunction = void (*)(
+      InitFunction*, MainFunction*, FinalFunction*);
 
     u32 _00;
     u32 _04;

@@ -1,7 +1,6 @@
 // Input.hpp - User input manager
 //   Written by Palapeli
 //
-// Copyright (C) 2022 Team Saoirse
 // SPDX-License-Identifier: MIT
 
 #pragma once
@@ -15,8 +14,7 @@ public:
 
     Input();
 
-    enum Button
-    {
+    enum Button {
         BTN_UP = 1 << 0,
         BTN_DOWN = 1 << 1,
         BTN_LEFT = 1 << 2,

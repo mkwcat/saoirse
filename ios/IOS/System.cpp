@@ -1,7 +1,6 @@
 // System.cpp - Saoirse IOS system
 //   Written by Palapeli
 //
-// Copyright (C) 2022 Team Saoirse
 // SPDX-License-Identifier: MIT
 
 #include "System.hpp"
@@ -58,7 +57,7 @@ void* operator new[](std::size_t size)
 void* operator new(std::size_t size, std::align_val_t align)
 {
     void* block =
-        IOS_AllocAligned(System::GetHeap(), size, static_cast<u32>(align));
+      IOS_AllocAligned(System::GetHeap(), size, static_cast<u32>(align));
     assert(block != nullptr);
     return block;
 }
@@ -66,7 +65,7 @@ void* operator new(std::size_t size, std::align_val_t align)
 void* operator new[](std::size_t size, std::align_val_t align)
 {
     void* block =
-        IOS_AllocAligned(System::GetHeap(), size, static_cast<u32>(align));
+      IOS_AllocAligned(System::GetHeap(), size, static_cast<u32>(align));
     assert(block != nullptr);
     return block;
 }
@@ -109,11 +108,11 @@ void AbortColor(u32 color)
         ;
 }
 
-extern "C" void __AssertFail(const char* expr, const char* file, s32 line,
-                             u32 lr)
+extern "C" void __AssertFail(
+  const char* expr, const char* file, s32 line, u32 lr)
 {
     PRINT(IOS, ERROR, "Assertion failed:\n\n%s\nfile %s, line %d, LR: %08X",
-          expr, file, line, lr);
+      expr, file, line, lr);
     abort();
 }
 
@@ -123,6 +122,7 @@ ASM_FUNCTION(void AssertFail(const char* expr, const char* file, s32 line),
     mov     r3, lr;
     b       __AssertFail;
 )
+
 // clang-format on
 
 void usleep(u32 usec)
@@ -157,14 +157,16 @@ void usleep(u32 usec)
 bool s_timerStarted = false;
 u8 s_timerIndex = 0;
 u64 s_baseEpoch = 0;
+
 struct {
     u32 m_timer = 0;
     u64 m_tick = 0;
 } s_timerCtx[2];
 
 #define diff_ticks(tick0, tick1)                                               \
-    (((u64)(tick1) < (u64)(tick0)) ? ((u64)-1 - (u64)(tick0) + (u64)(tick1))   \
-                                   : ((u64)(tick1) - (u64)(tick0)))
+  (((u64) (tick1) < (u64) (tick0))                                             \
+      ? ((u64) -1 - (u64) (tick0) + (u64) (tick1))                             \
+      : ((u64) (tick1) - (u64) (tick0)))
 
 static s32 TimerThreadEntry([[maybe_unused]] void* arg)
 {
@@ -181,7 +183,7 @@ static s32 TimerThreadEntry([[maybe_unused]] void* arg)
         u32 nextTimer = ACRReadTrusted(ACRReg::TIMER);
 
         s_timerCtx[next].m_tick =
-            s_timerCtx[prev].m_tick + diff_ticks(prevTimer, nextTimer);
+          s_timerCtx[prev].m_tick + diff_ticks(prevTimer, nextTimer);
         s_timerCtx[next].m_timer = nextTimer;
         s_timerIndex = next;
     }
@@ -202,9 +204,8 @@ void System::SetTime(u32 hwTimerVal, u64 epoch)
 u64 System::GetTime()
 {
     u8 i = s_timerIndex;
-    u64 timeNow =
-        s_timerCtx[i].m_tick +
-        diff_ticks(s_timerCtx[i].m_timer, ACRReadTrusted(ACRReg::TIMER));
+    u64 timeNow = s_timerCtx[i].m_tick + diff_ticks(s_timerCtx[i].m_timer,
+                                           ACRReadTrusted(ACRReg::TIMER));
 
     return s_baseEpoch + (timeNow / 1898614);
 }
@@ -221,7 +222,7 @@ void* System::UnalignedMemcpy(void* dest, const void* src, size_t len)
 
     // Do main rounded copy (optimized memcpy will copy in words anyway)
     memcpy(round_up(dest, 4), src + round_up(destAddr, 4) - destAddr,
-           destEndRounded - round_up(destAddr, 4));
+      destEndRounded - round_up(destAddr, 4));
 
     // Write the leading bytes
     if (destRounded != destAddr) {
@@ -251,7 +252,7 @@ void* System::UnalignedMemcpy(void* dest, const void* src, size_t len)
 
 void KernelWrite(u32 address, u32 value)
 {
-    const s32 queue = IOS_CreateMessageQueue((u32*)address, 0x40000000);
+    const s32 queue = IOS_CreateMessageQueue((u32*) address, 0x40000000);
     if (queue < 0)
         AbortColor(YUV_PINK);
 
@@ -305,15 +306,14 @@ extern "C" void Entry([[maybe_unused]] void* arg)
 
     static u8 SystemThreadStack[0x800] ATTRIBUTE_ALIGN(32);
 
-    ret = IOS_CreateThread(
-        SystemThreadEntry, nullptr,
-        reinterpret_cast<u32*>(SystemThreadStack + sizeof(SystemThreadStack)),
-        sizeof(SystemThreadStack), 80, true);
+    ret = IOS_CreateThread(SystemThreadEntry, nullptr,
+      reinterpret_cast<u32*>(SystemThreadStack + sizeof(SystemThreadStack)),
+      sizeof(SystemThreadStack), 80, true);
     if (ret < 0)
         AbortColor(YUV_YELLOW);
 
     // Set new thread CPSR with system mode enabled
-    u32 cpsr = 0x1F | ((u32)(SystemThreadEntry)&1 ? 0x20 : 0);
+    u32 cpsr = 0x1F | ((u32) (SystemThreadEntry) &1 ? 0x20 : 0);
     KernelWrite(0xFFFE0000 + ret * 0xB0, cpsr);
 
     ret = IOS_StartThread(ret);

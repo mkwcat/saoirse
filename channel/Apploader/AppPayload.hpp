@@ -1,7 +1,6 @@
 // AppPayload.hpp - Apploader payload manager
 //   Written by riidefi
 //
-// Copyright (C) 2022 Team Saoirse
 // SPDX-License-Identifier: MIT
 
 #pragma once

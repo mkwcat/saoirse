@@ -1,7 +1,6 @@
 // TaskThread.hpp
 //   Written by Palapeli
 //
-// Copyright (C) 2022 Team Saoirse
 // SPDX-License-Identifier: MIT
 
 #pragma once
@@ -27,8 +26,8 @@ public:
         m_running = true;
         m_cancelTask = false;
         m_onDestroyQueue = onDestroyQueue;
-        m_thread.create(&__threadProc, reinterpret_cast<void*>(this), nullptr,
-                        0x1000, 80);
+        m_thread.create(
+          &__threadProc, reinterpret_cast<void*>(this), nullptr, 0x1000, 80);
     }
 
     void stop()

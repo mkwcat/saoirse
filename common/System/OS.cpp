@@ -1,7 +1,6 @@
 // OS.cpp - libogc-IOS compatible types and functions
 //   Written by Palapeli
 //
-// Copyright (C) 2022 Team Saoirse
 // SPDX-License-Identifier: MIT
 
 #include "OS.hpp"
@@ -28,7 +27,7 @@ void IOS::Resource::MakeIPCToCallbackThread()
     Queue<Request*>* queue = new Queue<Request*>(16);
     s_toCbQueue = queue->id();
     new Thread(&ipcToCallbackThread, reinterpret_cast<void*>(queue), nullptr,
-               0x1000, 80);
+      0x1000, 80);
 }
 
 s32 IOS::Resource::s_toCbQueue = -1;

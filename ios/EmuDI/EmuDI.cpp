@@ -1,7 +1,6 @@
 // EmuDI.cpp - Emulated DI RM
 //   Written by Palapeli
 //
-// Copyright (C) 2022 Team Saoirse
 // SPDX-License-Identifier: MIT
 
 #include "EmuDI.hpp"
@@ -46,8 +45,8 @@ static u32 DiNumPatches = 0;
 VirtualDisc* disc;
 bool useVirtualDisc = false;
 
-static DI::DIError WriteOutput(void* out, u32 outLen, const void* data,
-                               u32 dataLen)
+static DI::DIError WriteOutput(
+  void* out, u32 outLen, const void* data, u32 dataLen)
 {
     if (outLen < dataLen)
         return DI::DIError::Security;
@@ -59,8 +58,8 @@ static DI::DIError WriteOutput(void* out, u32 outLen, const void* data,
 template <class T>
 static DI::DIError WriteOutputStruct(void* out, u32 outLen, const T* data)
 {
-    return WriteOutput(out, outLen, reinterpret_cast<const void*>(data),
-                       sizeof(T));
+    return WriteOutput(
+      out, outLen, reinterpret_cast<const void*>(data), sizeof(T));
 }
 
 /*
@@ -70,8 +69,8 @@ static DI::DIError WriteOutputStruct(void* out, u32 outLen, const T* data)
  * out: Output buffer
  * outLen: Length of the output buffer
  */
-static DI::DIError EmuIoctl(DVDCommand* block, DI::DIIoctl cmd, void* out,
-                            u32 outLen)
+static DI::DIError EmuIoctl(
+  DVDCommand* block, DI::DIIoctl cmd, void* out, u32 outLen)
 {
     assert(disc != nullptr);
 
@@ -84,7 +83,7 @@ static DI::DIError EmuIoctl(DVDCommand* block, DI::DIIoctl cmd, void* out,
     case DI::DIIoctl::Inquiry: {
         if (outLen != sizeof(DI::DriveInfo)) {
             PRINT(IOS_EmuDI, ERROR,
-                  "Inquiry: Output buffer length does not match DriveInfo");
+              "Inquiry: Output buffer length does not match DriveInfo");
             return DI::DIError::Security;
         }
 
@@ -102,7 +101,7 @@ static DI::DIError EmuIoctl(DVDCommand* block, DI::DIIoctl cmd, void* out,
 
         if (inByteLength != outLen) {
             PRINT(IOS_EmuDI, ERROR,
-                  "Read: Output buffer length does not match command block");
+              "Read: Output buffer length does not match command block");
             return DI::DIError::Security;
         }
 
@@ -128,8 +127,8 @@ static DI::DIError EmuIoctl(DVDCommand* block, DI::DIIoctl cmd, void* out,
 
         if (inByteLength != outLen) {
             PRINT(IOS_EmuDI, ERROR,
-                  "UnencryptedRead: Output buffer length does not match "
-                  "command block");
+              "UnencryptedRead: Output buffer length does not match "
+              "command block");
             return DI::DIError::Security;
         }
 
@@ -194,7 +193,7 @@ static DI::DIError EmuIoctl(DVDCommand* block, DI::DIIoctl cmd, void* out,
  * vec: I/O vectors
  */
 static DI::DIError EmuIoctlv(DVDCommand* block, DI::DIIoctl cmd, u32 inCount,
-                             u32 ioCount, IOS::Vector* vec)
+  u32 ioCount, IOS::Vector* vec)
 {
     assert(disc != nullptr);
 
@@ -213,8 +212,8 @@ static DI::DIError EmuIoctlv(DVDCommand* block, DI::DIIoctl cmd, u32 inCount,
 
         if (vec[1].len != 0) {
             if (vec[1].len < sizeof(ES::Ticket)) {
-                PRINT(IOS_EmuDI, ERROR,
-                      "Input ticket vector size is too short");
+                PRINT(
+                  IOS_EmuDI, ERROR, "Input ticket vector size is too short");
                 return DI::DIError::Security;
             }
 
@@ -240,7 +239,7 @@ static DI::DIError EmuIoctlv(DVDCommand* block, DI::DIIoctl cmd, u32 inCount,
         }
 
         [[maybe_unused]] auto esError =
-            reinterpret_cast<ES::ESError*>(vec[4].data);
+          reinterpret_cast<ES::ESError*>(vec[4].data);
 
         PRINT(IOS_EmuDI, INFO, "All open partition params correct");
         return disc->OpenPartition(block->args[0], outTmd);
@@ -304,7 +303,7 @@ static s32 RealRead(void* outbuf, u32 offset, u32 length)
 
     if (useVirtualDisc) {
         return static_cast<s32>(
-            EmuIoctl(&rblock, DI::DIIoctl::Read, outbuf, length));
+          EmuIoctl(&rblock, DI::DIIoctl::Read, outbuf, length));
     }
 
     return static_cast<s32>(DI::sInstance->Read(outbuf, length, offset));
@@ -337,8 +336,8 @@ static s32 Read(u8* outbuf, u32 offset, u32 length)
     }
 
     for (u32 idx = SearchPatch(offset); length != 0; idx++) {
-        PRINT(IOS_EmuDI, INFO, "DI_Read: Read patch %d of %d", idx,
-              DiNumPatches);
+        PRINT(
+          IOS_EmuDI, INFO, "DI_Read: Read patch %d of %d", idx, DiNumPatches);
         if (idx >= DiNumPatches) {
             PRINT(IOS_EmuDI, WARN, "DI_Read: Out of bounds DVD read");
             memset(outbuf, 0, length);
@@ -351,7 +350,7 @@ static s32 Read(u8* outbuf, u32 offset, u32 length)
         u32 read_len = DiPatches[idx].disc_length << 2;
         if (DiPatches[idx].disc_offset != offset) {
             const FRESULT fret =
-                f_lseek(&f, (offset - DiPatches[idx].disc_offset) << 2);
+              f_lseek(&f, (offset - DiPatches[idx].disc_offset) << 2);
             if (fret != FR_OK) {
                 PRINT(IOS_EmuDI, ERROR, "DI_Read: FS_LSeek failed: %d", fret);
                 abort();
@@ -401,8 +400,8 @@ static bool DI_DoNewIOCTL(IOSRequest* req)
         u32 length = block->args[0];
         if (length > req->ioctl.io_len) {
             PRINT(IOS_EmuDI, ERROR,
-                  "DI_IOCTL_READ: Output size < read length (0x%X, 0x%x)",
-                  length, req->ioctl.io_len);
+              "DI_IOCTL_READ: Output size < read length (0x%X, 0x%x)", length,
+              req->ioctl.io_len);
             IOS_ResourceReply(req, DI_ESECURITY);
             return true;
         }
@@ -430,8 +429,8 @@ static bool DI_DoNewIOCTL(IOSRequest* req)
         DiNumPatches = req->ioctl.in_len / sizeof(DVDPatch);
         if (req->ioctl.in_len > sizeof(DiPatches)) {
             PRINT(IOS_EmuDI, ERROR,
-                  "DI_PROXY_IOCTL_PATCHDVD: "
-                  "Not enough memory for DVD patches");
+              "DI_PROXY_IOCTL_PATCHDVD: "
+              "Not enough memory for DVD patches");
             IOS_ResourceReply(req, IOS_ENOMEM);
             return true;
         }
@@ -488,16 +487,15 @@ static inline void ReqIoctl(IOSRequest* req)
         }
 
         auto reply = EmuIoctl(reinterpret_cast<DVDCommand*>(req->ioctl.in),
-                              static_cast<DI::DIIoctl>(req->ioctl.cmd),
-                              req->ioctl.io, req->ioctl.io_len);
+          static_cast<DI::DIIoctl>(req->ioctl.cmd), req->ioctl.io,
+          req->ioctl.io_len);
         IOS_ResourceReply(req, static_cast<s32>(reply));
         return;
     }
 
     // Real drive
-    const s32 ret =
-        IOS_Ioctl(DI::sInstance->GetFd(), req->ioctl.cmd, req->ioctl.in,
-                  req->ioctl.in_len, req->ioctl.io, req->ioctl.io_len);
+    const s32 ret = IOS_Ioctl(DI::sInstance->GetFd(), req->ioctl.cmd,
+      req->ioctl.in, req->ioctl.in_len, req->ioctl.io, req->ioctl.io_len);
     IOS_ResourceReply(req, ret);
 }
 
@@ -514,8 +512,8 @@ static inline void ReqIoctlv(IOSRequest* req)
             return;
         }
 
-        auto reply = EmuIoctlv(
-            reinterpret_cast<DVDCommand*>(req->ioctlv.vec[0].data),
+        auto reply =
+          EmuIoctlv(reinterpret_cast<DVDCommand*>(req->ioctlv.vec[0].data),
             static_cast<DI::DIIoctl>(req->ioctlv.cmd), req->ioctlv.in_count,
             req->ioctlv.io_count, req->ioctlv.vec);
         IOS_ResourceReply(req, static_cast<s32>(reply));
@@ -523,9 +521,8 @@ static inline void ReqIoctlv(IOSRequest* req)
     }
 
     // Real drive
-    const s32 ret =
-        IOS_Ioctlv(DI::sInstance->GetFd(), req->ioctlv.cmd,
-                   req->ioctlv.in_count, req->ioctlv.io_count, req->ioctlv.vec);
+    const s32 ret = IOS_Ioctlv(DI::sInstance->GetFd(), req->ioctlv.cmd,
+      req->ioctlv.in_count, req->ioctlv.io_count, req->ioctlv.vec);
     IOS_ResourceReply(req, ret);
 }
 
@@ -568,7 +565,7 @@ s32 ThreadEntry([[maybe_unused]] void* arg)
     s32 ret = IOS_CreateMessageQueue(__diMsgData, 8);
     if (ret < 0) {
         PRINT(IOS_EmuDI, ERROR,
-              "DI_ThreadEntry: IOS_CreateMessageQueue failed: %d", ret);
+          "DI_ThreadEntry: IOS_CreateMessageQueue failed: %d", ret);
         abort();
     }
     DiMsgQueue = ret;
@@ -576,7 +573,7 @@ s32 ThreadEntry([[maybe_unused]] void* arg)
     ret = IOS_RegisterResourceManager("~dev/di", DiMsgQueue);
     if (ret != IOS_SUCCESS) {
         PRINT(IOS_EmuDI, ERROR,
-              "DI_ThreadEntry: IOS_RegisterResourceManager failed: %d", ret);
+          "DI_ThreadEntry: IOS_RegisterResourceManager failed: %d", ret);
         abort();
     }
 
@@ -586,10 +583,10 @@ s32 ThreadEntry([[maybe_unused]] void* arg)
     IPCLog::sInstance->Notify();
     while (1) {
         IOSRequest* req;
-        ret = IOS_ReceiveMessage(DiMsgQueue, (u32*)&req, 0);
+        ret = IOS_ReceiveMessage(DiMsgQueue, (u32*) &req, 0);
         if (ret != IOS_SUCCESS) {
             PRINT(IOS_EmuDI, ERROR,
-                  "DI_ThreadEntry: IOS_ReceiveMessage failed: %d", ret);
+              "DI_ThreadEntry: IOS_ReceiveMessage failed: %d", ret);
             abort();
         }
 

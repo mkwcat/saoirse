@@ -1,7 +1,6 @@
 // SHA.hpp - SHA engine interface
 //   Written by Palapeli
 //
-// Copyright (C) 2022 Team Saoirse
 // SPDX-License-Identifier: MIT
 
 #pragma once
@@ -20,15 +19,14 @@ public:
     };
 
 private:
-    enum class SHAIoctl
-    {
+    enum class SHAIoctl {
         Init = 0,
         Update = 1,
         Final = 2,
     };
 
-    s32 Command(SHAIoctl cmd, Context* ctx, const void* data, u32 len,
-                u8* hashOut)
+    s32 Command(
+      SHAIoctl cmd, Context* ctx, const void* data, u32 len, u8* hashOut)
     {
         IOS::IOVector<1, 2> vec;
         vec.in[0].data = data;

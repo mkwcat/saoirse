@@ -1,7 +1,6 @@
 // ISO.cpp - ISO virtual disc
 //   Written by Palapeli
 //
-// Copyright (C) 2022 Team Saoirse
 // SPDX-License-Identifier: MIT
 
 #include "ISO.hpp"
@@ -45,7 +44,7 @@ ISO::ISO(const char* path, const char* path2)
         fret = f_lseek(&m_isoFile, CREATE_LINKMAP);
         assert(fret == FR_OK);
     } else {
-        u32 dist = ((u64)m_partSize + (u64)m_lastPartSize) / clmtSize;
+        u32 dist = ((u64) m_partSize + (u64) m_lastPartSize) / clmtSize;
         u32 clmt1stSize = m_partSize / dist;
 
         m_isoFile.cltbl = m_isoClmt;
@@ -85,7 +84,7 @@ bool ISO::ReadRaw(void* buffer, u32 wordOffset, u32 byteLen)
         return false;
     }
 
-    u64 realOffset = (u64)wordOffset * 4;
+    u64 realOffset = (u64) wordOffset * 4;
 
     u32 partNum = realOffset / m_partSize;
     u32 partNumEnd = (realOffset + byteLen - 1) / m_partSize;
@@ -98,8 +97,8 @@ bool ISO::ReadRaw(void* buffer, u32 wordOffset, u32 byteLen)
 
     if (partNumEnd == lastPart && (partOffset + byteLen) >= m_lastPartSize) {
         PRINT(IOS_EmuDI, ERROR,
-              "Read off the end of the last part (%llX >= %llx)", partOffset,
-              m_lastPartSize);
+          "Read off the end of the last part (%llX >= %llx)", partOffset,
+          m_lastPartSize);
         return false;
     }
 
@@ -110,11 +109,11 @@ bool ISO::ReadRaw(void* buffer, u32 wordOffset, u32 byteLen)
                                  : nullptr;
 
         u32 lengthToRead =
-            partNum == partNumEnd ? byteLen : m_partSize - partOffset;
+          partNum == partNumEnd ? byteLen : m_partSize - partOffset;
 
         if (fp == nullptr) {
             PRINT(IOS_EmuDI, ERROR,
-                  "Part counts greater than 1 currently aren't supported");
+              "Part counts greater than 1 currently aren't supported");
             return false;
         }
 
@@ -153,8 +152,7 @@ bool ISO::ReadAndDecryptBlock(u32 wordOffset)
 
     // Decrypt the block using the unique title key
     s32 ret = AES::sInstance->Decrypt(m_titleKey, &m_dataBlock[0x3D0],
-                                      &m_dataBlock[BlockHeaderSize],
-                                      BlockDataSize, m_dataBlockDecrypted);
+      &m_dataBlock[BlockHeaderSize], BlockDataSize, m_dataBlockDecrypted);
     assert(ret == IOSError::OK);
     return true;
 }
@@ -180,7 +178,7 @@ bool ISO::ReadFromPartition(void* out, u32 wordOffset, u32 byteLen)
 
     // Find offset of the encrypted block
     u32 blockWordOffset =
-        dataStart + wordOffset / (BlockDataSize >> 2) * (BlockSize >> 2);
+      dataStart + wordOffset / (BlockDataSize >> 2) * (BlockSize >> 2);
     u8* writeBuffer = reinterpret_cast<u8*>(out);
 
     // Decrypt first block separately if it's not aligned to a block boundary
@@ -244,8 +242,8 @@ DI::DIError ISO::ReadTMD(ES::TMDFixed<512>* out)
     }
 
     if (!ReadRaw(reinterpret_cast<void*>(out),
-                 m_partitionOffset + m_partition.tmdWordOffset,
-                 m_partition.tmdByteLength)) {
+          m_partitionOffset + m_partition.tmdWordOffset,
+          m_partition.tmdByteLength)) {
         PRINT(IOS_EmuDI, ERROR, "Failed to read TMD from disc image");
         return DI::DIError::Drive;
     }
@@ -257,14 +255,13 @@ DI::DIError ISO::OpenPartition(u32 wordOffset, ES::TMDFixed<512>* tmdOut)
 {
     if (m_partitionOpened) {
         PRINT(IOS_EmuDI, ERROR,
-              "Attempt to open a partition when one is already open");
+          "Attempt to open a partition when one is already open");
         return DI::DIError::Invalid;
     }
 
     if (!m_readDiskIDCalled) {
-        PRINT(
-            IOS_EmuDI, ERROR,
-            "ReadDiskID must be called before attempting to open a partition");
+        PRINT(IOS_EmuDI, ERROR,
+          "ReadDiskID must be called before attempting to open a partition");
         return DI::DIError::Invalid;
     }
 
@@ -272,7 +269,7 @@ DI::DIError ISO::OpenPartition(u32 wordOffset, ES::TMDFixed<512>* tmdOut)
 
     if (!ReadRawStruct(&m_partition, wordOffset)) {
         PRINT(IOS_EmuDI, ERROR, "Failed to read partition at offset 0x%08X",
-              wordOffset);
+          wordOffset);
         return DI::DIError::Drive;
     }
 
@@ -283,7 +280,7 @@ DI::DIError ISO::OpenPartition(u32 wordOffset, ES::TMDFixed<512>* tmdOut)
     }
 
     auto esRet =
-        EmuES::DIVerify(m_partition.ticket.info.titleID, &m_partition.ticket);
+      EmuES::DIVerify(m_partition.ticket.info.titleID, &m_partition.ticket);
     if (esRet != ES::ESError::OK) {
         PRINT(IOS_EmuDI, ERROR, "DIVerify failed: %d", esRet);
         return DI::DIError::Verify;
@@ -294,15 +291,29 @@ DI::DIError ISO::OpenPartition(u32 wordOffset, ES::TMDFixed<512>* tmdOut)
 
     // TODO: Get the keys and decrypt a more 'normal' way
     u8 key[16] ATTRIBUTE_ALIGN(32) = {
-        0xeb, 0xe4, 0x2a, 0x22, 0x5e, 0x85, 0x93, 0xe4,
-        0x48, 0xd9, 0xc5, 0x45, 0x73, 0x81, 0xaa, 0xf7,
+      0xeb,
+      0xe4,
+      0x2a,
+      0x22,
+      0x5e,
+      0x85,
+      0x93,
+      0xe4,
+      0x48,
+      0xd9,
+      0xc5,
+      0x45,
+      0x73,
+      0x81,
+      0xaa,
+      0xf7,
     };
 
     u8 iv[16] = {0};
     memcpy(iv, &m_partition.ticket.info.titleID, 8);
 
-    auto ret2 = AES::sInstance->Decrypt(key, iv, titleKeyBuffer,
-                                        sizeof(titleKeyBuffer), titleKeyBuffer);
+    auto ret2 = AES::sInstance->Decrypt(
+      key, iv, titleKeyBuffer, sizeof(titleKeyBuffer), titleKeyBuffer);
     assert(ret2 == IOSError::OK);
     memcpy(m_titleKey, titleKeyBuffer, 16);
 

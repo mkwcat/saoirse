@@ -1,7 +1,6 @@
 // DI.hpp - DI types and I/O
 //   Written by Palapeli
 //
-// Copyright (C) 2022 Team Saoirse
 // SPDX-License-Identifier: MIT
 
 #pragma once
@@ -20,8 +19,7 @@ class DI
 public:
     static DI* sInstance;
 
-    enum class DIError : s32
-    {
+    enum class DIError : s32 {
         Unknown = 0x0,
         OK = 0x1,
         Drive = 0x2,
@@ -34,8 +32,7 @@ public:
 
     static const char* PrintError(DIError error);
 
-    enum class DIIoctl : u8
-    {
+    enum class DIIoctl : u8 {
         Inquiry = 0x12,
         ReadDiskID = 0x70,
         Read = 0x71,
@@ -108,6 +105,7 @@ public:
         // implicit pad
         u32 args[7];
     };
+
     static_assert(sizeof(DICommand) == 0x20);
 
     struct Partition {
@@ -120,6 +118,7 @@ public:
         u32 dataWordOffset;
         u32 dataWordLength;
     };
+
     static_assert(sizeof(DICommand) == 0x20);
 
     // DVDLowInquiry; Retrieves information about the drive version.
@@ -154,9 +153,8 @@ public:
     // ticket - input (optional, must be 32 byte aligned)
     // certs - input (optional, must be 32 byte aligned)
     DIError OpenPartition(u32 wordOffset, ES::TMDFixed<512>* tmd,
-                          ES::ESError* esError = nullptr,
-                          const ES::Ticket* ticket = nullptr,
-                          const void* certs = nullptr, u32 certsLen = 0);
+      ES::ESError* esError = nullptr, const ES::Ticket* ticket = nullptr,
+      const void* certs = nullptr, u32 certsLen = 0);
 
     // DVDLowClosePartition; Closes the currently-open partition, removing
     // information about its keys and such.
@@ -176,10 +174,8 @@ public:
     // ticket - input (optional, must be 32 byte aligned)
     // certs - input (optional, must be 32 byte aligned)
     DIError OpenPartitionWithTmdAndTicket(u32 wordOffset, ES::TMD* tmd,
-                                          ES::ESError* esError = nullptr,
-                                          const ES::Ticket* ticket = nullptr,
-                                          const void* certs = nullptr,
-                                          u32 certsLen = 0);
+      ES::ESError* esError = nullptr, const ES::Ticket* ticket = nullptr,
+      const void* certs = nullptr, u32 certsLen = 0);
 
     // DVDLowOpenPartitionWithTmdAndTicketView; Opens a partition, including
     // verifying it through ES. ReadDiskID needs to have been called beforehand.
@@ -190,10 +186,10 @@ public:
     // tmd - input (required, must be 32 byte aligned)
     // ticketView - input (optional, must be 32 byte aligned)
     // certs - input (optional, must be 32 byte aligned)
-    DIError OpenPartitionWithTmdAndTicketView(
-        u32 wordOffset, ES::TMD* tmd, ES::ESError* esError = nullptr,
-        const ES::TicketView* ticketView = nullptr, const void* certs = nullptr,
-        u32 certsLen = 0);
+    DIError OpenPartitionWithTmdAndTicketView(u32 wordOffset, ES::TMD* tmd,
+      ES::ESError* esError = nullptr,
+      const ES::TicketView* ticketView = nullptr, const void* certs = nullptr,
+      u32 certsLen = 0);
 
     // DVDLowSeek; Seeks to the sector containing a specific position on the
     // disc.
@@ -208,8 +204,8 @@ public:
     }
 
 private:
-    DIError CallIoctl(DICommand& block, DIIoctl cmd, void* out = nullptr,
-                      u32 outLen = 0);
+    DIError CallIoctl(
+      DICommand& block, DIIoctl cmd, void* out = nullptr, u32 outLen = 0);
 
     IOS::ResourceCtrl<DIIoctl> di{"/dev/di"};
 };

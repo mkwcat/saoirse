@@ -2,7 +2,6 @@
 //   Written by riidefi
 //   Based on BrainSlug, by Chadderz
 //
-// Copyright (C) 2022 Team Saoirse
 // SPDX-License-Identifier: MIT
 
 #include "GlobalsConfig.hpp"
@@ -24,8 +23,7 @@ typedef struct {
     uint32_t gc_magic;
 } os_disc_id_t;
 
-typedef enum
-{
+typedef enum {
     OS_BOOT_NORMAL = 0x0d15ea5e
 } os_boot_type_t;
 
@@ -49,8 +47,7 @@ typedef struct {
     uint8_t padding[0x3c];
 } os_debugger_t;
 
-typedef enum
-{
+typedef enum {
     OS_TV_MODE_NTSC,
     OS_TV_MODE_PAL,
     OS_TV_MODE_MPAL,
@@ -85,7 +82,7 @@ typedef struct {
     os_thread_info_t threads; /* 0xc0 */
 } os_early_globals_t;
 
-static os_early_globals_t* const os0 = (os_early_globals_t*)0x80000000;
+static os_early_globals_t* const os0 = (os_early_globals_t*) 0x80000000;
 
 typedef struct {
     void* exception_handlers[0x10]; /* 0x0 */
@@ -121,20 +118,23 @@ typedef struct {
     uint32_t return_code; /* 0x190 */
 } os_late_globals_t;
 
-static os_late_globals_t* const os1 = (os_late_globals_t*)0x80003000;
+static os_late_globals_t* const os1 = (os_late_globals_t*) 0x80003000;
 
 uint32_t GetArenaLow()
 {
     return os0->info.arena_low;
 }
+
 void SetArenaLow(uint32_t low)
 {
     os0->info.arena_low = low;
 }
+
 uint32_t GetArenaHigh()
 {
     return os0->info.arena_high;
 }
+
 void SetArenaHigh(uint32_t high)
 {
     os0->info.arena_high = high;
@@ -167,12 +167,12 @@ void SetupGlobals(int fst_expand)
     os0->info.mem1_size = 0x01800000;
 
     // [Heap---------------][Mods][FST][END OF MEMORY]
-    os0->info.console_type = 1 + ((*(uint32_t*)0xcc00302c) >> 28);
+    os0->info.console_type = 1 + ((*(uint32_t*) 0xcc00302c) >> 28);
     os0->info.arena_high = os0->info.arena_high - fst_expand;
-    os0->info.fst = (char*)os0->info.fst - fst_expand;
+    os0->info.fst = (char*) os0->info.fst - fst_expand;
     os0->info.fst_size += fst_expand;
 
-    os0->threads.debug_monitor_location = (void*)0x81800000;
+    os0->threads.debug_monitor_location = (void*) 0x81800000;
     os0->threads.simulated_memory_size = 0x01800000;
     os0->threads.bus_speed = 0x0E7BE2C0;
     os0->threads.cpu_speed = 0x2B73A840;

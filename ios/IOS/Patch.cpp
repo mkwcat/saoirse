@@ -1,7 +1,6 @@
 // Patch.cpp - IOS kernel patching
 //   Written by Palapeli
 //
-// Copyright (C) 2022 Team Saoirse
 // SPDX-License-Identifier: MIT
 
 #include "Patch.hpp"
@@ -32,6 +31,7 @@ ASM_FUNCTION(static void IOSOpenStrncpyTrampoline(),
     mov     r3, r10; // pid
     bx      r12;
 )
+
 // clang-format on
 
 extern "C" char* IOSOpenStrncpy(char* dest, const char* src, u32 num, s32 pid)
@@ -158,18 +158,18 @@ void PatchIOSOpen()
     // Search backwards for the bytes to patch
     for (int i = 0; i < 0x180; i += 2) {
         if (read16(addr - i) == 0x1C6A && read16(addr - i - 2) == 0x58D0) {
-            write16(addr - i + 2,
-                    ThumbBLHi(addr - i + 2,
-                              (u32)ToUncached(&IOSOpenStrncpyTrampoline)));
-            write16(addr - i + 4,
-                    ThumbBLLo(addr - i + 2,
-                              (u32)ToUncached(&IOSOpenStrncpyTrampoline)));
+            write16(
+              addr - i + 2, ThumbBLHi(addr - i + 2,
+                              (u32) ToUncached(&IOSOpenStrncpyTrampoline)));
+            write16(
+              addr - i + 4, ThumbBLLo(addr - i + 2,
+                              (u32) ToUncached(&IOSOpenStrncpyTrampoline)));
 
             PRINT(IOS, WARN, "Patched %08X = %04X%04X", addr - i + 2,
-                  read16(addr - i + 2), read16(addr - i + 4));
+              read16(addr - i + 2), read16(addr - i + 4));
 
             // IOS automatically aligns flush
-            IOS_FlushDCache((void*)(addr - i + 2), 4);
+            IOS_FlushDCache((void*) (addr - i + 2), 4);
             InvalidateICacheLine(round_down(addr - i + 2, 32));
             InvalidateICacheLine(round_down(addr - i + 2, 32) + 32);
             return;
@@ -211,8 +211,22 @@ static u32 FindImportKeyFunction()
 }
 
 const u8 KoreanCommonKey[] = {
-    0x63, 0xb8, 0x2b, 0xb4, 0xf4, 0x61, 0x4e, 0x2e,
-    0x13, 0xf2, 0xfe, 0xfb, 0xba, 0x4c, 0x9b, 0x7e,
+  0x63,
+  0xb8,
+  0x2b,
+  0xb4,
+  0xf4,
+  0x61,
+  0x4e,
+  0x2e,
+  0x13,
+  0xf2,
+  0xfe,
+  0xfb,
+  0xba,
+  0x4c,
+  0x9b,
+  0x7e,
 };
 
 void ImportKoreanCommonKey()
@@ -227,8 +241,8 @@ void ImportKoreanCommonKey()
     PRINT(IOS, WARN, "Found import key function at 0x%08X", func);
 
     // Call function by address
-    (*(void (*)(int keyIndex, const u8* key, u32 keySize))func)(
-        11, KoreanCommonKey, sizeof(KoreanCommonKey));
+    (*(void (*)(int keyIndex, const u8* key, u32 keySize)) func)(
+      11, KoreanCommonKey, sizeof(KoreanCommonKey));
 }
 
 constexpr u32 MakePPCBranch(u32 src, u32 dest)
@@ -258,8 +272,8 @@ bool ResetEspresso(u32 entry)
 
     DASSERT(in_mem1(entry));
     if (!in_mem1(entry)) {
-        PRINT(IOS, ERROR, "Invalid entry point: 0x%08X! Must be in MEM1!",
-              entry);
+        PRINT(
+          IOS, ERROR, "Invalid entry point: 0x%08X! Must be in MEM1!", entry);
         return false;
     }
 
@@ -280,7 +294,7 @@ bool ResetEspresso(u32 entry)
     PRINT(IOS, INFO, "Now watching for decryption...");
 
     while (true) {
-        IOS_InvalidateDCache((void*)0x01330100, sizeof(u32));
+        IOS_InvalidateDCache((void*) 0x01330100, sizeof(u32));
 
         // Check if the first instruction has been decrypted. The block has
         // already been hashed by this point.
@@ -288,10 +302,10 @@ bool ResetEspresso(u32 entry)
             PRINT(IOS, INFO, "Decrypted!");
 
             write32(0x01330100, MakePPCBranch(0x01330100, entry));
-            IOS_FlushDCache((void*)0x01330100, sizeof(u32));
+            IOS_FlushDCache((void*) 0x01330100, sizeof(u32));
 
             PRINT(IOS, WARN, "Patched %08X = %08X", 0x01330100,
-                  MakePPCBranch(0x01330100, entry));
+              MakePPCBranch(0x01330100, entry));
             break;
         }
     }

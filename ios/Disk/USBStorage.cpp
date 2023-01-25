@@ -21,19 +21,16 @@
 #include <algorithm>
 #include <cstring>
 
-enum
-{
+enum {
     MSC_GET_MAX_LUN = 0xfe,
 };
 
-enum
-{
+enum {
     CSW_SIZE = 0x1f,
     CBW_SIZE = 0xd,
 };
 
-enum
-{
+enum {
     SCSI_TEST_UNIT_READY = 0x0,
     SCSI_REQUEST_SENSE = 0x3,
     SCSI_INQUIRY = 0x12,
@@ -43,14 +40,13 @@ enum
     SCSI_SYNCHRONIZE_CACHE_10 = 0x35,
 };
 
-enum
-{
+enum {
     SCSI_TYPE_DIRECT_ACCESS = 0x0,
 };
 
 USBStorage::USBStorage(USB* usb, USB::DeviceInfo info)
 {
-    m_buffer = (u8*)IOS::Alloc(0x4000);
+    m_buffer = (u8*) IOS::Alloc(0x4000);
     m_usb = usb;
     m_info = info;
 }
@@ -61,7 +57,7 @@ bool USBStorage::GetLunCount(u8* lunCount)
     requestType |= USB::CtrlType::ReqType_Class;
     requestType |= USB::CtrlType::Dir_Device2Host;
     if (m_usb->WriteCtrlMsg(m_id, requestType, MSC_GET_MAX_LUN, 0, m_interface,
-                            0x1, m_buffer) != USB::USBError::OK) {
+          0x1, m_buffer) != USB::USBError::OK) {
         PRINT(IOS_USB, ERROR, "WriteCtrlMsg failed");
         return false;
     }
@@ -69,8 +65,8 @@ bool USBStorage::GetLunCount(u8* lunCount)
     return *lunCount >= 1 && *lunCount <= 16;
 }
 
-bool USBStorage::SCSITransfer(bool isWrite, u32 size, void* data, u8 lun,
-                              u8 cbSize, void* cb)
+bool USBStorage::SCSITransfer(
+  bool isWrite, u32 size, void* data, u8 lun, u8 cbSize, void* cb)
 {
     assert(!!size == !!data);
     assert(lun <= 16);
@@ -102,7 +98,7 @@ bool USBStorage::SCSITransfer(bool isWrite, u32 size, void* data, u8 lun,
             memcpy(m_buffer, data, chunkSize);
         }
         if (m_usb->WriteBulkMsg(m_id, isWrite ? m_outEndpoint : m_inEndpoint,
-                                chunkSize, m_buffer) != USB::USBError::OK) {
+              chunkSize, m_buffer) != USB::USBError::OK) {
             PRINT(IOS_USB, ERROR, "WriteBulkMsg (2) failed");
             return false;
         }
@@ -153,8 +149,8 @@ bool USBStorage::Inquiry(u8 lun, u8* type)
     write8(cmd + 0x1, lun << 5);
     write8(cmd + 0x4, sizeof(response));
 
-    if (!SCSITransfer(false, sizeof(response), response, lun, sizeof(cmd),
-                      cmd)) {
+    if (!SCSITransfer(
+          false, sizeof(response), response, lun, sizeof(cmd), cmd)) {
         return false;
     }
 
@@ -182,8 +178,8 @@ bool USBStorage::RequestSense(u8 lun)
     write8(cmd + 0x0, SCSI_REQUEST_SENSE);
     write8(cmd + 0x4, sizeof(response));
 
-    if (!SCSITransfer(false, sizeof(response), response, lun, sizeof(cmd),
-                      cmd)) {
+    if (!SCSITransfer(
+          false, sizeof(response), response, lun, sizeof(cmd), cmd)) {
         return false;
     }
 
@@ -215,8 +211,8 @@ bool USBStorage::ReadCapacity(u8 lun, u32* blockSize)
     u8 cmd[10] = {0};
     write8(cmd, SCSI_READ_CAPACITY_10);
 
-    if (!SCSITransfer(false, sizeof(response), response, lun, sizeof(cmd),
-                      cmd)) {
+    if (!SCSITransfer(
+          false, sizeof(response), response, lun, sizeof(cmd), cmd)) {
         return false;
     }
 
@@ -234,13 +230,13 @@ bool USBStorage::Init()
         const USB::EndpointDescriptor* endpointDescriptor = &m_info.endpoint[i];
 
         u8 transferType =
-            endpointDescriptor->attributes & USB::CtrlType::TransferType_Mask;
+          endpointDescriptor->attributes & USB::CtrlType::TransferType_Mask;
         if (transferType != USB::CtrlType::TransferType_Bulk) {
             continue;
         }
 
         u8 direction =
-            endpointDescriptor->endpointAddr & USB::CtrlType::Dir_Mask;
+          endpointDescriptor->endpointAddr & USB::CtrlType::Dir_Mask;
         if (!outFound && direction == USB::CtrlType::Dir_Host2Device) {
             m_outEndpoint = endpointDescriptor->endpointAddr;
             outFound = true;
@@ -315,8 +311,8 @@ bool USBStorage::ReadSectors(u32 firstSector, u32 sectorCount, void* buffer)
     return false;
 }
 
-bool USBStorage::WriteSectors(u32 firstSector, u32 sectorCount,
-                              const void* buffer)
+bool USBStorage::WriteSectors(
+  u32 firstSector, u32 sectorCount, const void* buffer)
 {
     assert(sectorCount <= UINT16_MAX);
 
@@ -329,8 +325,8 @@ bool USBStorage::WriteSectors(u32 firstSector, u32 sectorCount,
         write8(cmd + 0x8, sectorCount & 0xFF);
 
         u32 size = sectorCount * m_blockSize;
-        if (SCSITransfer(true, size, const_cast<void*>(buffer), m_lun,
-                         sizeof(cmd), cmd)) {
+        if (SCSITransfer(
+              true, size, const_cast<void*>(buffer), m_lun, sizeof(cmd), cmd)) {
             return true;
         }
 

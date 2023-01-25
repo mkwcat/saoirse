@@ -1,7 +1,6 @@
 // IOSBoot.cpp - IOS startup code
 //   Written by Palapeli
 //
-// Copyright (C) 2022 Team Saoirse
 // SPDX-License-Identifier: MIT
 
 #include "IOSBoot.hpp"
@@ -23,7 +22,7 @@
 
 #ifdef IOS_LAUNCH_FAIL_DEBUG
 LIBOGC_SUCKS_BEGIN
-#include <ogc/pad.h>
+#  include <ogc/pad.h>
 LIBOGC_SUCKS_END
 #endif
 
@@ -59,14 +58,17 @@ template <u32 TSize>
 struct VFile {
     static constexpr u32 MAGIC = 0x46494C45; /* FILE */
 
-    VFile(const void* data, u32 len) : m_magic(MAGIC), m_length(len), m_pos(0)
+    VFile(const void* data, u32 len)
+      : m_magic(MAGIC)
+      , m_length(len)
+      , m_pos(0)
     {
         ASSERT(len <= TSize);
         ASSERT(len >= 0x34);
         ASSERT(!memcmp(data,
-                       "\x7F"
-                       "ELF",
-                       4));
+          "\x7F"
+          "ELF",
+          4));
         memcpy(m_data, data, len);
         m_data[7] = 0x61;
         m_data[8] = 1;
@@ -235,13 +237,13 @@ static void DebugRegisterDump(u32 addr)
     }
 
     printf(
-        "R0       R1       R2       R3       R4       R5       R6       R7\n");
+      "R0       R1       R2       R3       R4       R5       R6       R7\n");
     printf("%08X %08X %08X %08X %08X %08X %08X %08X\n", reg[0], reg[1], reg[2],
-           reg[3], reg[4], reg[5], reg[6], reg[7]);
+      reg[3], reg[4], reg[5], reg[6], reg[7]);
     printf(
-        "R8       R9       R10      R11      R12      R13      R14      R15\n");
+      "R8       R9       R10      R11      R12      R13      R14      R15\n");
     printf("%08X %08X %08X %08X %08X %08X %08X %08X\n", reg[8], reg[9], reg[10],
-           reg[11], reg[12], reg[13], reg[14], reg[15]);
+      reg[11], reg[12], reg[13], reg[14], reg[15]);
 }
 
 static void ReportIOSReceiveMessage([[maybe_unused]] u32 sp)
@@ -253,12 +255,12 @@ static void ReportIOSThread(int id)
 {
     const u32 threadPtr = SRAMMirrToReal(0xFFFE0000 + 0xB0 * id);
 
-    PRINT(Core, INFO, "--- Thread %d (PID: %d) ---", id,
-          read32(threadPtr + 0x54));
+    PRINT(
+      Core, INFO, "--- Thread %d (PID: %d) ---", id, read32(threadPtr + 0x54));
 
     PRINT(Core, INFO, "CPSR 0x%08X; State 0x%04X; PC 0x%08X; LR 0x%08X",
-          read32(threadPtr + 0x00), read32(threadPtr + 0x50),
-          read32(threadPtr + 0x40), read32(threadPtr + 0x3C));
+      read32(threadPtr + 0x00), read32(threadPtr + 0x50),
+      read32(threadPtr + 0x40), read32(threadPtr + 0x3C));
 
     // All addresses here should be physical (we don't map anything
     // different from the physical address).
@@ -296,8 +298,8 @@ static void ReportIOSThread(int id)
     // Blocked in IOS_ReceiveMessage.
     if (pc != 0 && read32(pc) == 0x1BFFFF2C && read32(pc + 4) == 0xEAFFFFD7) {
         if (sp == 0) {
-            PRINT(Core, INFO,
-                  "Cannot give IOS_ReceiveMessage report: Invalid sp!");
+            PRINT(
+              Core, INFO, "Cannot give IOS_ReceiveMessage report: Invalid sp!");
         } else {
             // Valid sp, let's give report (TODO)
             PRINT(Core, INFO, "Dumping IOS_ReceiveMessage context: TODO!");
@@ -313,7 +315,7 @@ void IOSBoot::DebugLaunchReport()
     // will work regardless if whether or not IOS is currently functional.
 
     // Check VFile status
-    auto vf = (VFile<VFILE_SIZE>*)VFILE_ADDR;
+    auto vf = (VFile<VFILE_SIZE>*) VFILE_ADDR;
     PRINT(Core, INFO, "VFile::m_length = 0x%08X", vf->m_length);
     PRINT(Core, INFO, "VFile::m_pos = 0x%08X", vf->m_pos);
 
@@ -329,9 +331,8 @@ void IOSBoot::DebugLaunchReport()
     MEMCRWrite(MEMCRReg::MEM_PROT_DDR, 0);
 
     PRINT(Core, INFO, "Idle thread state 0x%08X; PC 0x%08X; LR 0x%08X",
-          read32(SRAMMirrToReal(0xFFFE0050)),
-          read32(SRAMMirrToReal(0xFFFE0040)),
-          read32(SRAMMirrToReal(0xFFFE003C)));
+      read32(SRAMMirrToReal(0xFFFE0050)), read32(SRAMMirrToReal(0xFFFE0040)),
+      read32(SRAMMirrToReal(0xFFFE003C)));
 
     // Our process is PID 1 (ES), so to find it we will search and report on
     // every thread with PID 1. We will skip like the first 20 threads so we
@@ -458,9 +459,8 @@ s32 IOSBoot::IPCLog::threadEntry(void* userdata)
     IPCLog* log = reinterpret_cast<IPCLog*>(userdata);
 
     while (true) {
-        s32 result =
-            log->logRM.ioctl(Log::IPCLogIoctl::RegisterPrintHook, NULL, 0,
-                             log->logBuffer, sizeof(log->logBuffer));
+        s32 result = log->logRM.ioctl(Log::IPCLogIoctl::RegisterPrintHook, NULL,
+          0, log->logBuffer, sizeof(log->logBuffer));
         if (!log->handleEvent(result))
             break;
     }
@@ -477,7 +477,7 @@ IOSBoot::IPCLog::IPCLog()
         for (s32 i = 0; i < 1000; i++) {
             usleep(1000);
             new (&this->logRM)
-                IOS::ResourceCtrl<Log::IPCLogIoctl>("/dev/saoirse");
+              IOS::ResourceCtrl<Log::IPCLogIoctl>("/dev/saoirse");
             if (this->logRM.fd() != IOSError::NotFound)
                 break;
         }
@@ -492,37 +492,36 @@ IOSBoot::IPCLog::IPCLog()
     // Set the time on IOS
     u64 epoch = time(nullptr);
     u32 input[3] = {
-        ACRReadTrusted(ACRReg::TIMER),
-        u64Hi(epoch),
-        u64Lo(epoch),
+      ACRReadTrusted(ACRReg::TIMER),
+      u64Hi(epoch),
+      u64Lo(epoch),
     };
-    s32 ret = this->logRM.ioctl(Log::IPCLogIoctl::SetTime, input, sizeof(input),
-                                nullptr, 0);
+    s32 ret = this->logRM.ioctl(
+      Log::IPCLogIoctl::SetTime, input, sizeof(input), nullptr, 0);
     assert(ret == IOSError::OK);
 
-    new (&m_thread) Thread(threadEntry, reinterpret_cast<void*>(this), nullptr,
-                           0x10000, 80);
+    new (&m_thread)
+      Thread(threadEntry, reinterpret_cast<void*>(this), nullptr, 0x10000, 80);
 
-    new (&m_handlerThread)
-        Thread(HandlerThreadEntry, reinterpret_cast<void*>(this), nullptr,
-               0x10000, 80);
+    new (&m_handlerThread) Thread(
+      HandlerThreadEntry, reinterpret_cast<void*>(this), nullptr, 0x10000, 80);
 }
 
 /* don't judge this code; it's not meant to be seen by eyes */
 
 void IOSBoot::SetupPrintHook()
 {
-    static const u8 hook_code[] = {
-        0x4A, 0x04, 0x68, 0x13, 0x18, 0xD0, 0x70, 0x01, 0x21, 0x00, 0x70, 0x41,
-        0x33, 0x01, 0x60, 0x13, 0x47, 0x70, 0x00, 0x00, 0x10, 0xC0, 0x00, 0x00};
-    *(u32*)0x90C00000 = 4;
-    DCFlushRange((void*)0x90C00000, 0x10000);
+    static const u8 hook_code[] = {0x4A, 0x04, 0x68, 0x13, 0x18, 0xD0, 0x70,
+      0x01, 0x21, 0x00, 0x70, 0x41, 0x33, 0x01, 0x60, 0x13, 0x47, 0x70, 0x00,
+      0x00, 0x10, 0xC0, 0x00, 0x00};
+    *(u32*) 0x90C00000 = 4;
+    DCFlushRange((void*) 0x90C00000, 0x10000);
 
-    *(u32*)0xCD4F744C = ((u32)(&hook_code) & ~0xC0000000) | 1;
+    *(u32*) 0xCD4F744C = ((u32) (&hook_code) & ~0xC0000000) | 1;
 }
 
 void IOSBoot::ReadPrintHook()
 {
-    DCInvalidateRange((void*)0x90C00000, 0x10000);
-    printf("PRINT HOOK RESULT:\n%s", (char*)0x90C00004);
+    DCInvalidateRange((void*) 0x90C00000, 0x10000);
+    printf("PRINT HOOK RESULT:\n%s", (char*) 0x90C00004);
 }

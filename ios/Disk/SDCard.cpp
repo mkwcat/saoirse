@@ -6,7 +6,7 @@
  *   Michael Wiedenbauer (shagkur)
  *   Dave Murphy (WinterMute)
  *   Sven Peter <svpe@gmx.net>
- *   Modified by Palapeli for Saoirse (2022)
+ *   Modified by Palapeli for Saoirse
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -34,11 +34,11 @@
 #include <System/Util.h>
 #include <string.h>
 #ifdef TARGET_IOS
-#include <IOS/Syscalls.h>
-#include <IOS/System.hpp>
+#  include <IOS/Syscalls.h>
+#  include <IOS/System.hpp>
 #else
-#include <ogc/ipc.h>
-#include <unistd.h>
+#  include <ogc/ipc.h>
+#  include <unistd.h>
 #endif
 
 #define SDIO_HEAPSIZE (5 * 1024)
@@ -109,9 +109,9 @@
 #define SDIO_STATUS_CARD_INITIALIZED 0x10000
 #define SDIO_STATUS_CARD_SDHC 0x100000
 
-#define READ_BL_LEN ((u8)(__sd0_csd[5] & 0x0f))
+#define READ_BL_LEN ((u8) (__sd0_csd[5] & 0x0f))
 #define WRITE_BL_LEN                                                           \
-    ((u8)(((__sd0_csd[12] & 0x03) << 2) | ((__sd0_csd[13] >> 6) & 0x03)))
+  ((u8) (((__sd0_csd[12] & 0x03) << 2) | ((__sd0_csd[13] >> 6) & 0x03)))
 
 static u8 rw_buffer[SDIO_HEAPSIZE] ATTRIBUTE_ALIGN(32);
 
@@ -143,16 +143,16 @@ static s32 __sdio_initialized = 0;
 
 static char _sd0_fs[] = "/dev/sdio/slot0";
 
-static inline void SyncBeforeRead([[maybe_unused]] const void* address,
-                                  [[maybe_unused]] u32 len)
+static inline void SyncBeforeRead(
+  [[maybe_unused]] const void* address, [[maybe_unused]] u32 len)
 {
 #ifdef TARGET_IOS
     IOS_InvalidateDCache(const_cast<void*>(address), len);
 #endif
 }
 
-static inline void SyncBeforeWrite([[maybe_unused]] const void* address,
-                                   [[maybe_unused]] u32 len)
+static inline void SyncBeforeWrite(
+  [[maybe_unused]] const void* address, [[maybe_unused]] u32 len)
 {
 #ifdef TARGET_IOS
     IOS_FlushDCache(const_cast<void*>(address), len);
@@ -160,8 +160,7 @@ static inline void SyncBeforeWrite([[maybe_unused]] const void* address,
 }
 
 static s32 __sdio_sendcommand(u32 cmd, u32 cmd_type, u32 rsp_type, u32 arg,
-                              u32 blk_cnt, u32 blk_size, void* buffer,
-                              void* reply, u32 rlen)
+  u32 blk_cnt, u32 blk_size, void* buffer, void* reply, u32 rlen)
 {
     s32 ret;
     IOS::Vector iovec[3];
@@ -197,8 +196,7 @@ static s32 __sdio_sendcommand(u32 cmd, u32 cmd_type, u32 rsp_type, u32 arg,
         ret = IOS_Ioctlv(__sd0_fd, IOCTL_SDIO_SENDCMD, 2, 1, iovec);
     } else
         ret = IOS_Ioctl(__sd0_fd, IOCTL_SDIO_SENDCMD, &request,
-                        sizeof(struct _sdiorequest), &response,
-                        sizeof(struct _sdioresponse));
+          sizeof(struct _sdiorequest), &response, sizeof(struct _sdioresponse));
 
     if (reply && !(rlen > 16))
         memcpy(reply, &response, rlen);
@@ -224,8 +222,8 @@ static s32 __sdio_getstatus()
     s32 ret;
     u32 status ATTRIBUTE_ALIGN(32);
 
-    ret = IOS_Ioctl(__sd0_fd, IOCTL_SDIO_GETSTATUS, NULL, 0, &status,
-                    sizeof(u32));
+    ret =
+      IOS_Ioctl(__sd0_fd, IOCTL_SDIO_GETSTATUS, NULL, 0, &status, sizeof(u32));
     if (ret < 0)
         return ret;
 
@@ -238,12 +236,12 @@ static s32 __sdio_resetcard()
     u32 status ATTRIBUTE_ALIGN(32);
 
     __sd0_rca = 0;
-    ret = IOS_Ioctl(__sd0_fd, IOCTL_SDIO_RESETCARD, NULL, 0, &status,
-                    sizeof(u32));
+    ret =
+      IOS_Ioctl(__sd0_fd, IOCTL_SDIO_RESETCARD, NULL, 0, &status, sizeof(u32));
     if (ret < 0)
         return ret;
 
-    __sd0_rca = (u16)(status >> 16);
+    __sd0_rca = (u16) (status >> 16);
     return (status & 0xffff);
 }
 
@@ -264,8 +262,8 @@ static s32 __sdio_gethcr(u8 reg, u8 size, u32* val)
     hcr_query[3] = size;
     hcr_query[4] = 0;
     hcr_query[5] = 0;
-    ret = IOS_Ioctl(__sd0_fd, IOCTL_SDIO_READHCREG, (void*)hcr_query, 24,
-                    &hcr_value, sizeof(u32));
+    ret = IOS_Ioctl(__sd0_fd, IOCTL_SDIO_READHCREG, (void*) hcr_query, 24,
+      &hcr_value, sizeof(u32));
     *val = hcr_value;
 
     return ret;
@@ -282,8 +280,8 @@ static s32 __sdio_sethcr(u8 reg, u8 size, u32 data)
     hcr_query[3] = size;
     hcr_query[4] = data;
     hcr_query[5] = 0;
-    ret = IOS_Ioctl(__sd0_fd, IOCTL_SDIO_WRITEHCREG, (void*)hcr_query, 24, NULL,
-                    0);
+    ret = IOS_Ioctl(
+      __sd0_fd, IOCTL_SDIO_WRITEHCREG, (void*) hcr_query, 24, NULL, 0);
 
     return ret;
 }
@@ -341,12 +339,12 @@ static s32 __sd0_getrca()
     s32 ret;
     u32 rca;
 
-    ret = __sdio_sendcommand(SDIO_CMD_SENDRCA, 0, SDIO_RESPONSE_R5, 0, 0, 0,
-                             NULL, &rca, sizeof(rca));
+    ret = __sdio_sendcommand(
+      SDIO_CMD_SENDRCA, 0, SDIO_RESPONSE_R5, 0, 0, 0, NULL, &rca, sizeof(rca));
     if (ret < 0)
         return ret;
 
-    __sd0_rca = (u16)(rca >> 16);
+    __sd0_rca = (u16) (rca >> 16);
     return (rca & 0xffff);
 }
 
@@ -354,9 +352,8 @@ static s32 __sd0_select()
 {
     s32 ret;
 
-    ret =
-        __sdio_sendcommand(SDIO_CMD_SELECT, SDIOCMD_TYPE_AC, SDIO_RESPONSE_R1B,
-                           (__sd0_rca << 16), 0, 0, NULL, NULL, 0);
+    ret = __sdio_sendcommand(SDIO_CMD_SELECT, SDIOCMD_TYPE_AC,
+      SDIO_RESPONSE_R1B, (__sd0_rca << 16), 0, 0, NULL, NULL, 0);
 
     return ret;
 }
@@ -366,7 +363,7 @@ static s32 __sd0_deselect()
     s32 ret;
 
     ret = __sdio_sendcommand(SDIO_CMD_DESELECT, SDIOCMD_TYPE_AC,
-                             SDIO_RESPONSE_R1B, 0, 0, 0, NULL, NULL, 0);
+      SDIO_RESPONSE_R1B, 0, 0, 0, NULL, NULL, 0);
 
     return ret;
 }
@@ -376,7 +373,7 @@ static s32 __sd0_setblocklength(u32 blk_len)
     s32 ret;
 
     ret = __sdio_sendcommand(SDIO_CMD_SETBLOCKLEN, SDIOCMD_TYPE_AC,
-                             SDIO_RESPONSE_R1, blk_len, 0, 0, NULL, NULL, 0);
+      SDIO_RESPONSE_R1, blk_len, 0, 0, NULL, NULL, 0);
 
     return ret;
 }
@@ -391,12 +388,12 @@ static s32 __sd0_setbuswidth(u32 bus_width)
         val = 0x0002;
 
     ret = __sdio_sendcommand(SDIO_CMD_APPCMD, SDIOCMD_TYPE_AC, SDIO_RESPONSE_R1,
-                             (__sd0_rca << 16), 0, 0, NULL, NULL, 0);
+      (__sd0_rca << 16), 0, 0, NULL, NULL, 0);
     if (ret < 0)
         return ret;
 
     ret = __sdio_sendcommand(SDIO_ACMD_SETBUSWIDTH, SDIOCMD_TYPE_AC,
-                             SDIO_RESPONSE_R1, val, 0, 0, NULL, NULL, 0);
+      SDIO_RESPONSE_R1, val, 0, 0, NULL, NULL, 0);
 
     return ret;
 }
@@ -419,7 +416,7 @@ static s32 __sd0_getcid()
     s32 ret;
 
     ret = __sdio_sendcommand(SDIO_CMD_ALL_SENDCID, 0, SDIO_RESPOSNE_R2,
-                             (__sd0_rca << 16), 0, 0, NULL, __sd0_cid, 16);
+      (__sd0_rca << 16), 0, 0, NULL, __sd0_cid, 16);
 
     return ret;
 }
@@ -487,7 +484,7 @@ static bool __sd0_initio()
         if (ret < 0)
             goto fail;
         ret = __sdio_sendcommand(SDIO_CMD_SENDIFCOND, 0, SDIO_RESPONSE_R6,
-                                 0x1aa, 0, 0, NULL, &resp, sizeof(resp));
+          0x1aa, 0, 0, NULL, &resp, sizeof(resp));
         if (ret < 0)
             goto fail;
         if ((resp.rsp_fields[0] & 0xff) != 0xaa)
@@ -496,12 +493,11 @@ static bool __sd0_initio()
         tries = 10;
         while (tries-- > 0) {
             ret = __sdio_sendcommand(SDIO_CMD_APPCMD, SDIOCMD_TYPE_AC,
-                                     SDIO_RESPONSE_R1, 0, 0, 0, NULL, NULL, 0);
+              SDIO_RESPONSE_R1, 0, 0, 0, NULL, NULL, 0);
             if (ret < 0)
                 goto fail;
-            ret =
-                __sdio_sendcommand(SDIO_ACMD_SENDOPCOND, 0, SDIO_RESPONSE_R3,
-                                   0x40300000, 0, 0, NULL, &resp, sizeof(resp));
+            ret = __sdio_sendcommand(SDIO_ACMD_SENDOPCOND, 0, SDIO_RESPONSE_R3,
+              0x40300000, 0, 0, NULL, &resp, sizeof(resp));
             if (ret < 0)
                 goto fail;
             if (resp.rsp_fields[0] & (1 << 31))
@@ -609,8 +605,8 @@ s32 SDCard::ReadSectors(sec_t sector, sec_t numSectors, void* buffer)
     if (ret < 0)
         return ret;
 
-    if ((u32)buffer & 0x1F) {
-        ptr = (u8*)buffer;
+    if ((u32) buffer & 0x1F) {
+        ptr = (u8*) buffer;
         int secs_to_read;
         while (numSectors > 0) {
             if (__sd0_sdhc == 0)
@@ -623,8 +619,8 @@ s32 SDCard::ReadSectors(sec_t sector, sec_t numSectors, void* buffer)
                 secs_to_read = numSectors;
             SyncBeforeRead(rw_buffer, secs_to_read * PAGE_SIZE512);
             ret = __sdio_sendcommand(SDIO_CMD_READMULTIBLOCK, SDIOCMD_TYPE_AC,
-                                     SDIO_RESPONSE_R1, blk_off, secs_to_read,
-                                     PAGE_SIZE512, rw_buffer, NULL, 0);
+              SDIO_RESPONSE_R1, blk_off, secs_to_read, PAGE_SIZE512, rw_buffer,
+              NULL, 0);
             if (ret >= 0) {
                 memcpy(ptr, rw_buffer, PAGE_SIZE512 * secs_to_read);
                 ptr += PAGE_SIZE512 * secs_to_read;
@@ -638,8 +634,7 @@ s32 SDCard::ReadSectors(sec_t sector, sec_t numSectors, void* buffer)
             sector *= PAGE_SIZE512;
         SyncBeforeRead(buffer, PAGE_SIZE512 * numSectors);
         ret = __sdio_sendcommand(SDIO_CMD_READMULTIBLOCK, SDIOCMD_TYPE_AC,
-                                 SDIO_RESPONSE_R1, sector, numSectors,
-                                 PAGE_SIZE512, buffer, NULL, 0);
+          SDIO_RESPONSE_R1, sector, numSectors, PAGE_SIZE512, buffer, NULL, 0);
     }
 
     __sd0_deselect();
@@ -660,8 +655,8 @@ s32 SDCard::WriteSectors(sec_t sector, sec_t numSectors, const void* buffer)
     if (ret < 0)
         return ret;
 
-    if ((u32)buffer & 0x1F) {
-        ptr = (u8*)buffer;
+    if ((u32) buffer & 0x1F) {
+        ptr = (u8*) buffer;
         int secs_to_write;
         while (numSectors > 0) {
             if (__sd0_sdhc == 0)
@@ -675,8 +670,8 @@ s32 SDCard::WriteSectors(sec_t sector, sec_t numSectors, const void* buffer)
             memcpy(rw_buffer, ptr, PAGE_SIZE512 * secs_to_write);
             SyncBeforeWrite(rw_buffer, PAGE_SIZE512 * secs_to_write);
             ret = __sdio_sendcommand(SDIO_CMD_WRITEMULTIBLOCK, SDIOCMD_TYPE_AC,
-                                     SDIO_RESPONSE_R1, blk_off, secs_to_write,
-                                     PAGE_SIZE512, rw_buffer, NULL, 0);
+              SDIO_RESPONSE_R1, blk_off, secs_to_write, PAGE_SIZE512, rw_buffer,
+              NULL, 0);
             if (ret >= 0) {
                 ptr += PAGE_SIZE512 * secs_to_write;
                 sector += secs_to_write;
@@ -689,8 +684,8 @@ s32 SDCard::WriteSectors(sec_t sector, sec_t numSectors, const void* buffer)
             sector *= PAGE_SIZE512;
         SyncBeforeWrite(buffer, PAGE_SIZE512 * numSectors);
         ret = __sdio_sendcommand(SDIO_CMD_WRITEMULTIBLOCK, SDIOCMD_TYPE_AC,
-                                 SDIO_RESPONSE_R1, sector, numSectors,
-                                 PAGE_SIZE512, (char*)buffer, NULL, 0);
+          SDIO_RESPONSE_R1, sector, numSectors, PAGE_SIZE512, (char*) buffer,
+          NULL, 0);
     }
 
     __sd0_deselect();

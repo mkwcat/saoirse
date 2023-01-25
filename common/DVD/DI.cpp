@@ -1,7 +1,6 @@
 // DI.cpp - DI types and I/O
 //   Written by Palapeli
 //
-// Copyright (C) 2022 Team Saoirse
 // SPDX-License-Identifier: MIT
 
 #include "DI.hpp"
@@ -11,8 +10,8 @@ DI* DI::sInstance;
 const char* DI::PrintError(DIError error)
 {
 #define DI_ERROR_STR(val)                                                      \
-    case DIError::val:                                                         \
-        return #val
+  case DIError::val:                                                           \
+    return #val
     switch (error) {
         DI_ERROR_STR(Unknown);
         DI_ERROR_STR(OK);
@@ -31,14 +30,13 @@ const char* DI::PrintError(DIError error)
 DI::DIError DI::Inquiry(DriveInfo* info)
 {
     DICommand block = {
-        .cmd = DIIoctl::Inquiry,
-        .args = {0},
+      .cmd = DIIoctl::Inquiry,
+      .args = {0},
     };
     DriveInfo drvInfo ATTRIBUTE_ALIGN(32);
 
-    DIError res =
-        CallIoctl(block, DIIoctl::Inquiry, reinterpret_cast<void*>(&drvInfo),
-                  sizeof(DriveInfo));
+    DIError res = CallIoctl(block, DIIoctl::Inquiry,
+      reinterpret_cast<void*>(&drvInfo), sizeof(DriveInfo));
     if (res == DIError::OK)
         *info = drvInfo;
     return res;
@@ -48,14 +46,13 @@ DI::DIError DI::Inquiry(DriveInfo* info)
 DI::DIError DI::ReadDiskID(DiskID* diskid)
 {
     DICommand block = {
-        .cmd = DIIoctl::ReadDiskID,
-        .args = {0},
+      .cmd = DIIoctl::ReadDiskID,
+      .args = {0},
     };
     DiskID drvDiskid ATTRIBUTE_ALIGN(32);
 
-    DIError res =
-        CallIoctl(block, DIIoctl::ReadDiskID,
-                  reinterpret_cast<void*>(&drvDiskid), sizeof(DiskID));
+    DIError res = CallIoctl(block, DIIoctl::ReadDiskID,
+      reinterpret_cast<void*>(&drvDiskid), sizeof(DiskID));
     if (res == DIError::OK)
         *diskid = drvDiskid;
     return res;
@@ -67,8 +64,8 @@ DI::DIError DI::ReadDiskID(DiskID* diskid)
 DI::DIError DI::Read(void* data, u32 lenBytes, u32 wordOffset)
 {
     DICommand block = {
-        .cmd = DIIoctl::Read,
-        .args = {lenBytes, wordOffset},
+      .cmd = DIIoctl::Read,
+      .args = {lenBytes, wordOffset},
     };
     return CallIoctl(block, DIIoctl::Read, data, lenBytes);
 }
@@ -80,8 +77,8 @@ DI::DIError DI::Read(void* data, u32 lenBytes, u32 wordOffset)
 DI::DIError DI::WaitForCoverClose()
 {
     DICommand block = {
-        .cmd = DIIoctl::WaitForCoverClose,
-        .args = {0},
+      .cmd = DIIoctl::WaitForCoverClose,
+      .args = {0},
     };
     return CallIoctl(block, DIIoctl::WaitForCoverClose);
 }
@@ -90,12 +87,12 @@ DI::DIError DI::WaitForCoverClose()
 DI::DIError DI::GetLength(u32* length)
 {
     DICommand block = {
-        .cmd = DIIoctl::GetLength,
-        .args = {0},
+      .cmd = DIIoctl::GetLength,
+      .args = {0},
     };
     u32 drvLength;
     DIError res = CallIoctl(block, DIIoctl::GetLength,
-                            reinterpret_cast<void*>(&drvLength), sizeof(u32));
+      reinterpret_cast<void*>(&drvLength), sizeof(u32));
     *length = drvLength;
     return res;
 }
@@ -106,8 +103,8 @@ DI::DIError DI::GetLength(u32* length)
 DI::DIError DI::Reset(bool spinup)
 {
     DICommand block = {
-        .cmd = DIIoctl::Reset,
-        .args = {static_cast<u32>(spinup)},
+      .cmd = DIIoctl::Reset,
+      .args = {static_cast<u32>(spinup)},
     };
     return CallIoctl(block, DIIoctl::Reset);
 }
@@ -119,14 +116,14 @@ DI::DIError DI::Reset(bool spinup)
 // ticket - input (optional, must be 32 byte aligned)
 // certs - input (optional, must be 32 byte aligned)
 DI::DIError DI::OpenPartition(u32 wordOffset, ES::TMDFixed<512>* tmd,
-                              ES::ESError* esError, const ES::Ticket* ticket,
-                              const void* certs, u32 certsLen)
+  ES::ESError* esError, const ES::Ticket* ticket, const void* certs,
+  u32 certsLen)
 {
     if (!aligned(tmd, 32) || !aligned(ticket, 32) || !aligned(certs, 32))
         return DIError::Invalid;
     DICommand block = {
-        .cmd = DIIoctl::OpenPartition,
-        .args = {wordOffset},
+      .cmd = DIIoctl::OpenPartition,
+      .args = {wordOffset},
     };
     u32 output[8] ATTRIBUTE_ALIGN(32);
 
@@ -159,8 +156,8 @@ DI::DIError DI::OpenPartition(u32 wordOffset, ES::TMDFixed<512>* tmd,
 DI::DIError DI::ClosePartition()
 {
     DICommand block = {
-        .cmd = DIIoctl::ClosePartition,
-        .args = {0},
+      .cmd = DIIoctl::ClosePartition,
+      .args = {0},
     };
     return CallIoctl(block, DIIoctl::ClosePartition);
 }
@@ -169,8 +166,8 @@ DI::DIError DI::ClosePartition()
 // "System Area" of the disc.
 DI::DIError DI::UnencryptedRead(void* data, u32 lenBytes, u32 wordOffset)
 {
-    DICommand block = {.cmd = DIIoctl::UnencryptedRead,
-                       .args = {lenBytes, wordOffset}};
+    DICommand block = {
+      .cmd = DIIoctl::UnencryptedRead, .args = {lenBytes, wordOffset}};
     return CallIoctl(block, DIIoctl::UnencryptedRead, data, lenBytes);
 }
 
@@ -184,15 +181,14 @@ DI::DIError DI::UnencryptedRead(void* data, u32 lenBytes, u32 wordOffset)
 // ticket - input (optional, must be 32 byte aligned)
 // certs - input (optional, must be 32 byte aligned)
 DI::DIError DI::OpenPartitionWithTmdAndTicket(u32 wordOffset, ES::TMD* tmd,
-                                              ES::ESError* esError,
-                                              const ES::Ticket* ticket,
-                                              const void* certs, u32 certsLen)
+  ES::ESError* esError, const ES::Ticket* ticket, const void* certs,
+  u32 certsLen)
 {
     if (!aligned(tmd, 32) || !aligned(ticket, 32) || !aligned(certs, 32))
         return DIError::Invalid;
     DICommand block = {
-        .cmd = DIIoctl::OpenPartitionWithTmdAndTicket,
-        .args = {wordOffset},
+      .cmd = DIIoctl::OpenPartitionWithTmdAndTicket,
+      .args = {wordOffset},
     };
     u32 output[8] ATTRIBUTE_ALIGN(32);
 
@@ -214,7 +210,7 @@ DI::DIError DI::OpenPartitionWithTmdAndTicket(u32 wordOffset, ES::TMD* tmd,
     vec.out[0].len = sizeof(output);
 
     DIError res = static_cast<DIError>(
-        di.ioctlv(DIIoctl::OpenPartitionWithTmdAndTicket, vec));
+      di.ioctlv(DIIoctl::OpenPartitionWithTmdAndTicket, vec));
     if (esError != nullptr)
         *esError = static_cast<ES::ESError>(output[0]);
 
@@ -230,15 +226,15 @@ DI::DIError DI::OpenPartitionWithTmdAndTicket(u32 wordOffset, ES::TMD* tmd,
 // tmd - input (required, must be 32 byte aligned)
 // ticketView - input (optional, must be 32 byte aligned)
 // certs - input (optional, must be 32 byte aligned)
-DI::DIError DI::OpenPartitionWithTmdAndTicketView(
-    u32 wordOffset, ES::TMD* tmd, ES::ESError* esError,
-    const ES::TicketView* ticketView, const void* certs, u32 certsLen)
+DI::DIError DI::OpenPartitionWithTmdAndTicketView(u32 wordOffset, ES::TMD* tmd,
+  ES::ESError* esError, const ES::TicketView* ticketView, const void* certs,
+  u32 certsLen)
 {
     if (!aligned(tmd, 32) || !aligned(ticketView, 32) || !aligned(certs, 32))
         return DIError::Invalid;
     DICommand block = {
-        .cmd = DIIoctl::OpenPartitionWithTmdAndTicketView,
-        .args = {wordOffset},
+      .cmd = DIIoctl::OpenPartitionWithTmdAndTicketView,
+      .args = {wordOffset},
     };
     u32 output[8] ATTRIBUTE_ALIGN(32);
 
@@ -260,7 +256,7 @@ DI::DIError DI::OpenPartitionWithTmdAndTicketView(
     vec.out[0].len = sizeof(output);
 
     DIError res = static_cast<DIError>(
-        di.ioctlv(DIIoctl::OpenPartitionWithTmdAndTicketView, vec));
+      di.ioctlv(DIIoctl::OpenPartitionWithTmdAndTicketView, vec));
     if (esError != nullptr)
         *esError = static_cast<ES::ESError>(output[0]);
 
@@ -272,8 +268,8 @@ DI::DIError DI::OpenPartitionWithTmdAndTicketView(
 DI::DIError DI::Seek(u32 wordOffset)
 {
     DICommand block = {
-        .cmd = DIIoctl::Seek,
-        .args = {wordOffset},
+      .cmd = DIIoctl::Seek,
+      .args = {wordOffset},
     };
     return CallIoctl(block, DIIoctl::Seek);
 }
@@ -284,14 +280,14 @@ DI::DIError DI::ReadDiskBca(u8* out)
     if (!aligned(out, 32))
         return DIError::Invalid;
     DICommand block = {
-        .cmd = DIIoctl::ReadDiskBca,
-        .args = {0},
+      .cmd = DIIoctl::ReadDiskBca,
+      .args = {0},
     };
     return CallIoctl(block, DIIoctl::ReadDiskBca, out, 64);
 }
 
 DI::DIError DI::CallIoctl(DICommand& block, DIIoctl cmd, void* out, u32 outLen)
 {
-    return static_cast<DIError>(di.ioctl(cmd, reinterpret_cast<void*>(&block),
-                                         sizeof(DICommand), out, outLen));
+    return static_cast<DIError>(di.ioctl(
+      cmd, reinterpret_cast<void*>(&block), sizeof(DICommand), out, outLen));
 }
