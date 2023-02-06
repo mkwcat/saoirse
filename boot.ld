@@ -19,7 +19,7 @@ SECTIONS
 		. = ALIGN(32);
 	} : stub = 0
 	
-	. = 0x80004000;
+	. = 0x81200000;
 	
 	.text : {
 		*(.text*)
@@ -29,20 +29,31 @@ SECTIONS
 
 	.bss : {
 		PROVIDE(__bss_start = .);
-		*(.dynsbss)
 		*(.sbss)
 		*(.sbss.*)
-		*(.gnu.linkonce.sb.*)
-		*(.scommon)
 		*(.sbss2)
 		*(.sbss2.*)
-		*(.gnu.linkonce.sb2.*)
 		*(.bss)
 		*(.bss.*)
-		*(.dynbss)
-		*(.gnu.linkonce.b.*)
-		*(COMMON)
 		. = ALIGN(32);
 		PROVIDE (__bss_end = .);
 	} : bss = 0
+
+	vtr = 0xcc002000;
+    dcr = 0xcc002002;
+    vto = 0xcc00200c;
+    vte = 0xcc002010;
+    tfbl = 0xcc00201c;
+    bfbl = 0xcc002024;
+    hsw = 0xcc002048;
+    hsr = 0xcc00204a;
+    visel = 0xcc00206e;
+
+    ppcmsg = 0xcd000000;
+    ppcctrl = 0xcd000004;
+    armmsg = 0xcd000008;
+
+    irqmask = 0xcd000034;
+
+    aicr = 0xcd006c00;
 }

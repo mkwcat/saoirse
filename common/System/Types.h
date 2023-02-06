@@ -1,11 +1,7 @@
 // From libogc
 
 #pragma once
-#ifndef TARGET_IOS
-#   include <gctypes.h>
-#else
 
-/* for IOS */
 /*! \file types.h 
 \brief Data type definitions
 */ 
@@ -86,7 +82,5 @@ typedef unsigned int BOOL;
 #ifdef __cplusplus
    }
 #endif /* __cplusplus */
-
-#endif
 
 /* END OF FILE */

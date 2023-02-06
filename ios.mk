@@ -10,11 +10,11 @@
 # INCLUDES is a list of directories containing extra header files
 #---------------------------------------------------------------------------------
 TARGET		:=	saoirse_ios
-BUILD		:=	build_ios
+BUILD		:=	build/ios
 SOURCES		:=	$(wildcard ios/*) $(wildcard common/*)
 DATA		:=	data  
 INCLUDES	:=      ios common
-BIN			:=  bin
+BIN             :=      bin
 
 LIBS		:=	
 LIBDIRS		:=
@@ -57,10 +57,10 @@ LOADER_TARGET := ios_loader
 #---------------------------------------------------------------------------------
 # automatically build a list of object files for our project
 #---------------------------------------------------------------------------------
-DUMMY != mkdir -p $(BIN) $(BUILD) $(foreach dir,$(SOURCES),$(BUILD)/$(dir))
+DUMMY != mkdir -p $(BUILD) $(foreach dir,$(SOURCES),$(BUILD)/$(dir))
 
-OUTPUT		:=  $(BIN)/$(TARGET)
-LOADER_OUTPUT		:= $(BIN)/$(LOADER_TARGET)
+OUTPUT		:=  $(BUILD)/$(TARGET)
+LOADER_OUTPUT		:= $(BUILD)/$(LOADER_TARGET)
 CFILES		:=	$(foreach dir,$(SOURCES),$(wildcard $(dir)/*.c))
 CPPFILES	:=	$(foreach dir,$(SOURCES),$(wildcard $(dir)/*.cpp))
 sFILES		:=	$(foreach dir,$(SOURCES),$(wildcard $(dir)/*.s))
@@ -113,14 +113,10 @@ LDFLAGS	= $(GCC_ARCH) $(LIBPATHS) $(LIBS) -n -Wl,--gc-sections -Wl,-static
 
 
 default: $(OUTPUT).elf $(LOADER_OUTPUT).bin
-
-clean:
-	@echo cleaning...
-	@rm -rf $(BIN) $(BUILD)
 	
 $(OUTPUT).elf: $(OUTPUT)_dbg.elf
 	@echo output ... $(notdir $@)
-	@$(LD) -s -o $@ $(OFILES) -T$(LINKSCRIPT) $(LDFLAGS) -Wl,-Map,$(BIN)/$(TARGET).map
+	@$(LD) -s -o $@ $(OFILES) -T$(LINKSCRIPT) $(LDFLAGS) -Wl,-Map,$(BUILD)/$(TARGET).map
 
 $(OUTPUT)_dbg.elf: $(OFILES) $(LINKSCRIPT)
 	@echo linking ... $(notdir $@)

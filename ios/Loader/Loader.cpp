@@ -3,6 +3,7 @@
 //
 // SPDX-License-Identifier: MIT
 
+#include <Boot/AddressMap.hpp>
 #include <IOS/Syscalls.h>
 #include <IOS/System.hpp>
 #include <System/Hollywood.hpp>
@@ -348,6 +349,14 @@ void LoaderEntry()
 
     // Enable PPC access to SRAM.
     ACRSetFlag(ACRSRNPROTBit::AHPEN, true);
+
+    // Give the PPC full ISFS permissions.
+    IOS_SetUid(15, 0);
+
+    write32(IOS_BOOT_MSG_ADDRESS, 1);
+    IOS_FlushDCache((void*) IOS_BOOT_MSG_ADDRESS, 4);
+
+    return;
 
 #ifdef LOADER_DEBUG
     MakeIPCLog();

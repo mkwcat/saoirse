@@ -1,136 +1,52 @@
-#---------------------------------------------------------------------------------
-# Clear the implicit built in rules
-#---------------------------------------------------------------------------------
-.SUFFIXES:
-#---------------------------------------------------------------------------------
-ifeq ($(strip $(DEVKITPPC)),)
-$(error "Please set DEVKITPPC in your environment. export DEVKITPPC=<path to>devkitPPC")
-endif
+# Add .d to Make's recognized suffixes.
+SUFFIXES += .d
 
-include $(DEVKITPPC)/wii_rules
+# Project directory
+BUILD := build/channel
+TARGET := channel
+LOADER := Loader
 
-#---------------------------------------------------------------------------------
-# TARGET is the name of the output
-# BUILD is the directory where object files & intermediate files will be placed
-# SOURCES is a list of directories containing source code
-# INCLUDES is a list of directories containing extra header files
-#---------------------------------------------------------------------------------
-TARGET		:=	channel
-BUILD		:=	build_channel
-BIN         :=  bin
-SOURCES		:=	channel $(wildcard common/*) $(wildcard channel/*)
-DATA		:=	data  
-INCLUDES	:=  $(SOURCES) $(BUILD) common
+# Compiler definitions
+CC := $(DEVKITPPC)/bin/powerpc-eabi-gcc
+LD := $(DEVKITPPC)/bin/powerpc-eabi-ld
+OBJCOPY := $(DEVKITPPC)/bin/powerpc-eabi-objcopy
 
-#---------------------------------------------------------------------------------
-# options for code generation
-#---------------------------------------------------------------------------------
+CFILES := $(wildcard channel/*.c)
+CPPFILES := $(wildcard channel/*.cpp)
+SFILES := $(wildcard channel/*.s)
+OFILES		:=	$(CPPFILES:.cpp=_cpp.o) $(CFILES:.c=_c.o) $(SFILES:.s=_s.o)
+OFILES		:= $(addprefix $(BUILD)/, $(OFILES))
+DEPS	:= $(OFILES:.o=.d)
 
-CFLAGS	= -g -O0 -Wall -Wextra -Wpedantic -Wnull-dereference -Wshadow -Werror -Wno-format-truncation -fno-exceptions \
-	-fno-asynchronous-unwind-tables -fno-unwind-tables -fno-builtin-memcpy -fno-builtin-memset -Wno-pointer-arith \
-	$(MACHDEP) $(INCLUDE)
-CXXFLAGS	=	$(CFLAGS) -std=c++20 -Wno-register -Wno-narrowing
+DUMMY != mkdir -p $(BUILD) $(BUILD)/channel
 
-LDFLAGS	=	-g $(MACHDEP) -Wl,-Map,$(OUTPUT).map -Wl,--section-start,.init=0x80900000
+CFLAGS := -O3 -fno-rtti -fno-short-enums -fshort-wchar -fno-exceptions -nodefaultlibs -ffreestanding -ffunction-sections -fdata-sections -Icommon -Ichannel
 
-#---------------------------------------------------------------------------------
-# any extra libraries we wish to link with the project
-#---------------------------------------------------------------------------------
-LIBS	:=	 -lwiiuse -lbte -logc -lm -lmxml
 
-#---------------------------------------------------------------------------------
-# list of directories containing libraries, this must be the top level containing
-# include and lib
-#---------------------------------------------------------------------------------
-LIBDIRS	:= $(PORTLIBS)
+default: $(BUILD)/$(TARGET).bin
 
-#---------------------------------------------------------------------------------
-# no real need to edit anything past this point unless you need to add additional
-# rules for different file extensions
-#---------------------------------------------------------------------------------
-ifneq ($(BUILD),$(notdir $(CURDIR)))
-#---------------------------------------------------------------------------------
-
-export OUTPUT	:=	$(CURDIR)/$(TARGET)
-
-export VPATH	:=	$(foreach dir,$(SOURCES),$(CURDIR)/$(dir)) \
-					$(foreach dir,$(DATA),$(CURDIR)/$(dir))
-
-export DEPSDIR	:=	$(CURDIR)/$(BUILD)
-
-#---------------------------------------------------------------------------------
-# automatically build a list of object files for our project
-#---------------------------------------------------------------------------------
-CFILES		:=	$(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.c)))
-CPPFILES	:=	$(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.cpp)))
-sFILES		:=	$(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.s)))
-SFILES		:=	$(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.S)))
-BINFILES    :=  $(BIN)/data.ar
-
-#---------------------------------------------------------------------------------
-# use CXX for linking C++ projects, CC for standard C
-#---------------------------------------------------------------------------------
-ifeq ($(strip $(CPPFILES)),)
-	export LD	:=	$(CC)
-else
-	export LD	:=	$(CXX)
-endif
-
-export OFILES	:=	$(addsuffix .o,$(notdir $(BINFILES))) \
-					$(CPPFILES:.cpp=.o) $(CFILES:.c=.o) \
-					$(sFILES:.s=.o) $(SFILES:.S=.o)
-
-#---------------------------------------------------------------------------------
-# build a list of include paths
-#---------------------------------------------------------------------------------
-export INCLUDE	:=	$(foreach dir,$(INCLUDES), -I$(CURDIR)/$(dir)) \
-					$(foreach dir,$(LIBDIRS),-I$(dir)/include) \
-					-I$(LIBOGC_INC)
-
-#---------------------------------------------------------------------------------
-# build a list of library paths
-#---------------------------------------------------------------------------------
-export LIBPATHS	:=	$(foreach dir,$(LIBDIRS),-L$(dir)/lib) \
-					-L$(LIBOGC_LIB)
-
-export OUTPUT	:=	$(CURDIR)/$(BIN)/$(TARGET)
-.PHONY: $(BUILD) clean
-
-#---------------------------------------------------------------------------------
-$(BUILD):
-	@[ -d $@ ] || mkdir -p $@
-	@$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/channel.mk
-
-#---------------------------------------------------------------------------------
 clean:
-	@echo clean ...
-	@rm -fr $(BUILD) $(OUTPUT).elf $(OUTPUT).dol
+	@echo cleaning...
+	@rm -rf $(BUILD)
 
-#---------------------------------------------------------------------------------
-run:
-	wiiload $(BIN)/$(TARGET).dol
+-include $(DEPS)
 
-#---------------------------------------------------------------------------------
-else
+$(BUILD)/%_c.o: %.c
+	@echo $<
+	@$(CC) -MMD $(CFLAGS) -I../include -c -o $@ $<
 
-DEPENDS	:=	$(OFILES:.o=.d)
+$(BUILD)/%_cpp.o: %.cpp
+	@echo $<
+	@$(CC) -std=c++17 -MMD $(CFLAGS) -I../include -c -o $@ $<
 
-#---------------------------------------------------------------------------------
-# main targets
-#---------------------------------------------------------------------------------
-$(OUTPUT).dol: $(OUTPUT).elf
-$(OUTPUT).elf: $(OFILES)
+$(BUILD)/%_s.o: %.s
+	@echo $<
+	@$(CC) -x assembler-with-cpp -I../include -c -o $@ $<
 
--include $(DEPENDS)
+$(BUILD)/$(TARGET).elf: $(OFILES)
+	@echo linking ... $(TARGET).elf
+	@$(CC) -Tchannel.ld -n $(OFILES) -Wl,--gc-sections -Wl,-static -o $@
 
-#---------------------------------------------------------------------------------
-# This rule links in the data archive
-#---------------------------------------------------------------------------------
-data.ar.o	:	$(CURDIR)/../$(BIN)/data.ar
-#---------------------------------------------------------------------------------
-	@echo $(notdir $<)
-	@$(bin2o)
-
-#---------------------------------------------------------------------------------
-endif
-#---------------------------------------------------------------------------------
+$(BUILD)/$(TARGET).bin: $(BUILD)/$(TARGET).elf
+	@echo output ... $(notdir $@)
+	@$(OBJCOPY) $< $@ -O binary

@@ -1,5 +1,4 @@
 bin
-build_ios
-build_channel
-build_boot
+build
+__pycache__
 .vscode

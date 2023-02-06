@@ -124,12 +124,6 @@ static inline u32 u64Lo(u64 value)
     return value & 0xFFFFFFFF;
 }
 
-#ifndef TARGET_IOS
-LIBOGC_SUCKS_BEGIN
-#  include <ogc/machine/processor.h>
-LIBOGC_SUCKS_END
-#else
-
 static inline u32 bswap32(u32 val)
 {
     return ((val & 0xFF) << 24) | ((val & 0xFF00) << 8) |
@@ -185,8 +179,6 @@ static inline void _mask32(u32 address, u32 clear, u32 set)
 
 #  define mask32(_ADDRESS, _CLEAR, _SET)                                       \
     _mask32((u32) (_ADDRESS), (u32) (_CLEAR), (u32) (_SET))
-
-#endif
 
 #define read16_le(_ADDRESS) bswap16(read16((u32) (_ADDRESS)))
 #define read32_le(_ADDRESS) bswap32(read32((u32) (_ADDRESS)))

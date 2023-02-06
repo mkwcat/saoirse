@@ -2,7 +2,7 @@ OUTPUT_ARCH(arm)
 ENTRY(LoaderEntry)
 
 MEMORY {
-	ram(rwx) 	: ORIGIN = 0x10100000, LENGTH = 0x40000
+	ram(rwx) 	: ORIGIN = 0x10000200, LENGTH = 0x40000
 }
 
 SECTIONS

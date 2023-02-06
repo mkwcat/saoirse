@@ -7,29 +7,38 @@
 # TARGET is the name of the output
 # BUILD is the directory where object files & intermediate files will be placed
 #---------------------------------------------------------------------------------
-BIN			:=  bin
-TARGET      :=  data.ar
-DATA		:=  data
+BUILD	    :=  build
+ARCHIVE_D   :=  $(BUILD)/data/data.arc.lzma.d
+TARGET      :=  data.arc
+DATA        :=  data
 
 #---------------------------------------------------------------------------------
 # the prefix on the compiler executables
 #---------------------------------------------------------------------------------
-PREFIX		:= $(DEVKITPPC)/bin/powerpc-eabi-
-AR			:= $(PREFIX)ar
+WUJ5 := tools/wuj5/wuj5.py
 
 #---------------------------------------------------------------------------------
 # automatically build a list of object files for our project
 #---------------------------------------------------------------------------------
-DUMMY != mkdir -p $(BIN)
+DUMMY != mkdir -p $(BUILD)/data $(ARCHIVE_D)
 
 OUTPUT		:=  $(BIN)/$(TARGET)
-DATAFILES := $(foreach dir,$(DATA),$(wildcard $(dir)/*))
 
 default: $(OUTPUT)
 
-$(OUTPUT): $(DATAFILES) $(BIN)/saoirse_ios.elf $(BIN)/ios_loader.bin
+
+$(ARCHIVE_D)/channel.bin: $(BUILD)/channel/channel.bin
+	@cp -f $< $@
+
+$(ARCHIVE_D)/ios_module.elf: $(BUILD)/ios/saoirse_ios.elf
+	@cp -f $< $@
+
+$(ARCHIVE_D)/ios_loader.bin: $(BUILD)/ios/ios_loader.bin
+	@cp -f $< $@
+
+$(OUTPUT): $(DATAFILES) $(ARCHIVE_D)/channel.bin $(ARCHIVE_D)/ios_module.elf $(ARCHIVE_D)/ios_loader.bin
 	@rm -rf $@
 	@echo packing ... $(notdir $@)
-	@$(AR) -r $@ $(DATAFILES) $(BIN)/saoirse_ios.elf $(BIN)/ios_loader.bin
+	@python $(WUJ5) encode $(ARCHIVE_D)
 
 

@@ -163,7 +163,7 @@ rvlStartup:
 	mtmsr   r4
 
 	mfspr   r4, HID4
-	rlwinm  r4, r4, 0, 7, 5
+	// rlwinm  r4, r4, 0, 7, 5
 	mtspr   HID4, r4
 
 	mfspr   r3, HID0

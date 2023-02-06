@@ -1,0 +1,19 @@
+#pragma once
+
+#ifdef TARGET_IOS
+#  define PPC_ADDR(v) (v & ~0xC0000000)
+#else
+#  define PPC_ADDR(v) (v)
+#endif
+
+enum {
+    SEL_ADDRESS = PPC_ADDR(0x80900000),
+    SEL_MAXLEN = 0x00100000,
+
+    IOS_BOOT_MSG_ADDRESS = PPC_ADDR(0x90000100),
+    IOS_BOOT_ADDRESS = PPC_ADDR(0x90000200),
+    IOS_BOOT_MAXLEN = 0x00040000,
+
+    BOOT_ARC_ADDRESS = PPC_ADDR(0x90040000),
+    BOOT_ARC_MAXLEN = 0x00100000,
+};
