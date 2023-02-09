@@ -39,6 +39,11 @@ SECTIONS
 		PROVIDE (__bss_end = .);
 	} : bss = 0
 
+	/DISCARD/ : {
+		*(.fimport*)
+		*(.comment)
+	}
+
 	vtr = 0xcc002000;
     dcr = 0xcc002002;
     vto = 0xcc00200c;

@@ -9,6 +9,8 @@
 #ifdef TARGET_IOS
 #  include <Disk/DeviceMgr.hpp>
 #  include <IOS/IPCLog.hpp>
+#else
+#  include <Import/RVL_OS.h>
 #endif
 #include <array>
 #include <cstring>
@@ -95,7 +97,7 @@ void Log::VPrint(LogSource src, const char* srcStr, const char* funcStr,
         }
 
 #else
-        printf("%s[%s %s] %s\n\x1b[37;1m", logColors[slvl], srcStr, funcStr,
+        OSReport("%s[%s %s] %s\n\x1b[37;1m", logColors[slvl], srcStr, funcStr,
           logBuffer.data());
 #endif
         logMutex->unlock();

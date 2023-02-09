@@ -273,8 +273,8 @@ bool LoadWiiShopSEL()
     return true;
 }
 
-extern u8 data_arc_lzma[];
-extern u8 data_arc_lzma_end[];
+extern u8 LoaderArchive[];
+extern u32 LoaderArchiveSize;
 
 u32 s_bootArcSize;
 
@@ -282,11 +282,11 @@ bool DecompressArchive()
 {
     ELzmaStatus status;
 
-    u32 compressedSize = (const u8*) &data_arc_lzma_end - data_arc_lzma;
+    u32 compressedSize = LoaderArchiveSize;
     size_t destLen = BOOT_ARC_MAXLEN;
     size_t inLen = compressedSize - 5;
-    SRes ret = LzmaDecode((u8*) BOOT_ARC_ADDRESS, &destLen, data_arc_lzma + 0xD,
-      &inLen, data_arc_lzma, LZMA_PROPS_SIZE, LZMA_FINISH_END, &status, 0);
+    SRes ret = LzmaDecode((u8*) BOOT_ARC_ADDRESS, &destLen, LoaderArchive + 0xD,
+      &inLen, LoaderArchive, LZMA_PROPS_SIZE, LZMA_FINISH_END, &status, 0);
 
     if (ret != SZ_OK) {
         return false;
@@ -396,7 +396,7 @@ void Launch()
     Console::Print("done\n");
 
     Console::Print("Load Saoirse channel... ");
-    entry = archive.get("./channel.bin");
+    entry = archive.get("./ppc_channel.bin");
     file = std::get_if<Archive::File>(&entry);
     if (!file) {
         Console::Print("\nERROR : Failed to get the channel payload.\n");

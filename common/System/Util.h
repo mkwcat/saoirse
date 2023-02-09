@@ -35,19 +35,27 @@
 #  define EXTERN_C_END
 #endif
 
-#define LIBOGC_SUCKS_BEGIN                                                     \
-  _Pragma("GCC diagnostic push")                                               \
-    _Pragma("GCC diagnostic ignored \"-Wpedantic\"")
-
-#define LIBOGC_SUCKS_END _Pragma("GCC diagnostic pop")
-
 #define ASM(...) asm volatile(#__VA_ARGS__)
 
-#define ASM_FUNCTION(_PROTOTYPE, ...)                                          \
-  __attribute__((naked)) _PROTOTYPE                                            \
+#define ASM_THUMB_FUNCTION(_PROTOTYPE, ...)                                    \
+  _Pragma("GCC diagnostic push");                                              \
+  _Pragma("GCC diagnostic ignored \"-Wreturn-type\"");                         \
+  _Pragma("GCC diagnostic ignored \"-Wunused-parameter\"");                    \
+  __attribute__((naked)) ATTRIBUTE_TARGET(thumb) ATTRIBUTE_NOINLINE _PROTOTYPE \
   {                                                                            \
     ASM(__VA_ARGS__);                                                          \
-  }
+  }                                                                            \
+  _Pragma("GCC diagnostic pop");
+
+#define ASM_ARM_FUNCTION(_PROTOTYPE, ...)                                      \
+  _Pragma("GCC diagnostic push");                                              \
+  _Pragma("GCC diagnostic ignored \"-Wreturn-type\"");                         \
+  _Pragma("GCC diagnostic ignored \"-Wunused-parameter\"");                    \
+  __attribute__((naked)) ATTRIBUTE_TARGET(arm) ATTRIBUTE_NOINLINE _PROTOTYPE   \
+  {                                                                            \
+    ASM(__VA_ARGS__);                                                          \
+  }                                                                            \
+  _Pragma("GCC diagnostic pop");
 
 #ifdef __cplusplus
 template <typename T>
@@ -170,15 +178,15 @@ static inline void _mask32(u32 address, u32 clear, u32 set)
     *(vu32*) address = ((*(vu32*) address) & ~clear) | set;
 }
 
-#  define write8(_ADDRESS, _VALUE) _write8((u32) (_ADDRESS), (u8) (_VALUE))
-#  define write16(_ADDRESS, _VALUE) _write16((u32) (_ADDRESS), (u16) (_VALUE))
-#  define write32(_ADDRESS, _VALUE) _write32((u32) (_ADDRESS), (u32) (_VALUE))
-#  define read8(_ADDRESS) _read8((u32) (_ADDRESS))
-#  define read16(_ADDRESS) _read16((u32) (_ADDRESS))
-#  define read32(_ADDRESS) _read32((u32) (_ADDRESS))
+#define write8(_ADDRESS, _VALUE) _write8((u32) (_ADDRESS), (u8) (_VALUE))
+#define write16(_ADDRESS, _VALUE) _write16((u32) (_ADDRESS), (u16) (_VALUE))
+#define write32(_ADDRESS, _VALUE) _write32((u32) (_ADDRESS), (u32) (_VALUE))
+#define read8(_ADDRESS) _read8((u32) (_ADDRESS))
+#define read16(_ADDRESS) _read16((u32) (_ADDRESS))
+#define read32(_ADDRESS) _read32((u32) (_ADDRESS))
 
-#  define mask32(_ADDRESS, _CLEAR, _SET)                                       \
-    _mask32((u32) (_ADDRESS), (u32) (_CLEAR), (u32) (_SET))
+#define mask32(_ADDRESS, _CLEAR, _SET)                                         \
+  _mask32((u32) (_ADDRESS), (u32) (_CLEAR), (u32) (_SET))
 
 #define read16_le(_ADDRESS) bswap16(read16((u32) (_ADDRESS)))
 #define read32_le(_ADDRESS) bswap32(read32((u32) (_ADDRESS)))

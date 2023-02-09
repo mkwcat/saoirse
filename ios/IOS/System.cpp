@@ -90,6 +90,16 @@ void operator delete[](void* ptr, std::size_t size)
     IOS_Free(System::GetHeap(), ptr);
 }
 
+void operator delete(void* ptr, std::size_t size, std::align_val_t align)
+{
+    IOS_Free(System::GetHeap(), ptr);
+}
+
+void operator delete[](void* ptr, std::size_t size, std::align_val_t align)
+{
+    IOS_Free(System::GetHeap(), ptr);
+}
+
 void abort()
 {
     PRINT(IOS, ERROR, "Abort was called! Thread: %d", IOS_GetThreadId());
@@ -117,8 +127,7 @@ extern "C" void __AssertFail(
 }
 
 // clang-format off
-ATTRIBUTE_NOINLINE
-ASM_FUNCTION(void AssertFail(const char* expr, const char* file, s32 line),
+ASM_ARM_FUNCTION(void AssertFail(const char* expr, const char* file, s32 line),
     mov     r3, lr;
     b       __AssertFail;
 )

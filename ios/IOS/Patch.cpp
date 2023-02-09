@@ -14,16 +14,13 @@
 #include <cstring>
 
 // clang-format off
-ATTRIBUTE_TARGET(arm)
-ATTRIBUTE_NOINLINE
-ASM_FUNCTION(void InvalidateICacheLine(u32 addr),
+ASM_ARM_FUNCTION(void InvalidateICacheLine(u32 addr),
     // r0 = addr
     mcr     p15, 0, r0, c7, c5, 1;
     bx      lr
 )
 
-ATTRIBUTE_TARGET(thumb)
-ASM_FUNCTION(static void IOSOpenStrncpyTrampoline(),
+ASM_THUMB_FUNCTION(static void IOSOpenStrncpyTrampoline(),
     // Overwrite first parameter
     str     r0, [sp, #0x14];
     ldr     r3, =IOSOpenStrncpy;

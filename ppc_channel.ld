@@ -18,13 +18,13 @@ SECTIONS
 	.text : {
 		KEEP (*(.start))
 		*(.text*)
-		KEEP (*(.fimport.*))
+		*(.fimport.*)
 	} : text = 0
 
 	.data : {
 		. = ALIGN(4);
 		SelImportTable = .;
-		KEEP (*(.fimport_table*))
+		*(.fimport_table*)
 		SelImportTableEnd = .;
 		. = ALIGN(32);
 		*(.rodata*)

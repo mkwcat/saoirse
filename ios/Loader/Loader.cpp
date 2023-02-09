@@ -37,7 +37,7 @@ namespace Loader
 #define DEVICE_NAME "/dev/sao_loader"
 
 // clang-format off
-ASM_FUNCTION(static u32 GetStackPointer(), 
+ASM_ARM_FUNCTION(static u32 GetStackPointer(),
     mov     r0, sp;
     bx      lr;
 )
