@@ -31,7 +31,7 @@ static void Lock()
 {
     auto data = reinterpret_cast<Boot_ConsoleData*>(CONSOLE_DATA_ADDRESS);
 
-    for (u32 i = 0; i < 4;) {
+    for (u32 i = 0; i < 16;) {
         IOS_InvalidateDCache(data, sizeof(Boot_ConsoleData));
 
         u32 lock = data->lock;
@@ -123,7 +123,7 @@ static void Unlock()
     data->lock = 0;
 }
 
-static u8 GetRow()
+static s32 GetRow()
 {
     auto data =
       reinterpret_cast<Boot_ConsoleData*>(CONSOLE_DATA_ADDRESS | 0xC0000000);
@@ -131,7 +131,7 @@ static u8 GetRow()
     return data->ppcRow;
 }
 
-static u8 IncrementRow()
+static s32 IncrementRow()
 {
     auto data =
       reinterpret_cast<Boot_ConsoleData*>(CONSOLE_DATA_ADDRESS | 0xC0000000);

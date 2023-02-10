@@ -89,8 +89,6 @@ void DeviceMgr::WriteToLog(const char* str, u32 len)
 
     UINT bw = 0;
     f_write(&m_logFile, str, len, &bw);
-    static const char newline = '\n';
-    f_write(&m_logFile, &newline, 1, &bw);
     f_sync(&m_logFile);
 }
 

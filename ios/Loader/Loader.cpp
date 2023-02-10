@@ -262,7 +262,7 @@ static s32 LoaderThreadEntry([[maybe_unused]] void* arg)
 {
     LOADER_PRINT(INFO, "Loader thread entry");
 
-    Console::Print("Launching IOS module... ");
+    // Console::Print("Launching IOS module... ");
 
     // Create resource manager that we will use to emulate a file.
     u32 queueData[8];
@@ -298,8 +298,6 @@ static s32 LoaderThreadEntry([[maybe_unused]] void* arg)
     LOADER_ASSERT(ret == IOSError::OK);
     LOADER_PRINT(INFO, "Module launched!");
 
-    Console::Print("done\n");
-
     LOADER_PRINT(INFO, "Loader thread exit");
     return 0;
 }
@@ -326,8 +324,8 @@ void LoaderEntry()
     IOS_SetUid(15, 0);
 
     // Initialize console
-    Debug_VI::Init();
-    Console::Init();
+    // Debug_VI::Init();
+    // Console::Init();
 
     write32(IOS_BOOT_MSG_ADDRESS, 1);
     IOS_FlushDCache((void*) IOS_BOOT_MSG_ADDRESS, 4);

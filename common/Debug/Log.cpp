@@ -7,6 +7,7 @@
 #include <System/OS.hpp>
 #include <System/Types.h>
 #ifdef TARGET_IOS
+#  include <Debug/Console.hpp>
 #  include <Disk/DeviceMgr.hpp>
 #  include <IOS/IPCLog.hpp>
 #else
@@ -40,9 +41,9 @@ constexpr u32 logLevel = 0;
 bool Log::IsEnabled()
 {
 #ifdef TARGET_IOS
-    return ipcLogEnabled || DeviceMgr::s_instance->IsLogEnabled();
+    return ipcLogEnabled;
 #else
-    return true;
+    return false;
 #endif
 }
 
@@ -83,22 +84,18 @@ void Log::VPrint(LogSource src, const char* srcStr, const char* funcStr,
 #ifdef TARGET_IOS
         static std::array<char, 256> printBuffer;
 
-        if (ipcLogEnabled) {
-            len = snprintf(&printBuffer[0], printBuffer.size(),
-              "%s[%s %s] %s\x1b[37;1m", logColors[slvl], srcStr, funcStr,
-              logBuffer.data());
-            IPCLog::s_instance->Print(&printBuffer[0]);
-        }
+        len = snprintf(&printBuffer[0], printBuffer.size(), "%c[%s %s] %s\n",
+        logChars[slvl], srcStr, funcStr, logBuffer.data());
 
-        if (DeviceMgr::s_instance->IsLogEnabled()) {
-            len = snprintf(&printBuffer[0], printBuffer.size(), "%c[%s %s] %s",
-              logChars[slvl], srcStr, funcStr, logBuffer.data());
-            DeviceMgr::s_instance->WriteToLog(&printBuffer[0], len);
-        }
+        Console::Print(&printBuffer[0]);
 
+        // if (DeviceMgr::s_instance->IsLogEnabled()) {
+        // DeviceMgr::s_instance->WriteToLog(&printBuffer[0], len);
+        // }
 #else
-        OSReport("%s[%s %s] %s\n\x1b[37;1m", logColors[slvl], srcStr, funcStr,
-          logBuffer.data());
+        // OSReport("%s[%s %s] %s\n\x1b[37;1m", logColors[slvl], srcStr,
+        // funcStr,
+        //  logBuffer.data());
 #endif
         logMutex->unlock();
     }

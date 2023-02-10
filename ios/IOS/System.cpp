@@ -5,6 +5,8 @@
 
 #include "System.hpp"
 #include <DVD/DI.hpp>
+#include <Debug/Console.hpp>
+#include <Debug/Debug_VI.hpp>
 #include <Debug/Log.hpp>
 #include <Disk/DeviceMgr.hpp>
 #include <Disk/SDCard.hpp>
@@ -80,22 +82,24 @@ void operator delete[](void* ptr)
     IOS_Free(System::GetHeap(), ptr);
 }
 
-void operator delete(void* ptr, std::size_t size)
+void operator delete(void* ptr, [[maybe_unused]] std::size_t size)
 {
     IOS_Free(System::GetHeap(), ptr);
 }
 
-void operator delete[](void* ptr, std::size_t size)
+void operator delete[](void* ptr, [[maybe_unused]] std::size_t size)
 {
     IOS_Free(System::GetHeap(), ptr);
 }
 
-void operator delete(void* ptr, std::size_t size, std::align_val_t align)
+void operator delete(void* ptr, [[maybe_unused]] std::size_t size,
+  [[maybe_unused]] std::align_val_t align)
 {
     IOS_Free(System::GetHeap(), ptr);
 }
 
-void operator delete[](void* ptr, std::size_t size, std::align_val_t align)
+void operator delete[](void* ptr, [[maybe_unused]] std::size_t size,
+  [[maybe_unused]] std::align_val_t align)
 {
     IOS_Free(System::GetHeap(), ptr);
 }
@@ -273,13 +277,21 @@ void KernelWrite(u32 address, u32 value)
 
 s32 SystemThreadEntry([[maybe_unused]] void* arg)
 {
+    Debug_VI::Init();
+    Console::Init();
+
+    Console::Print("Print from IOS module\n");
+    Console::Print("Second print test\n");
+    Log::ipcLogEnabled = true;
+    PRINT(Core, INFO, "Log print");
+
     SHA::s_instance = new SHA();
     AES::s_instance = new AES();
     DI::s_instance = new DI();
     ES::s_instance = new ES();
 
     ImportKoreanCommonKey();
-    IOS::Resource::MakeIPCToCallbackThread();
+
     StaticInit();
 
     DeviceMgr::s_instance = new DeviceMgr();
@@ -292,13 +304,20 @@ s32 SystemThreadEntry([[maybe_unused]] void* arg)
 
     new Thread(EmuFS::ThreadEntry, nullptr, nullptr, 0x2000, 80);
     new Thread(EmuDI::ThreadEntry, nullptr, nullptr, 0x2000, 80);
-    new Thread(EmuES::ThreadEntry, nullptr, nullptr, 0x2000, 80);
+
+    // new Thread(EmuES::ThreadEntry, nullptr, nullptr, 0x2000, 80);
+
+    return 0;
+
+
 
     return 0;
 }
 
 extern "C" void Entry([[maybe_unused]] void* arg)
 {
+    IOS_SetThreadPriority(0, 40);
+
     static u8 systemHeapData[SystemHeapSize] ATTRIBUTE_ALIGN(32);
 
     // Create system heap
@@ -309,9 +328,7 @@ extern "C" void Entry([[maybe_unused]] void* arg)
 
     Config::s_instance = new Config();
     IPCLog::s_instance = new IPCLog();
-    Log::ipcLogEnabled = true;
-
-    IOS_SetThreadPriority(0, 40);
+    // Log::ipcLogEnabled = true;
 
     static u8 SystemThreadStack[0x800] ATTRIBUTE_ALIGN(32);
 
