@@ -4,16 +4,16 @@
 // SPDX-License-Identifier: MIT
 
 #include "Archive.hpp"
-#include "Console.hpp"
-#include "DCache.hpp"
 #include "ES.hpp"
 #include "ICache.hpp"
 #include "IOS.hpp"
 #include "LzmaDec.h"
 #include "Sel.hpp"
-#include "VI.hpp"
 #include <Boot/AddressMap.hpp>
+#include <Boot/DCache.hpp>
 #include <Boot/Init.hpp>
+#include <Debug/Console.hpp>
+#include <Debug/Debug_VI.hpp>
 #include <cstring>
 #include <iterator>
 #include <stdio.h>
@@ -346,7 +346,7 @@ u32 GetSymbol(Sel& sel, const char* name)
 
 void Launch()
 {
-    VI::Init();
+    Debug_VI::Init();
 
     Console::Init();
     Console::Print("\n\nSaoirse Loader!\n\n\n");
@@ -371,6 +371,19 @@ void Launch()
     memcpy((void*) IOS_BOOT_ADDRESS, (u8*) BOOT_ARC_ADDRESS + file->offset,
       file->size);
     IOS::SafeFlush((void*) IOS_BOOT_ADDRESS, file->size);
+
+    entry = archive.get("./ios_module.elf");
+    file = std::get_if<Archive::File>(&entry);
+    if (!file) {
+        Console::Print("\nERROR : Failed to get the IOS module.\n");
+        return;
+    }
+
+    *(u32*) IOS_FILE_INFO_ADDRESS = BOOT_ARC_ADDRESS + file->offset;
+    *(u32*) (IOS_FILE_INFO_ADDRESS + 4) = file->size;
+    IOS::SafeFlush((void*) IOS_FILE_INFO_ADDRESS, IOS_FILE_INFO_MAXLEN);
+    IOS::SafeFlush((void*) BOOT_ARC_ADDRESS + file->offset, file->size);
+
     if (!IOS::BootstrapEntry()) {
         Console::Print("\nERROR : Failed to launch the IOS boot payload.\n");
         return;

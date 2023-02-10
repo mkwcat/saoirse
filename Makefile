@@ -86,7 +86,7 @@ IOS_LDFLAGS := $(IOS_ARCH) -lgcc -n -Wl,--gc-sections -Wl,-static
 PPC_LDFLAGS := -flto -nodefaultlibs -nostdlib -n -Wl,--gc-sections -Wl,-static
 
 IOS_DEFS := $(IOS_ARCH) $(IOS_INCLUDES) -DTARGET_IOS
-PPC_DEFS := $(PPC_INCLUDES)
+PPC_DEFS := $(PPC_INCLUDES) -DTARGET_PPC
 
 default: $(TARGET_PPC_LOADER).dol
 

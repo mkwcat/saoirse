@@ -1,9 +1,16 @@
-#include "VI.hpp"
+#include "Debug_VI.hpp"
 
-#include "DCache.hpp"
+#include <Boot/AddressMap.hpp>
+#include <Boot/DCache.hpp>
 
-namespace VI
+namespace Debug_VI
 {
+
+static u16 xfbWidth;
+static u16 xfbHeight;
+u32* const xfb = reinterpret_cast<u32*>(CONSOLE_XFB_ADDRESS);
+
+#ifndef TARGET_IOS
 
 extern "C" volatile u16 vtr;
 extern "C" volatile u16 dcr;
@@ -15,12 +22,17 @@ extern "C" volatile u16 hsw;
 extern "C" volatile u16 hsr;
 extern "C" volatile u16 visel;
 
-static u16 xfbWidth;
-static u16 xfbHeight;
-u32* const xfb = reinterpret_cast<u32*>(0x92000000);
-
 void Init()
 {
+    auto data = reinterpret_cast<Boot_ConsoleData*>(CONSOLE_DATA_ADDRESS);
+    DCache::Invalidate(data, sizeof(Boot_ConsoleData));
+
+    if (data->xfbInit) {
+        xfbWidth = data->xfbWidth;
+        xfbHeight = data->xfbHeight;
+        return;
+    }
+
     bool isProgressive = visel & 1 || dcr & 4;
     bool isNtsc = (dcr >> 8 & 3) == 0;
     xfbWidth = 640;
@@ -46,7 +58,32 @@ void Init()
     hsr = 0x10f5;
     tfbl = 1 << 28 | reinterpret_cast<u32>(xfb) >> 5;
     bfbl = 1 << 28 | reinterpret_cast<u32>(xfb) >> 5;
+
+    *data = {
+      .xfbWidth = xfbWidth,
+      .xfbHeight = xfbHeight,
+      .lock = 0,
+      .ppcRow = -1,
+      .iosRow = -1,
+
+      .xfbInit = true,
+    };
+
+    DCache::Flush(data, sizeof(Boot_ConsoleData));
 }
+
+#else
+
+void Init()
+{
+    auto data = reinterpret_cast<Boot_ConsoleData*>(CONSOLE_DATA_ADDRESS);
+    DCache::Invalidate(data, sizeof(Boot_ConsoleData));
+
+    xfbWidth = data->xfbWidth;
+    xfbHeight = data->xfbHeight;
+}
+
+#endif
 
 u16 GetXFBWidth()
 {
@@ -94,4 +131,4 @@ void FlushXFB()
     DCache::Store(xfb, 320 * 574 * sizeof(u32));
 }
 
-} // namespace VI
+} // namespace Debug_VI

@@ -1,4 +1,6 @@
 #include <Boot/Init.hpp>
+#include <Debug/Console.hpp>
+#include <Debug/Debug_VI.hpp>
 #include <Import/RVL_OS.h>
 #include <Import/Sel.h>
 
@@ -11,6 +13,11 @@ SelImport("DVDLowSetSpinupFlag", bool DVDLowSetSpinupFlag(bool flag));
 int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
 {
     OSReport("saoirse main() called!\n");
+
+    Debug_VI::Init();
+    Console::Init();
+
+    Console::Print("Printing from channel now\n");
 
     DVDLowSetSpinupFlag(true);
     DVDLowReset(nullptr);

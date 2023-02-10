@@ -4,6 +4,8 @@
 // SPDX-License-Identifier: MIT
 
 #include <Boot/AddressMap.hpp>
+#include <Debug/Console.hpp>
+#include <Debug/Debug_VI.hpp>
 #include <IOS/Syscalls.h>
 #include <IOS/System.hpp>
 #include <System/Hollywood.hpp>
@@ -18,7 +20,6 @@
 #ifdef LOADER_DEBUG
 
 #  include <Debug/Log.hpp>
-#  include <IOS/IPCLog.hpp>
 
 #  define LOADER_PRINT(...) PRINT(IOS_Loader, __VA_ARGS__)
 #  define LOADER_ASSERT(...) assert(__VA_ARGS__)
@@ -46,11 +47,7 @@ ASM_ARM_FUNCTION(static u32 GetStackPointer(),
 
 void LoaderAssertFail(int line)
 {
-    // This should only be called if LOADER_DEBUG is disabled. As such, printing
-    // isn't very useful.
-    // This will display a solid color in UVY (YUV in a different order). The
-    // PPC-side IOSBoot can clear this and then print the value if it wants to.
-    ACRWriteTrusted(ACRReg::VISOLID, (line << 16) | 1);
+    Console::Print("error!\n");
 
     if (IOS_GetThreadId() != 0) {
         IOS_CancelThread(0, 0);
@@ -229,8 +226,14 @@ static s32 FileRMThreadEntry([[maybe_unused]] void* arg)
 {
     LOADER_PRINT(INFO, "File RM thread entry");
 
-    s_fileSize = read32(0x11000004);
-    s_fileAddr = reinterpret_cast<u8*>(0x11000020);
+    s_fileAddr = (u8*) (read32(IOS_FILE_INFO_ADDRESS) & ~0xC0000000);
+    s_fileSize = read32(IOS_FILE_INFO_ADDRESS + 4);
+
+    // Check for ELF header
+    LOADER_ASSERT(read32(s_fileAddr) == 0x7F454C46);
+
+    s_fileAddr[7] = 0x61;
+    s_fileAddr[8] = 1;
 
     while (true) {
         IOSRequest* req;
@@ -242,7 +245,6 @@ static s32 FileRMThreadEntry([[maybe_unused]] void* arg)
         s32 reply = HandleRequest(req);
 
         // Reply back to the user.
-        LOADER_PRINT(INFO, "Reply: %d", reply);
         ret = IOS_ResourceReply(req, reply);
         LOADER_ASSERT(ret == IOSError::OK);
 
@@ -259,7 +261,8 @@ static s32 FileRMThreadEntry([[maybe_unused]] void* arg)
 static s32 LoaderThreadEntry([[maybe_unused]] void* arg)
 {
     LOADER_PRINT(INFO, "Loader thread entry");
-    LOADER_PRINT(INFO, "Second print test");
+
+    Console::Print("Launching IOS module... ");
 
     // Create resource manager that we will use to emulate a file.
     u32 queueData[8];
@@ -295,42 +298,11 @@ static s32 LoaderThreadEntry([[maybe_unused]] void* arg)
     LOADER_ASSERT(ret == IOSError::OK);
     LOADER_PRINT(INFO, "Module launched!");
 
+    Console::Print("done\n");
+
     LOADER_PRINT(INFO, "Loader thread exit");
     return 0;
 }
-
-#ifdef LOADER_DEBUG
-
-static s32 IPCLogThreadEntry([[maybe_unused]] void* arg)
-{
-    IPCLog::s_instance->Run();
-    // Will return on close.
-    delete IPCLog::s_instance;
-    return 0;
-}
-
-static void MakeIPCLog()
-{
-    // Create and enable the IPC log.
-    IPCLog::s_instance = new IPCLog();
-    Log::ipcLogEnabled = true;
-
-    // New stack pointer derived from current stack.
-    u32 stackTop = round_down(GetStackPointer() - 0x100, 32);
-
-    // Create the IPC log thread.
-    s32 thread = IOS_CreateThread(IPCLogThreadEntry, nullptr,
-      reinterpret_cast<u32*>(stackTop),
-      0x400, // 1 KB stack
-      80, true);
-    LOADER_ASSERT(thread >= 0);
-
-    // Begin execution on the IPC log thread.
-    s32 ret = IOS_StartThread(thread);
-    LOADER_ASSERT(ret == IOSError::OK);
-}
-
-#endif
 
 extern "C" {
 ATTRIBUTE_SECTION(.start)
@@ -353,14 +325,12 @@ void LoaderEntry()
     // Give the PPC full ISFS permissions.
     IOS_SetUid(15, 0);
 
+    // Initialize console
+    Debug_VI::Init();
+    Console::Init();
+
     write32(IOS_BOOT_MSG_ADDRESS, 1);
     IOS_FlushDCache((void*) IOS_BOOT_MSG_ADDRESS, 4);
-
-    return;
-
-#ifdef LOADER_DEBUG
-    MakeIPCLog();
-#endif
 
     // Subtract 0x800 from the current stack pointer to use as the main loader
     // thread's.

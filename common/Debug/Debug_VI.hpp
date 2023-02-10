@@ -2,7 +2,8 @@
 
 #include <System/Types.h>
 
-namespace VI {
+namespace Debug_VI
+{
 
 void Init();
 
@@ -16,4 +17,4 @@ void WriteGrayscaleToXFB(u16 x, u16 y, u8 intensity);
 
 void FlushXFB();
 
-} // namespace VI
+} // namespace Debug_VI

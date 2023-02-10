@@ -47,4 +47,14 @@ SECTIONS
 	/DISCARD/ : {
 		*(.comment)
 	}
+
+	vtr = 0xcc002000;
+    dcr = 0xcc002002;
+    vto = 0xcc00200c;
+    vte = 0xcc002010;
+    tfbl = 0xcc00201c;
+    bfbl = 0xcc002024;
+    hsw = 0xcc002048;
+    hsr = 0xcc00204a;
+    visel = 0xcc00206e;
 }

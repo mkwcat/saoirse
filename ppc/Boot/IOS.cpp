@@ -1,7 +1,6 @@
 #include "IOS.hpp"
-#include "Console.hpp"
-#include "DCache.hpp"
 #include <Boot/AddressMap.hpp>
+#include <Boot/DCache.hpp>
 
 template <typename T>
 uintptr_t VirtualToPhysical(T* ptr)

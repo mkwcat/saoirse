@@ -5,6 +5,10 @@
 namespace DCache
 {
 
+#ifdef TARGET_PPC
+
+// PPC cache functions
+
 void Store(const void* start, size_t size)
 {
     if (size == 0) {
@@ -48,5 +52,41 @@ void Invalidate(void* start, size_t size)
         size -= 0x20;
     } while (size > 0);
 }
+
+#else
+
+// IOS cache functions
+
+#  include <IOS/Syscalls.h>
+
+void Store(const void* start, size_t size)
+{
+    if (size == 0) {
+        return;
+    }
+
+    // No store on IOS
+    IOS_FlushDCache(start, size);
+}
+
+void Flush(const void* start, size_t size)
+{
+    if (size == 0) {
+        return;
+    }
+
+    IOS_FlushDCache(start, size);
+}
+
+void Invalidate(void* start, size_t size)
+{
+    if (size == 0) {
+        return;
+    }
+
+    IOS_InvalidateDCache(start, size);
+}
+
+#endif
 
 } // namespace DCache

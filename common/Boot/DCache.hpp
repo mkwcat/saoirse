@@ -1,6 +1,6 @@
 #pragma once
 
-#include <cstring>
+#include <cstddef>
 
 namespace DCache
 {

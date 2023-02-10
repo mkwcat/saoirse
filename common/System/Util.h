@@ -78,7 +78,7 @@ constexpr bool aligned(T addr, unsigned int align)
     return !((u32) addr & (align - 1));
 }
 
-#  include <cstddef>
+typedef unsigned int size_t;
 
 template <class T1, class T2>
 constexpr bool check_bounds(T1 bounds, size_t bound_len, T2 buffer, size_t len)
