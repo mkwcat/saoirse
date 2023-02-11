@@ -25,6 +25,7 @@ enum class LogSource {
     IOS,
     IOS_Loader,
     IOS_DevMgr,
+    IOS_SDCard,
     IOS_USB,
     IOS_EmuFS,
     IOS_EmuDI,

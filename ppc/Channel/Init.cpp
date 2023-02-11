@@ -10,6 +10,8 @@ SelImport(
 SelImport("DVDLowReset", bool DVDLowReset(void* callback));
 SelImport("DVDLowSetSpinupFlag", bool DVDLowSetSpinupFlag(bool flag));
 
+SelImport("OSReturnToMenu", void OSReturnToMenu());
+
 int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
 {
     OSReport("saoirse main() called!\n");
@@ -19,8 +21,12 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
 
     Console::Print("Printing from channel now\n");
 
+#if 0
     DVDLowSetSpinupFlag(true);
     DVDLowReset(nullptr);
+#endif
+
+    OSReturnToMenu();
 
     while (true) {
     }

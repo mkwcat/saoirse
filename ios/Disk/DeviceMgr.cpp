@@ -18,11 +18,8 @@ DeviceMgr::DeviceMgr()
     m_timer = IOS_CreateTimer(0, 64000, m_timerQueue.id(), 0);
     assert(m_timer >= 0);
 
-    bool ret = SDCard::Open();
-    assert(ret);
-
     USB::s_instance = new USB(0);
-    ret = USB::s_instance->Init();
+    auto ret = USB::s_instance->Init();
     assert(ret);
 
     // Reset everything to default.
@@ -34,7 +31,7 @@ DeviceMgr::DeviceMgr()
         m_usbDevices[i].inUse = false;
     }
 
-    m_devices[0].disk = SDCard();
+    m_devices[0].disk.emplace<SDCard>();
     m_devices[0].enabled = true;
 
     m_thread.create(
@@ -103,11 +100,12 @@ bool DeviceMgr::DeviceInit(u32 devId)
     }
 
     if (std::holds_alternative<SDCard>(dev->disk)) {
-        if (SDCard::Startup())
+        SDCard& disk = std::get<SDCard>(dev->disk);
+        if (disk.Init())
             return true;
 
         SetError(devId);
-        PRINT(IOS_DevMgr, ERROR, "SDCard::Startup failed");
+        PRINT(IOS_DevMgr, ERROR, "SDCard::Init failed");
         return false;
     }
 
@@ -136,12 +134,12 @@ bool DeviceMgr::DeviceRead(u32 devId, void* data, u32 sector, u32 count)
     }
 
     if (std::holds_alternative<SDCard>(dev->disk)) {
-        auto ret = SDCard::ReadSectors(sector, count, data);
-        if (ret == IOSError::OK)
+        SDCard& disk = std::get<SDCard>(dev->disk);
+        if (disk.ReadSectors(sector, count, data))
             return true;
 
         SetError(devId);
-        PRINT(IOS_DevMgr, ERROR, "SDCard::ReadSectors failed: %08X", ret);
+        PRINT(IOS_DevMgr, ERROR, "SDCard::ReadSectors failed");
         return false;
     }
 
@@ -170,12 +168,12 @@ bool DeviceMgr::DeviceWrite(u32 devId, const void* data, u32 sector, u32 count)
     }
 
     if (std::holds_alternative<SDCard>(dev->disk)) {
-        auto ret = SDCard::WriteSectors(sector, count, data);
-        if (ret == 0)
+        SDCard& disk = std::get<SDCard>(dev->disk);
+        if (disk.WriteSectors(sector, count, data))
             return true;
 
         SetError(devId);
-        PRINT(IOS_DevMgr, ERROR, "SDCard::WriteSectors failed: %08X", ret);
+        PRINT(IOS_DevMgr, ERROR, "SDCard::WriteSectors failed");
         return false;
     }
 
@@ -208,13 +206,7 @@ bool DeviceMgr::DeviceSync(u32 devId)
     }
 
     if (std::holds_alternative<USBStorage>(dev->disk)) {
-        USBStorage& disk = std::get<USBStorage>(dev->disk);
-        if (disk.Sync())
-            return true;
-
-        SetError(devId);
-        PRINT(IOS_DevMgr, ERROR, "USBStorage::Sync failed");
-        return false;
+        return true;
     }
 
     PRINT(IOS_DevMgr, ERROR, "Device not recognized: %u", devId);
@@ -402,7 +394,7 @@ void DeviceMgr::UpdateHandle(u32 devId)
         return;
 
     if (std::holds_alternative<SDCard>(dev->disk)) {
-        dev->inserted = SDCard::IsInserted();
+        dev->inserted = std::get<SDCard>(dev->disk).IsInserted();
     }
 
     // Clear error if the device has been ejected, so we can try again if it's

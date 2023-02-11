@@ -53,7 +53,7 @@ private:
 
     struct DeviceHandle {
         FATFS fs;
-        std::variant<SDCard, USBStorage> disk;
+        std::variant<std::monostate, SDCard, USBStorage> disk;
         bool enabled;
         bool inserted;
         bool error;

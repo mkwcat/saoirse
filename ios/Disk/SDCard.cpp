@@ -1,710 +1,424 @@
-/*
- * SDCard.cpp - Wii SD Card slot I/O
- *
- * wiisd.c from libogc:
- * Copyright (c) 2008
- *   Michael Wiedenbauer (shagkur)
- *   Dave Murphy (WinterMute)
- *   Sven Peter <svpe@gmx.net>
- *   Modified by Palapeli for Saoirse
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are met:
- *  1. Redistributions of source code must retain the above copyright notice,
- *     this list of conditions and the following disclaimer.
- *  2. Redistributions in binary form must reproduce the above copyright notice,
- *     this list of conditions and the following disclaimer in the documentation
- * and/or other materials provided with the distribution.
- *  3. The name of the author may not be used to endorse or promote products
- * derived from this software without specific prior written permission. THIS
- * SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR IMPLIED
- * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
- * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO
- * EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
- * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
- * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS;
- * OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
- * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
- * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
- * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- */
+// Resources:
+// - https://wiibrew.org/wiki//dev/sdio
+// -
+// https://github.com/dolphin-emu/dolphin/blob/master/Source/Core/Core/IOS/SDIO/SDIOSlot0.cpp
+// -
+// https://www.sdcard.org/cms/wp-content/themes/sdcard-org/dl.php?f=Part1_Physical_Layer_Simplified_Specification_Ver8.00.pdf
+// - https://github.com/devkitPro/libogc/blob/master/libogc/wiisd.c
 
 #include "SDCard.hpp"
+
+#include <Debug/Log.hpp>
+#include <IOS/Syscalls.h>
 #include <System/OS.hpp>
-#include <System/Util.h>
+
+#include <algorithm>
+#include <stdalign.h>
 #include <string.h>
-#ifdef TARGET_IOS
-#  include <IOS/Syscalls.h>
-#  include <IOS/System.hpp>
-#else
-#  include <ogc/ipc.h>
-#  include <unistd.h>
-#endif
 
-#define SDIO_HEAPSIZE (5 * 1024)
+enum {
+    IOCTL_WRITE_HCR = 0x1,
+    IOCTL_READ_HCR = 0x2,
+    IOCTL_RESET_CARD = 0x4,
+    IOCTL_SET_CLOCK = 0x6,
+    IOCTL_SEND_COMMAND = 0x7,
+    IOCTL_GET_STATUS = 0xb,
+};
 
-#define PAGE_SIZE512 512
+enum {
+    IOCTLV_SEND_COMMAND = 0x7,
+};
 
-#define SDIOHCR_RESPONSE 0x10
-#define SDIOHCR_HOSTCONTROL 0x28
-#define SDIOHCR_POWERCONTROL 0x29
-#define SDIOHCR_CLOCKCONTROL 0x2c
-#define SDIOHCR_TIMEOUTCONTROL 0x2e
-#define SDIOHCR_SOFTWARERESET 0x2f
+enum {
+    STATUS_CARD_INSERTED = 1 << 0,
+    STATUS_TYPE_MEMORY = 1 << 16,
+    STATUS_TYPE_SDHC = 1 << 20,
+};
 
-#define SDIOHCR_HOSTCONTROL_4BIT 0x02
+enum {
+    HCR_HOST_CONTROL_1 = 0x28,
+};
 
-#define SDIO_DEFAULT_TIMEOUT 0xe
+enum {
+    HCR_HOST_CONTROL_1_4_BIT = 1 << 1,
+};
 
-#define IOCTL_SDIO_WRITEHCREG 0x01
-#define IOCTL_SDIO_READHCREG 0x02
-#define IOCTL_SDIO_READCREG 0x03
-#define IOCTL_SDIO_RESETCARD 0x04
-#define IOCTL_SDIO_WRITECREG 0x05
-#define IOCTL_SDIO_SETCLK 0x06
-#define IOCTL_SDIO_SENDCMD 0x07
-#define IOCTL_SDIO_SETBUSWIDTH 0x08
-#define IOCTL_SDIO_READMCREG 0x09
-#define IOCTL_SDIO_WRITEMCREG 0x0A
-#define IOCTL_SDIO_GETSTATUS 0x0B
-#define IOCTL_SDIO_GETOCR 0x0C
-#define IOCTL_SDIO_READDATA 0x0D
-#define IOCTL_SDIO_WRITEDATA 0x0E
+typedef struct {
+    u32 reg;
+    u32 _04;
+    u32 _08;
+    u32 size;
+    u32 val;
+    u32 _14;
+} RegOp;
 
-#define SDIOCMD_TYPE_BC 1
-#define SDIOCMD_TYPE_BCR 2
-#define SDIOCMD_TYPE_AC 3
-#define SDIOCMD_TYPE_ADTC 4
+enum {
+    CMD_SELECT = 7,
+    CMD_SET_BLOCKLEN = 16,
+    CMD_READ_MULTIPLE_BLOCK = 18,
+    CMD_WRITE_MULTIPLE_BLOCK = 25,
+    CMD_APP_CMD = 55,
+};
 
-#define SDIO_RESPONSE_NONE 0
-#define SDIO_RESPONSE_R1 1
-#define SDIO_RESPONSE_R1B 2
-#define SDIO_RESPOSNE_R2 3
-#define SDIO_RESPONSE_R3 4
-#define SDIO_RESPONSE_R4 5
-#define SDIO_RESPONSE_R5 6
-#define SDIO_RESPONSE_R6 7
+enum {
+    ACMD_SET_BUS_WIDTH = 6,
+};
 
-#define SDIO_CMD_GOIDLE 0x00
-#define SDIO_CMD_ALL_SENDCID 0x02
-#define SDIO_CMD_SENDRCA 0x03
-#define SDIO_CMD_SELECT 0x07
-#define SDIO_CMD_DESELECT 0x07
-#define SDIO_CMD_SENDIFCOND 0x08
-#define SDIO_CMD_SENDCSD 0x09
-#define SDIO_CMD_SENDCID 0x0A
-#define SDIO_CMD_SENDSTATUS 0x0D
-#define SDIO_CMD_SETBLOCKLEN 0x10
-#define SDIO_CMD_READBLOCK 0x11
-#define SDIO_CMD_READMULTIBLOCK 0x12
-#define SDIO_CMD_WRITEBLOCK 0x18
-#define SDIO_CMD_WRITEMULTIBLOCK 0x19
-#define SDIO_CMD_APPCMD 0x37
+enum {
+    RESPONSE_TYPE_R1 = 0x1,
+    RESPONSE_TYPE_R1B = 0x2,
+};
 
-#define SDIO_ACMD_SETBUSWIDTH 0x06
-#define SDIO_ACMD_SENDSCR 0x33
-#define SDIO_ACMD_SENDOPCOND 0x29
-
-#define SDIO_STATUS_CARD_INSERTED 0x1
-#define SDIO_STATUS_CARD_INITIALIZED 0x10000
-#define SDIO_STATUS_CARD_SDHC 0x100000
-
-#define READ_BL_LEN ((u8) (__sd0_csd[5] & 0x0f))
-#define WRITE_BL_LEN                                                           \
-  ((u8) (((__sd0_csd[12] & 0x03) << 2) | ((__sd0_csd[13] >> 6) & 0x03)))
-
-static u8 rw_buffer[SDIO_HEAPSIZE] ATTRIBUTE_ALIGN(32);
-
-struct _sdiorequest {
-    u32 cmd;
-    u32 cmd_type;
-    u32 rsp_type;
+typedef struct {
+    u32 command;
+    u32 commandType;
+    u32 responseType;
     u32 arg;
-    u32 blk_cnt;
-    u32 blk_size;
-    void* dma_addr;
-    u32 isdma;
-    u32 pad0;
-};
+    u32 blockCount;
+    u32 blockSize;
+    void* buffer;
+    u32 isDma;
+    u32 _20;
+} Request;
 
-struct _sdioresponse {
-    u32 rsp_fields[3];
-    u32 acmd12_response;
-};
+static_assert(sizeof(Request) == 0x24);
 
-static s32 __sd0_fd = -1;
-static u16 __sd0_rca = 0;
-static s32 __sd0_initialized = 0;
-static s32 __sd0_sdhc = 0;
-// static u8 __sd0_csd[16];
-static u8 __sd0_cid[16] ATTRIBUTE_ALIGN(32);
-
-static s32 __sdio_initialized = 0;
-
-static char _sd0_fs[] = "/dev/sdio/slot0";
-
-static inline void SyncBeforeRead(
-  [[maybe_unused]] const void* address, [[maybe_unused]] u32 len)
+SDCard::SDCard()
 {
-#ifdef TARGET_IOS
-    IOS_InvalidateDCache(const_cast<void*>(address), len);
-#endif
+    m_ok = false;
+
+    if (m_fd < 0) {
+        m_fd = IOS_Open("/dev/sdio/slot0", 0);
+    }
+
+    if (m_fd < 0) {
+        PRINT(IOS_SDCard, ERROR,
+          "Failed to open /dev/sdio/slot0: Returned error %i", m_fd);
+        return;
+    } else {
+        PRINT(IOS_SDCard, INFO, "Successfully opened interface: ID: %i", m_fd);
+    }
+
+    m_tmpBuffer = IOS::Alloc(TMP_BUFFER_SIZE);
+    assert(m_tmpBuffer != nullptr);
+
+    m_ok = true;
+    return;
 }
 
-static inline void SyncBeforeWrite(
-  [[maybe_unused]] const void* address, [[maybe_unused]] u32 len)
+SDCard::~SDCard()
 {
-#ifdef TARGET_IOS
-    IOS_FlushDCache(const_cast<void*>(address), len);
-#endif
+    if (m_fd > 0) {
+        IOS_Close(m_fd);
+        m_fd = -1;
+    }
+
+    if (m_tmpBuffer != nullptr) {
+        IOS::Free(m_tmpBuffer);
+        m_tmpBuffer = nullptr;
+    }
 }
 
-static s32 __sdio_sendcommand(u32 cmd, u32 cmd_type, u32 rsp_type, u32 arg,
-  u32 blk_cnt, u32 blk_size, void* buffer, void* reply, u32 rlen)
+bool SDCard::ResetCard()
 {
-    s32 ret;
-    IOS::Vector iovec[3];
-    struct _sdiorequest request ATTRIBUTE_ALIGN(32);
-    struct _sdioresponse response ATTRIBUTE_ALIGN(32);
+    alignas(0x20) u32 out;
 
-#ifdef TARGET_IOS
-    // The SDIO resource manager is a bit dumb and does not translate virtual
-    // addresses to physical, so we have to do it for it. We must be in PID 0
-    // for this to work, as IOS will reject any buffer that's not mapped in
-    // virtual memory otherwise.
-    assert(IOS_GetProcessId() == 0);
-    buffer = IOS_VirtualToPhysical(buffer);
-#endif
+    if (IOS_Ioctl(m_fd, IOCTL_RESET_CARD, nullptr, 0, &out, sizeof(out)) < 0) {
+        PRINT(IOS_SDCard, INFO, "Failed to reset interface");
+        return false;
+    }
 
-    request.cmd = cmd;
-    request.cmd_type = cmd_type;
-    request.rsp_type = rsp_type;
-    request.arg = arg;
-    request.blk_cnt = blk_cnt;
-    request.blk_size = blk_size;
-    request.dma_addr = buffer;
-    request.isdma = ((buffer != NULL) ? 1 : 0);
-    request.pad0 = 0;
-
-    if (request.isdma || __sd0_sdhc == 1) {
-        iovec[0].data = &request;
-        iovec[0].len = sizeof(struct _sdiorequest);
-        iovec[1].data = buffer;
-        iovec[1].len = (blk_size * blk_cnt);
-        iovec[2].data = &response;
-        iovec[2].len = sizeof(struct _sdioresponse);
-        ret = IOS_Ioctlv(__sd0_fd, IOCTL_SDIO_SENDCMD, 2, 1, iovec);
-    } else
-        ret = IOS_Ioctl(__sd0_fd, IOCTL_SDIO_SENDCMD, &request,
-          sizeof(struct _sdiorequest), &response, sizeof(struct _sdioresponse));
-
-    if (reply && !(rlen > 16))
-        memcpy(reply, &response, rlen);
-
-    //	printf("  cmd= %08x\n", cmd);
-
-    return ret;
+    PRINT(IOS_SDCard, INFO, "Successfully reset interface");
+    m_rca = out >> 16;
+    return true;
 }
 
-static s32 __sdio_setclock(u32 set)
+bool SDCard::GetStatus(u32* status)
 {
-    s32 ret;
-    u32 clock ATTRIBUTE_ALIGN(32);
+    alignas(0x20) u32 out;
 
-    clock = set;
-    ret = IOS_Ioctl(__sd0_fd, IOCTL_SDIO_SETCLK, &clock, sizeof(u32), NULL, 0);
+    if (IOS_Ioctl(m_fd, IOCTL_GET_STATUS, nullptr, 0, &out, sizeof(out)) < 0) {
+        PRINT(IOS_SDCard, INFO, "Failed to get status");
+        return false;
+    }
 
-    return ret;
+    *status = out;
+    return true;
 }
 
-static s32 __sdio_getstatus()
+bool SDCard::ReadHCR(u8 reg, u8 size, u32* val)
 {
-    s32 ret;
-    u32 status ATTRIBUTE_ALIGN(32);
+    alignas(0x20) RegOp regOp = {
+      .reg = reg,
+      ._04 = 0,
+      ._08 = 0,
+      .size = size,
+      .val = 0,
+      ._14 = 0,
+    };
+    alignas(0x20) u32 out;
 
-    ret =
-      IOS_Ioctl(__sd0_fd, IOCTL_SDIO_GETSTATUS, NULL, 0, &status, sizeof(u32));
-    if (ret < 0)
-        return ret;
+    if (IOS_Ioctl(
+          m_fd, IOCTL_READ_HCR, &regOp, sizeof(regOp), &out, sizeof(out)) < 0) {
+        PRINT(IOS_SDCard, INFO, "Failed to read host controller register 0x%x",
+          reg);
+        return false;
+    }
 
-    return status;
+    *val = out;
+    return true;
 }
 
-static s32 __sdio_resetcard()
+bool SDCard::WriteHCR(u8 reg, u8 size, u32 val)
 {
-    s32 ret;
-    u32 status ATTRIBUTE_ALIGN(32);
+    alignas(0x20) RegOp regOp = {
+      .reg = reg,
+      ._04 = 0,
+      ._08 = 0,
+      .size = size,
+      .val = val,
+      ._14 = 0,
+    };
 
-    __sd0_rca = 0;
-    ret =
-      IOS_Ioctl(__sd0_fd, IOCTL_SDIO_RESETCARD, NULL, 0, &status, sizeof(u32));
-    if (ret < 0)
-        return ret;
+    if (IOS_Ioctl(m_fd, IOCTL_WRITE_HCR, &regOp, sizeof(regOp), nullptr, 0) <
+        0) {
+        PRINT(IOS_SDCard, INFO,
+          "Failed to write to host controller register 0x%x", reg);
+        return false;
+    }
 
-    __sd0_rca = (u16) (status >> 16);
-    return (status & 0xffff);
+    return true;
 }
 
-static s32 __sdio_gethcr(u8 reg, u8 size, u32* val)
+bool SDCard::SetClock(u32 clock)
 {
-    s32 ret;
-    u32 hcr_value ATTRIBUTE_ALIGN(32);
-    u32 hcr_query[6] ATTRIBUTE_ALIGN(32);
+    alignas(0x20) u32 in = clock;
 
-    if (val == NULL)
-        return IOSError::OK;
+    if (IOS_Ioctl(m_fd, IOCTL_SET_CLOCK, &in, sizeof(in), nullptr, 0) < 0) {
+        PRINT(IOS_SDCard, INFO, "Failed to set clock");
+        return false;
+    }
 
-    hcr_value = 0;
-    *val = 0;
-    hcr_query[0] = reg;
-    hcr_query[1] = 0;
-    hcr_query[2] = 0;
-    hcr_query[3] = size;
-    hcr_query[4] = 0;
-    hcr_query[5] = 0;
-    ret = IOS_Ioctl(__sd0_fd, IOCTL_SDIO_READHCREG, (void*) hcr_query, 24,
-      &hcr_value, sizeof(u32));
-    *val = hcr_value;
-
-    return ret;
+    return true;
 }
 
-static s32 __sdio_sethcr(u8 reg, u8 size, u32 data)
+bool SDCard::SendCommand(u32 command, u32 commandType, u32 responseType,
+  u32 arg, u32 blockCount, u32 blockSize, void* buffer, u32* response)
 {
-    s32 ret;
-    u32 hcr_query[6] ATTRIBUTE_ALIGN(32);
+    alignas(0x20) Request request = {
+      .command = command,
+      .commandType = commandType,
+      .responseType = responseType,
+      .arg = arg,
+      .blockCount = blockCount,
+      .blockSize = blockSize,
+      .buffer = buffer,
+      .isDma = !!buffer,
+      ._20 = 0,
+    };
+    alignas(0x20) u32 out[4];
 
-    hcr_query[0] = reg;
-    hcr_query[1] = 0;
-    hcr_query[2] = 0;
-    hcr_query[3] = size;
-    hcr_query[4] = data;
-    hcr_query[5] = 0;
-    ret = IOS_Ioctl(
-      __sd0_fd, IOCTL_SDIO_WRITEHCREG, (void*) hcr_query, 24, NULL, 0);
+    if (buffer || m_isSdhc) {
+        alignas(0x20) IOVector vec[] = {
+          {
+            .data = &request,
+            .len = sizeof(request),
+          },
+          {
+            .data = buffer,
+            .len = blockCount * blockSize,
+          },
+          {
+            .data = out,
+            .len = sizeof(out),
+          },
+        };
+        if (IOS_Ioctlv(m_fd, IOCTLV_SEND_COMMAND, 2, 1, vec) < 0) {
+            if (command != CMD_SELECT) {
+                PRINT(IOS_SDCard, INFO, "Failed to send command 0x%x", command);
+            }
+            return false;
+        }
+    } else {
+        if (IOS_Ioctl(m_fd, IOCTL_SEND_COMMAND, &request, sizeof(request), &out,
+              sizeof(out)) < 0) {
+            if (command != CMD_SELECT) {
+                PRINT(IOS_SDCard, INFO, "Failed to send command 0x%x", command);
+            }
+            return false;
+        }
+    }
 
-    return ret;
+    if (response) {
+        *response = out[0];
+    }
+    return true;
 }
 
-static s32 __sdio_waithcr(u8 reg, u8 size, u8 unset, u32 mask)
+bool SDCard::Enable4BitBus()
 {
     u32 val;
-    s32 ret;
-    s32 tries = 10;
-
-    while (tries-- > 0) {
-        ret = __sdio_gethcr(reg, size, &val);
-        if (ret < 0)
-            return ret;
-        if ((unset && !(val & mask)) || (!unset && (val & mask)))
-            return 0;
-        usleep(10000);
-    }
-
-    return -1;
-}
-
-static s32 __sdio_setbuswidth(u32 bus_width)
-{
-    s32 ret;
-    u32 hc_reg = 0;
-
-    ret = __sdio_gethcr(SDIOHCR_HOSTCONTROL, 1, &hc_reg);
-    if (ret < 0)
-        return ret;
-
-    hc_reg &= 0xff;
-    hc_reg &= ~SDIOHCR_HOSTCONTROL_4BIT;
-    if (bus_width == 4)
-        hc_reg |= SDIOHCR_HOSTCONTROL_4BIT;
-
-    return __sdio_sethcr(SDIOHCR_HOSTCONTROL, 1, hc_reg);
-}
-
-#if 0
-static s32 __sd0_getstatus()
-{
-	s32 ret;
-	u32 status = 0;
- 
-	ret = __sdio_sendcommand(SDIO_CMD_SENDSTATUS,SDIOCMD_TYPE_AC,SDIO_RESPONSE_R1,(__sd0_rca<<16),0,0,NULL,&status,sizeof(u32));
-	if(ret<0) return ret;
- 
-	return status;
-}
-#endif
-
-static s32 __sd0_getrca()
-{
-    s32 ret;
-    u32 rca;
-
-    ret = __sdio_sendcommand(
-      SDIO_CMD_SENDRCA, 0, SDIO_RESPONSE_R5, 0, 0, 0, NULL, &rca, sizeof(rca));
-    if (ret < 0)
-        return ret;
-
-    __sd0_rca = (u16) (rca >> 16);
-    return (rca & 0xffff);
-}
-
-static s32 __sd0_select()
-{
-    s32 ret;
-
-    ret = __sdio_sendcommand(SDIO_CMD_SELECT, SDIOCMD_TYPE_AC,
-      SDIO_RESPONSE_R1B, (__sd0_rca << 16), 0, 0, NULL, NULL, 0);
-
-    return ret;
-}
-
-static s32 __sd0_deselect()
-{
-    s32 ret;
-
-    ret = __sdio_sendcommand(SDIO_CMD_DESELECT, SDIOCMD_TYPE_AC,
-      SDIO_RESPONSE_R1B, 0, 0, 0, NULL, NULL, 0);
-
-    return ret;
-}
-
-static s32 __sd0_setblocklength(u32 blk_len)
-{
-    s32 ret;
-
-    ret = __sdio_sendcommand(SDIO_CMD_SETBLOCKLEN, SDIOCMD_TYPE_AC,
-      SDIO_RESPONSE_R1, blk_len, 0, 0, NULL, NULL, 0);
-
-    return ret;
-}
-
-static s32 __sd0_setbuswidth(u32 bus_width)
-{
-    u16 val;
-    s32 ret;
-
-    val = 0x0000;
-    if (bus_width == 4)
-        val = 0x0002;
-
-    ret = __sdio_sendcommand(SDIO_CMD_APPCMD, SDIOCMD_TYPE_AC, SDIO_RESPONSE_R1,
-      (__sd0_rca << 16), 0, 0, NULL, NULL, 0);
-    if (ret < 0)
-        return ret;
-
-    ret = __sdio_sendcommand(SDIO_ACMD_SETBUSWIDTH, SDIOCMD_TYPE_AC,
-      SDIO_RESPONSE_R1, val, 0, 0, NULL, NULL, 0);
-
-    return ret;
-}
-
-#if 0
-static s32 __sd0_getcsd()
-{
-	s32 ret;
- 
-	ret = __sdio_sendcommand(SDIO_CMD_SENDCSD, SDIOCMD_TYPE_AC,
-	                         SDIO_RESPOSNE_R2, (__sd0_rca<<16), 0, 0, NULL,
-							 __sd0_csd, 16);
- 
-	return ret;
-}
-#endif
-
-static s32 __sd0_getcid()
-{
-    s32 ret;
-
-    ret = __sdio_sendcommand(SDIO_CMD_ALL_SENDCID, 0, SDIO_RESPOSNE_R2,
-      (__sd0_rca << 16), 0, 0, NULL, __sd0_cid, 16);
-
-    return ret;
-}
-
-static bool __sd0_initio()
-{
-    s32 ret;
-    s32 tries;
-    u32 status;
-    struct _sdioresponse resp;
-
-    __sdio_resetcard();
-    status = __sdio_getstatus();
-
-    if (!(status & SDIO_STATUS_CARD_INSERTED))
-        return false;
-
-    if (!(status & SDIO_STATUS_CARD_INITIALIZED)) {
-        // IOS doesn't like this card, so we need to convice it to accept it.
-
-        // reopen the handle which makes IOS clean stuff up
-        IOS_Close(__sd0_fd);
-        __sd0_fd = IOS_Open(_sd0_fs, 1);
-
-        // reset the host controller
-        if (__sdio_sethcr(SDIOHCR_SOFTWARERESET, 1, 7) < 0)
-            goto fail;
-        if (__sdio_waithcr(SDIOHCR_SOFTWARERESET, 1, 1, 7) < 0)
-            goto fail;
-
-        // initialize interrupts (sd_reset_card does this on success)
-        __sdio_sethcr(0x34, 4, 0x13f00c3);
-        __sdio_sethcr(0x38, 4, 0x13f00c3);
-
-        // enable power
-        __sd0_sdhc = 1;
-        ret = __sdio_sethcr(SDIOHCR_POWERCONTROL, 1, 0xe);
-        if (ret < 0)
-            goto fail;
-        ret = __sdio_sethcr(SDIOHCR_POWERCONTROL, 1, 0xf);
-        if (ret < 0)
-            goto fail;
-
-        // enable internal clock, wait until it gets stable and enable sd clock
-        ret = __sdio_sethcr(SDIOHCR_CLOCKCONTROL, 2, 0);
-        if (ret < 0)
-            goto fail;
-        ret = __sdio_sethcr(SDIOHCR_CLOCKCONTROL, 2, 0x101);
-        if (ret < 0)
-            goto fail;
-        ret = __sdio_waithcr(SDIOHCR_CLOCKCONTROL, 2, 0, 2);
-        if (ret < 0)
-            goto fail;
-        ret = __sdio_sethcr(SDIOHCR_CLOCKCONTROL, 2, 0x107);
-        if (ret < 0)
-            goto fail;
-
-        // setup timeout
-        ret = __sdio_sethcr(SDIOHCR_TIMEOUTCONTROL, 1, SDIO_DEFAULT_TIMEOUT);
-        if (ret < 0)
-            goto fail;
-
-        // standard SDHC initialization process
-        ret = __sdio_sendcommand(SDIO_CMD_GOIDLE, 0, 0, 0, 0, 0, NULL, NULL, 0);
-        if (ret < 0)
-            goto fail;
-        ret = __sdio_sendcommand(SDIO_CMD_SENDIFCOND, 0, SDIO_RESPONSE_R6,
-          0x1aa, 0, 0, NULL, &resp, sizeof(resp));
-        if (ret < 0)
-            goto fail;
-        if ((resp.rsp_fields[0] & 0xff) != 0xaa)
-            goto fail;
-
-        tries = 10;
-        while (tries-- > 0) {
-            ret = __sdio_sendcommand(SDIO_CMD_APPCMD, SDIOCMD_TYPE_AC,
-              SDIO_RESPONSE_R1, 0, 0, 0, NULL, NULL, 0);
-            if (ret < 0)
-                goto fail;
-            ret = __sdio_sendcommand(SDIO_ACMD_SENDOPCOND, 0, SDIO_RESPONSE_R3,
-              0x40300000, 0, 0, NULL, &resp, sizeof(resp));
-            if (ret < 0)
-                goto fail;
-            if (resp.rsp_fields[0] & (1 << 31))
-                break;
-
-            usleep(10000);
-        }
-        if (tries < 0)
-            goto fail;
-
-        // FIXME: SDv2 cards which are not high-capacity won't work :/
-        if (resp.rsp_fields[0] & (1 << 30))
-            __sd0_sdhc = 1;
-        else
-            __sd0_sdhc = 0;
-
-        ret = __sd0_getcid();
-        if (ret < 0)
-            goto fail;
-        ret = __sd0_getrca();
-        if (ret < 0)
-            goto fail;
-    } else if (status & SDIO_STATUS_CARD_SDHC)
-        __sd0_sdhc = 1;
-    else
-        __sd0_sdhc = 0;
-
-    ret = __sdio_setbuswidth(4);
-    if (ret < 0)
-        return false;
-
-    ret = __sdio_setclock(1);
-    if (ret < 0)
-        return false;
-
-    ret = __sd0_select();
-    if (ret < 0)
-        return false;
-
-    ret = __sd0_setblocklength(PAGE_SIZE512);
-    if (ret < 0) {
-        ret = __sd0_deselect();
+    if (!ReadHCR(HCR_HOST_CONTROL_1, sizeof(u8), &val)) {
         return false;
     }
 
-    ret = __sd0_setbuswidth(4);
-    if (ret < 0) {
-        ret = __sd0_deselect();
+    val |= HCR_HOST_CONTROL_1_4_BIT;
+
+    return WriteHCR(HCR_HOST_CONTROL_1, sizeof(u8), val);
+}
+
+bool SDCard::Select()
+{
+    return SendCommand(
+      CMD_SELECT, 3, RESPONSE_TYPE_R1B, m_rca << 16, 0, 0, nullptr, nullptr);
+}
+
+bool SDCard::Deselect()
+{
+    return SendCommand(
+      CMD_SELECT, 3, RESPONSE_TYPE_R1B, 0, 0, 0, nullptr, nullptr);
+}
+
+bool SDCard::SetCardBlockLength(u32 blockLength)
+{
+    return SendCommand(CMD_SET_BLOCKLEN, 3, RESPONSE_TYPE_R1, blockLength, 0, 0,
+      nullptr, nullptr);
+}
+
+bool SDCard::EnableCard4BitBus()
+{
+    if (!SendCommand(CMD_APP_CMD, 3, RESPONSE_TYPE_R1, m_rca << 16, 0, 0,
+          nullptr, nullptr)) {
         return false;
     }
-    __sd0_deselect();
 
-    __sd0_initialized = 1;
-    return true;
-
-fail:
-    __sdio_sethcr(SDIOHCR_SOFTWARERESET, 1, 7);
-    __sdio_waithcr(SDIOHCR_SOFTWARERESET, 1, 1, 7);
-    IOS_Close(__sd0_fd);
-    __sd0_fd = IOS_Open(_sd0_fs, 1);
-    return false;
+    return SendCommand(
+      ACMD_SET_BUS_WIDTH, 3, RESPONSE_TYPE_R1, 0x2, 0, 0, nullptr, nullptr);
 }
 
-bool SDCard::Open()
+bool SDCard::TransferAligned(
+  bool isWrite, u32 firstSector, u32 sectorCount, void* buffer)
 {
-    const s32 ret = IOS_Open(_sd0_fs, 1);
-    if (ret >= 0) {
-        __sd0_fd = ret;
-        return true;
-    }
-    return false;
-}
+    u32 command = isWrite ? CMD_WRITE_MULTIPLE_BLOCK : CMD_READ_MULTIPLE_BLOCK;
+    u32 firstBlock = m_isSdhc ? firstSector : firstSector * SECTOR_SIZE;
 
-bool SDCard::Startup()
-{
-    if (__sdio_initialized == 1)
-        Shutdown();
-
-    if (__sd0_initio() == false)
-        return false;
-
-    __sdio_initialized = 1;
-    return true;
-}
-
-bool SDCard::Shutdown()
-{
-    if (__sd0_initialized == 0)
-        return false;
-
-    __sd0_initialized = 0;
-    return true;
-}
-
-s32 SDCard::ReadSectors(sec_t sector, sec_t numSectors, void* buffer)
-{
-    s32 ret;
-    u8* ptr;
-    sec_t blk_off;
-
-    if (buffer == NULL)
-        return -1;
-
-    ret = __sd0_select();
-    if (ret < 0)
-        return ret;
-
-    if ((u32) buffer & 0x1F) {
-        ptr = (u8*) buffer;
-        int secs_to_read;
-        while (numSectors > 0) {
-            if (__sd0_sdhc == 0)
-                blk_off = (sector * PAGE_SIZE512);
-            else
-                blk_off = sector;
-            if (numSectors > 8)
-                secs_to_read = 8;
-            else
-                secs_to_read = numSectors;
-            SyncBeforeRead(rw_buffer, secs_to_read * PAGE_SIZE512);
-            ret = __sdio_sendcommand(SDIO_CMD_READMULTIBLOCK, SDIOCMD_TYPE_AC,
-              SDIO_RESPONSE_R1, blk_off, secs_to_read, PAGE_SIZE512, rw_buffer,
-              NULL, 0);
-            if (ret >= 0) {
-                memcpy(ptr, rw_buffer, PAGE_SIZE512 * secs_to_read);
-                ptr += PAGE_SIZE512 * secs_to_read;
-                sector += secs_to_read;
-                numSectors -= secs_to_read;
-            } else
-                break;
-        }
+    if (isWrite) {
+        IOS_FlushDCache(buffer, sectorCount * SECTOR_SIZE);
     } else {
-        if (__sd0_sdhc == 0)
-            sector *= PAGE_SIZE512;
-        SyncBeforeRead(buffer, PAGE_SIZE512 * numSectors);
-        ret = __sdio_sendcommand(SDIO_CMD_READMULTIBLOCK, SDIOCMD_TYPE_AC,
-          SDIO_RESPONSE_R1, sector, numSectors, PAGE_SIZE512, buffer, NULL, 0);
+        IOS_InvalidateDCache(buffer, sectorCount * SECTOR_SIZE);
     }
 
-    __sd0_deselect();
-
-    return ret;
+    return SendCommand(command, 3, RESPONSE_TYPE_R1, firstBlock, sectorCount,
+      SECTOR_SIZE, buffer, nullptr);
 }
 
-s32 SDCard::WriteSectors(sec_t sector, sec_t numSectors, const void* buffer)
+bool SDCard::Transfer(
+  bool isWrite, u32 firstSector, u32 sectorCount, void* buffer)
 {
-    s32 ret;
-    u8* ptr;
-    u32 blk_off;
+    assert(buffer);
 
-    if (buffer == NULL)
-        return -1;
+    if (!Select()) {
+        return false;
+    }
 
-    ret = __sd0_select();
-    if (ret < 0)
-        return ret;
-
-    if ((u32) buffer & 0x1F) {
-        ptr = (u8*) buffer;
-        int secs_to_write;
-        while (numSectors > 0) {
-            if (__sd0_sdhc == 0)
-                blk_off = (sector * PAGE_SIZE512);
-            else
-                blk_off = sector;
-            if (numSectors > 8)
-                secs_to_write = 8;
-            else
-                secs_to_write = numSectors;
-            memcpy(rw_buffer, ptr, PAGE_SIZE512 * secs_to_write);
-            SyncBeforeWrite(rw_buffer, PAGE_SIZE512 * secs_to_write);
-            ret = __sdio_sendcommand(SDIO_CMD_WRITEMULTIBLOCK, SDIOCMD_TYPE_AC,
-              SDIO_RESPONSE_R1, blk_off, secs_to_write, PAGE_SIZE512, rw_buffer,
-              NULL, 0);
-            if (ret >= 0) {
-                ptr += PAGE_SIZE512 * secs_to_write;
-                sector += secs_to_write;
-                numSectors -= secs_to_write;
-            } else
-                break;
+    while (sectorCount > 0) {
+        u32 chunkSectorCount = std::min<u32>(sectorCount, TMP_SECTOR_COUNT);
+        if (isWrite) {
+            memcpy(m_tmpBuffer, buffer, chunkSectorCount * SECTOR_SIZE);
         }
-    } else {
-        if (__sd0_sdhc == 0)
-            sector *= PAGE_SIZE512;
-        SyncBeforeWrite(buffer, PAGE_SIZE512 * numSectors);
-        ret = __sdio_sendcommand(SDIO_CMD_WRITEMULTIBLOCK, SDIOCMD_TYPE_AC,
-          SDIO_RESPONSE_R1, sector, numSectors, PAGE_SIZE512, (char*) buffer,
-          NULL, 0);
+        if (!TransferAligned(
+              isWrite, firstSector, chunkSectorCount, m_tmpBuffer)) {
+            Deselect();
+            return false;
+        }
+        if (!isWrite) {
+            memcpy(buffer, m_tmpBuffer, chunkSectorCount * SECTOR_SIZE);
+        }
+        firstSector += chunkSectorCount;
+        sectorCount -= chunkSectorCount;
+        buffer += chunkSectorCount * SECTOR_SIZE;
     }
 
-    __sd0_deselect();
+    Deselect();
 
-    return ret;
-}
-
-bool SDCard::ClearStatus()
-{
     return true;
 }
 
 bool SDCard::IsInserted()
 {
-    return ((__sdio_getstatus() & SDIO_STATUS_CARD_INSERTED) ==
-            SDIO_STATUS_CARD_INSERTED);
+    u32 status;
+    if (!GetStatus(&status)) {
+        return false;
+    }
+
+    if (!(status & STATUS_CARD_INSERTED)) {
+        return false;
+    }
+
+    return true;
 }
 
-bool SDCard::IsInitialized()
+bool SDCard::Init()
 {
-    return __sdio_initialized == 1;
+    if (!ResetCard()) {
+        return false;
+    }
+
+    u32 status;
+    if (!GetStatus(&status)) {
+        return false;
+    }
+
+    if (!(status & STATUS_CARD_INSERTED)) {
+        PRINT(IOS_SDCard, INFO, "No card inserted");
+        return false;
+    }
+
+    if (!(status & STATUS_TYPE_MEMORY)) {
+        PRINT(IOS_SDCard, INFO, "Not a memory card");
+        return false;
+    }
+
+    m_isSdhc = !!(status & STATUS_TYPE_SDHC);
+
+    if (!Enable4BitBus()) {
+        PRINT(IOS_SDCard, INFO, "Failed to enable 4-bit bus");
+        return false;
+    }
+
+    if (!SetClock(1)) {
+        return false;
+    }
+
+    if (!Select()) {
+        return false;
+    }
+
+    if (!SetCardBlockLength(SECTOR_SIZE)) {
+        Deselect();
+        return false;
+    }
+
+    if (!EnableCard4BitBus()) {
+        Deselect();
+        return false;
+    }
+
+    Deselect();
+    return true;
+}
+
+u32 SDCard::GetSectorSize()
+{
+    return SECTOR_SIZE;
+}
+
+bool SDCard::ReadSectors(u32 firstSector, u32 sectorCount, void* buffer)
+{
+    return Transfer(false, firstSector, sectorCount, buffer);
+}
+
+bool SDCard::WriteSectors(u32 firstSector, u32 sectorCount, const void* buffer)
+{
+    return Transfer(true, firstSector, sectorCount, (void*) buffer);
 }
