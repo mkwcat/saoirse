@@ -81,7 +81,7 @@ AFLAGS   := -x assembler-with-cpp
 
 IOS_ARCH := -march=armv5te -mtune=arm9tdmi -mthumb-interwork -mbig-endian
 
-IOS_LDFLAGS := $(IOS_ARCH) -lgcc -n -Wl,--gc-sections -Wl,-static
+IOS_LDFLAGS := $(IOS_ARCH) -flto -nostdlib -lgcc -n -Wl,--gc-sections -Wl,-static
 
 PPC_LDFLAGS := -flto -nodefaultlibs -nostdlib -n -Wl,--gc-sections -Wl,-static
 
@@ -144,11 +144,11 @@ $(TARGET_PPC_LOADER).elf: $(PPC_OFILES) $(PPC_LOADER_LD) $(DATA_LOADER).o
 
 $(TARGET_IOS_MODULE)_link.elf: $(IOS_OFILES) $(IOS_MODULE_LD)
 	@echo Linking: $(notdir $@)
-	@$(IOS_CC) -g $(IOS_LDFLAGS) $(IOS_OFILES) -T$(IOS_MODULE_LD) -o $@
+	@$(IOS_CC) -g $(IOS_OFILES) $(IOS_LDFLAGS) -T$(IOS_MODULE_LD) -o $@
 
 $(TARGET_IOS_MODULE).elf: $(TARGET_IOS_MODULE)_link.elf
 	@echo Output: $(notdir $@)
-	@$(IOS_CC) -s $(IOS_LDFLAGS) $(IOS_OFILES) -T$(IOS_MODULE_LD) -Wl,-Map,$(TARGET_IOS_MODULE).map -o $@
+	@$(IOS_CC) -s $(IOS_OFILES) $(IOS_LDFLAGS) -T$(IOS_MODULE_LD) -Wl,-Map,$(TARGET_IOS_MODULE).map -o $@
 
 # IOS Loader
 
