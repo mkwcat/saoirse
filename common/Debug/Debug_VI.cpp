@@ -22,17 +22,8 @@ extern "C" volatile u16 hsw;
 extern "C" volatile u16 hsr;
 extern "C" volatile u16 visel;
 
-void Init()
+void InitFirst()
 {
-    auto data = reinterpret_cast<Boot_ConsoleData*>(CONSOLE_DATA_ADDRESS);
-    DCache::Invalidate(data, sizeof(Boot_ConsoleData));
-
-    if (data->xfbInit) {
-        xfbWidth = data->xfbWidth;
-        xfbHeight = data->xfbHeight;
-        return;
-    }
-
     bool isProgressive = visel & 1 || dcr & 4;
     bool isNtsc = (dcr >> 8 & 3) == 0;
     xfbWidth = 640;
@@ -59,6 +50,9 @@ void Init()
     tfbl = 1 << 28 | reinterpret_cast<u32>(xfb) >> 5;
     bfbl = 1 << 28 | reinterpret_cast<u32>(xfb) >> 5;
 
+    auto data = reinterpret_cast<Boot_ConsoleData*>(CONSOLE_DATA_ADDRESS);
+    DCache::Invalidate(data, sizeof(Boot_ConsoleData));
+
     *data = {
       .xfbWidth = xfbWidth,
       .xfbHeight = xfbHeight,
@@ -72,7 +66,7 @@ void Init()
     DCache::Flush(data, sizeof(Boot_ConsoleData));
 }
 
-#else
+#endif
 
 void Init()
 {
@@ -82,8 +76,6 @@ void Init()
     xfbWidth = data->xfbWidth;
     xfbHeight = data->xfbHeight;
 }
-
-#endif
 
 u16 GetXFBWidth()
 {

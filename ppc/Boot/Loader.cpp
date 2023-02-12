@@ -346,7 +346,7 @@ u32 GetSymbol(Sel& sel, const char* name)
 
 void Launch()
 {
-    Debug_VI::Init();
+    Debug_VI::InitFirst();
 
     Console::Init();
     Console::Print("\n\nSaoirse Loader!\n\n\n");

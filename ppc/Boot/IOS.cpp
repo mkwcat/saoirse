@@ -124,13 +124,13 @@ bool BootstrapEntry()
     }
 
     u32* mem1 = reinterpret_cast<u32*>(0x80000000);
-    mem1[0] = 0x4903468D; // ldr r1, =0x10100000; mov sp, r1;
+    mem1[0] = 0x4903468D; // ldr r1, =stackptr; mov sp, r1;
     mem1[1] = 0x49034788; // ldr r1, =entrypoint; blx r1;
     // Overwrite reserved handler to loop infinitely
     mem1[2] = 0x49036209; // ldr r1, =0xFFFF0014; str r1, [r1, #0x20];
     mem1[3] = 0x47080000; // bx r1
-    mem1[4] = 0x10100000; // temporary stack
-    mem1[5] = IOS_BOOT_ADDRESS & 0x7FFFFFFF;
+    mem1[4] = (IOS_BOOT_STACK + IOS_BOOT_STACK_MAXLEN) & 0x7FFFFFFF; // stackptr
+    mem1[5] = IOS_BOOT_ADDRESS & 0x7FFFFFFF; // entrypoint
     mem1[6] = 0xFFFF0014; // reserved handler
 
     alignas(0x20) Resource::IoctlvPair pairs[4];

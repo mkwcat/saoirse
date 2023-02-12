@@ -246,11 +246,6 @@ void KernelWrite(u32 address, u32 value)
 
 s32 SystemThreadEntry([[maybe_unused]] void* arg)
 {
-    Debug_VI::Init();
-    Console::Init();
-
-    Console::Print("Print from IOS module\n");
-    Console::Print("Second print test\n");
     Log::ipcLogEnabled = true;
     PRINT(Core, INFO, "Log print");
 
@@ -265,7 +260,6 @@ s32 SystemThreadEntry([[maybe_unused]] void* arg)
 
     DeviceMgr::s_instance = new DeviceMgr();
 
-#if 0
     PRINT(IOS, INFO, "Wait for start request...");
     IPCLog::s_instance->WaitForStartRequest();
     PRINT(IOS, INFO, "Starting up game IOS...");
@@ -274,17 +268,21 @@ s32 SystemThreadEntry([[maybe_unused]] void* arg)
 
     new Thread(EmuFS::ThreadEntry, nullptr, nullptr, 0x2000, 80);
     new Thread(EmuDI::ThreadEntry, nullptr, nullptr, 0x2000, 80);
-    // new Thread(EmuES::ThreadEntry, nullptr, nullptr, 0x2000, 80);
-#endif
+    new Thread(EmuES::ThreadEntry, nullptr, nullptr, 0x2000, 80);
 
     return 0;
 }
 
+static u8 systemHeapData[SystemHeapSize] ATTRIBUTE_ALIGN(32);
+
 extern "C" void Entry([[maybe_unused]] void* arg)
 {
-    IOS_SetThreadPriority(0, 40);
+    Debug_VI::Init();
+    Console::Init();
 
-    static u8 systemHeapData[SystemHeapSize] ATTRIBUTE_ALIGN(32);
+    Console::Print("Print from IOS module\n");
+
+    IOS_SetThreadPriority(0, 40);
 
     // Create system heap
     s32 ret = IOS_CreateHeap(systemHeapData, sizeof(systemHeapData));
@@ -296,7 +294,7 @@ extern "C" void Entry([[maybe_unused]] void* arg)
     IPCLog::s_instance = new IPCLog();
     // Log::ipcLogEnabled = true;
 
-    static u8 SystemThreadStack[0x800] ATTRIBUTE_ALIGN(32);
+    static u8 SystemThreadStack[0x1000] ATTRIBUTE_ALIGN(32);
 
     ret = IOS_CreateThread(SystemThreadEntry, nullptr,
       reinterpret_cast<u32*>(SystemThreadStack + sizeof(SystemThreadStack)),

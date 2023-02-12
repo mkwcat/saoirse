@@ -5,6 +5,8 @@
 namespace Debug_VI
 {
 
+void InitFirst();
+
 void Init();
 
 u16 GetXFBWidth();
