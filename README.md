@@ -1,4 +1,8 @@
-# Saoirse Launcher
+# Saoirse Launcher [OUTDATED]
+
+_This repository contains the original libogc-based project that preceeded the development of [Starling](https://github.com/mkwcat/starling). Please see that repository for the modern rewrite of the project._
+
+_The orignal readme read as followed:_
 
 Saoirse is a (WIP) portable Wii homebrew project for launching games under a modified IOS firmware. The project aims to eventually become a user-friendly launcher for game modifications.
 
